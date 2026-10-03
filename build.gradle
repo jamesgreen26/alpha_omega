@@ -49,6 +49,18 @@ repositories {
     flatDir {
         dirs 'libs'
     }
+    // Optional compat targets (Xaero's maps), compiled against but never bundled.
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = "Modrinth"
+                url = "https://api.modrinth.com/maven"
+            }
+        }
+        filter {
+            includeGroup "maven.modrinth"
+        }
+    }
 }
 
 dependencies {
@@ -67,6 +79,9 @@ dependencies {
             prefer "0.3.7-beta.1"
         }
     }
+
+    compileOnly("maven.modrinth:xaeros-minimap:Q1tuMQBB")
+    compileOnly("maven.modrinth:xaeros-world-map:9Ckiihkz")
 
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.0")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.0")

@@ -13,6 +13,9 @@ description = '''
 [[mixins]]
 config = "alpha_omega.mixins.json"
 
+[[mixins]]
+config = "alpha_omega.compat.mixins.json"
+
 [[dependencies.alpha_omega]]
 modId = "neoforge"
 type = "required"

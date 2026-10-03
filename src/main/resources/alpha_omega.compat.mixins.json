@@ -1,0 +1,27 @@
+{
+  "required": false,
+  "package": "g_mungus.alpha_omega.mixin.compat",
+  "plugin": "g_mungus.alpha_omega.compat.CompatMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "minVersion": "0.8",
+  "client": [
+    "xaeromap.DistanceUtilsMixin",
+    "xaeromap.ElementReaderMixin",
+    "xaeromap.GuiMapMixin",
+    "xaeromap.LeveledRegionMixin",
+    "xaeromap.MapElementRenderHandlerMixin",
+    "xaeromap.MapProcessorMixin",
+    "xaeromap.MapWriterMixin",
+    "xaerominimap.DeathpointHandlerMixin",
+    "xaerominimap.DestinationHandlerMixin",
+    "xaerominimap.GuiAddWaypointMixin",
+    "xaerominimap.InfoDisplayRendererMixin",
+    "xaerominimap.MinimapElementRendererHandlerMixin",
+    "xaerominimap.TemporaryWaypointHandlerMixin",
+    "xaerominimap.WaypointRenderersMixin",
+    "xaerominimap.WaypointUtilsMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
