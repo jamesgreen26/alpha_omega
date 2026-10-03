@@ -17,6 +17,7 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.function.LongPredicate;
 
 /**
  * Islands and lift tables (design doc §5), independent of Minecraft so it can be property tested.
@@ -41,6 +42,11 @@ public final class IslandGraph {
     /** Lap pair for a chunk that starts a new island (§5.8), packed with {@link #packLaps}. */
     public interface Seeds {
         long seedLaps(int x, int z);
+    }
+
+    /** Picks the chunk whose lift is kept when a component is re-lifted (one with a player, ideally). */
+    public interface Anchors {
+        long anchor(LongOpenHashSet component);
     }
 
     /** Island {@code from} touches {@code into}; shifting {@code from} by the lap delta makes them agree. */
@@ -80,6 +86,9 @@ public final class IslandGraph {
     private final Int2ObjectOpenHashMap<Island> islands = new Int2ObjectOpenHashMap<>();
     private final IntSet loops = new IntOpenHashSet();
     private int nextId = 1;
+    /** Cuts (§5.7): boundary {@code b} severs columns (or rows) {@code b - 1} and {@code b}. */
+    private final IntOpenHashSet cutsX = new IntOpenHashSet();
+    private final IntOpenHashSet cutsZ = new IntOpenHashSet();
     /** Set when a join leaves two islands touching in disagreeing frames; cleared by {@link #takeDisagreementFlag}. */
     private boolean disagreementPending;
 
@@ -175,6 +184,7 @@ public final class IslandGraph {
             int z = keyZ(key);
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dz = -1; dz <= 1; dz++) {
+                    if (this.severed(x, z, dx, dz)) continue;
                     int nx = WrapMath.canon(x + dx, this.n);
                     int nz = WrapMath.canon(z + dz, this.n);
                     long neighbor = this.info.get(key(nx, nz));
@@ -209,6 +219,126 @@ public final class IslandGraph {
         return pending;
     }
 
+    // ---- cuts ----
+
+    public IntSet cuts(boolean xAxis) {
+        return xAxis ? this.cutsX : this.cutsZ;
+    }
+
+    public void addCut(boolean xAxis, int boundary) {
+        (xAxis ? this.cutsX : this.cutsZ).add(WrapMath.canon(boundary, this.n));
+    }
+
+    public void removeCut(boolean xAxis, int boundary) {
+        (xAxis ? this.cutsX : this.cutsZ).remove(WrapMath.canon(boundary, this.n));
+    }
+
+    /** Whether the step from chunk {@code (x, z)} by {@code (dx, dz)} crosses a cut. */
+    public boolean severed(int x, int z, int dx, int dz) {
+        if (dx != 0 && this.cutsX.contains(WrapMath.canon(dx > 0 ? x + 1 : x, this.n))) return true;
+        return dz != 0 && this.cutsZ.contains(WrapMath.canon(dz > 0 ? z + 1 : z, this.n));
+    }
+
+    /**
+     * Rebuilds every island from scratch, respecting cuts: connected components, each lifted contiguously from an
+     * anchor chunk that keeps its current lap. Used when cuts are added or moved.
+     *
+     * @return the lap change of every chunk whose lift changed, packed with {@link #packLaps}
+     */
+    public Long2LongOpenHashMap relayout(Anchors anchors) {
+        Long2LongOpenHashMap before = new Long2LongOpenHashMap(this.info);
+        LongOpenHashSet remaining = new LongOpenHashSet(this.info.keySet());
+        this.islands.clear();
+        this.loops.clear();
+        Long2LongOpenHashMap changes = new Long2LongOpenHashMap();
+        while (!remaining.isEmpty()) {
+            LongOpenHashSet component = this.component(remaining.iterator().nextLong(), remaining::contains);
+            remaining.removeAll(component);
+            Island island = this.newIsland();
+            long anchor = anchors.anchor(component);
+            long anchorInfo = before.get(anchor);
+            Long2LongOpenHashMap laps = new Long2LongOpenHashMap();
+            laps.put(anchor, packLaps(infoLapX(anchorInfo), infoLapZ(anchorInfo)));
+            LongArrayFIFOQueue queue = new LongArrayFIFOQueue();
+            queue.enqueue(anchor);
+            while (!queue.isEmpty()) {
+                long key = queue.dequeueLong();
+                int x = keyX(key);
+                int z = keyZ(key);
+                long own = laps.get(key);
+                for (int dx = -1; dx <= 1; dx++) {
+                    for (int dz = -1; dz <= 1; dz++) {
+                        if ((dx == 0 && dz == 0) || this.severed(x, z, dx, dz)) continue;
+                        int nx = WrapMath.canon(x + dx, this.n);
+                        int nz = WrapMath.canon(z + dz, this.n);
+                        long neighbor = key(nx, nz);
+                        if (!component.contains(neighbor)) continue;
+                        long implied = packLaps(Math.floorDiv(x + lapX(own) * this.n + dx - nx, this.n), Math.floorDiv(z + lapZ(own) * this.n + dz - nz, this.n));
+                        if (!laps.containsKey(neighbor)) {
+                            laps.put(neighbor, implied);
+                            queue.enqueue(neighbor);
+                        } else if (laps.get(neighbor) != implied) {
+                            this.loops.add(island.id); // still wraps: another cut is needed
+                        }
+                    }
+                }
+            }
+            for (Long2LongMap.Entry entry : laps.long2LongEntrySet()) {
+                long key = entry.getLongKey();
+                long newLaps = entry.getLongValue();
+                long old = before.get(key);
+                this.add(island, keyX(key), keyZ(key), lapX(newLaps), lapZ(newLaps));
+                int dlx = lapX(newLaps) - infoLapX(old);
+                int dlz = lapZ(newLaps) - infoLapZ(old);
+                if (dlx != 0 || dlz != 0) changes.put(key, packLaps(dlx, dlz));
+            }
+            this.checkExtent(island);
+        }
+        return changes;
+    }
+
+    /** Whether island {@code id} wraps (or is closing a loop) along x; otherwise it is z. */
+    public boolean wrapsAlongX(int id) {
+        Island island = this.islands.get(id);
+        if (island == null) return false;
+        if (this.cutsX.isEmpty() && island.extentX() > this.n - EXTENT_MARGIN) return true;
+        if (this.cutsZ.isEmpty() && island.extentZ() > this.n - EXTENT_MARGIN) return false;
+        // A self-conflict: find the axis on which neighboring lifts disagree.
+        LongIterator it = island.chunks.iterator();
+        while (it.hasNext()) {
+            long key = it.nextLong();
+            int x = keyX(key);
+            int z = keyZ(key);
+            long info = this.info.get(key);
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    if ((dx == 0 && dz == 0) || this.severed(x, z, dx, dz)) continue;
+                    int nx = WrapMath.canon(x + dx, this.n);
+                    int nz = WrapMath.canon(z + dz, this.n);
+                    long neighbor = this.info.get(key(nx, nz));
+                    if (neighbor == ABSENT || infoId(neighbor) != id) continue;
+                    if (x + infoLapX(info) * this.n + dx != nx + infoLapX(neighbor) * this.n) return true;
+                    if (z + infoLapZ(info) * this.n + dz != nz + infoLapZ(neighbor) * this.n) return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /** Whether any two loaded chunks are adjacent across the given cut (if not, the cut can go). */
+    public boolean cutInUse(boolean xAxis, int boundary) {
+        for (long key : this.info.keySet()) {
+            int x = keyX(key);
+            int z = keyZ(key);
+            if (xAxis && x == WrapMath.canon(boundary - 1, this.n)) {
+                for (int dz = -1; dz <= 1; dz++) if (this.info.containsKey(key(WrapMath.canon(x + 1, this.n), WrapMath.canon(z + dz, this.n)))) return true;
+            } else if (!xAxis && z == WrapMath.canon(boundary - 1, this.n)) {
+                for (int dx = -1; dx <= 1; dx++) if (this.info.containsKey(key(WrapMath.canon(x + dx, this.n), WrapMath.canon(z + 1, this.n)))) return true;
+            }
+        }
+        return false;
+    }
+
     // ---- join / leave ----
 
     public void join(int x, int z, Seeds seeds, Weights weights) {
@@ -219,7 +349,7 @@ public final class IslandGraph {
         Int2ObjectOpenHashMap<Long2IntOpenHashMap> votes = new Int2ObjectOpenHashMap<>();
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
-                if (dx == 0 && dz == 0) continue;
+                if ((dx == 0 && dz == 0) || this.severed(x, z, dx, dz)) continue;
                 int nx = WrapMath.canon(x + dx, this.n);
                 int nz = WrapMath.canon(z + dz, this.n);
                 long neighbor = this.info.get(key(nx, nz));
@@ -387,6 +517,7 @@ public final class IslandGraph {
         long info = this.info.get(key);
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
+                if (this.severed(x, z, dx, dz)) continue;
                 int nx = WrapMath.canon(x + dx, this.n);
                 int nz = WrapMath.canon(z + dz, this.n);
                 long neighbor = this.info.get(key(nx, nz));
@@ -403,34 +534,19 @@ public final class IslandGraph {
         this.loops.remove(id);
     }
 
+    /** An island nearly as wide as the world is about to wrap, unless a cut on that axis makes wrapping impossible. */
     private void checkExtent(Island island) {
-        if (island.extentX() > this.n - EXTENT_MARGIN || island.extentZ() > this.n - EXTENT_MARGIN) this.loops.add(island.id);
+        boolean wrapsX = this.cutsX.isEmpty() && island.extentX() > this.n - EXTENT_MARGIN;
+        boolean wrapsZ = this.cutsZ.isEmpty() && island.extentZ() > this.n - EXTENT_MARGIN;
+        if (wrapsX || wrapsZ) this.loops.add(island.id);
     }
 
     private void split(Island island) {
         LongOpenHashSet remaining = new LongOpenHashSet(island.chunks);
         List<LongOpenHashSet> components = new ArrayList<>();
         while (!remaining.isEmpty()) {
-            long start = remaining.iterator().nextLong();
-            LongOpenHashSet component = new LongOpenHashSet();
-            LongArrayFIFOQueue queue = new LongArrayFIFOQueue();
-            queue.enqueue(start);
-            remaining.remove(start);
-            component.add(start);
-            while (!queue.isEmpty()) {
-                long key = queue.dequeueLong();
-                int x = keyX(key);
-                int z = keyZ(key);
-                for (int dx = -1; dx <= 1; dx++) {
-                    for (int dz = -1; dz <= 1; dz++) {
-                        long neighbor = key(WrapMath.canon(x + dx, this.n), WrapMath.canon(z + dz, this.n));
-                        if (remaining.remove(neighbor)) {
-                            component.add(neighbor);
-                            queue.enqueue(neighbor);
-                        }
-                    }
-                }
-            }
+            LongOpenHashSet component = this.component(remaining.iterator().nextLong(), remaining::contains);
+            remaining.removeAll(component);
             components.add(component);
         }
 
@@ -449,5 +565,26 @@ public final class IslandGraph {
             }
             this.checkExtent(target);
         }
+    }
+
+    /** The chunks connected to {@code start} (8-connectivity on the torus, not across cuts) within {@code allowed}. */
+    private LongOpenHashSet component(long start, LongPredicate allowed) {
+        LongOpenHashSet component = new LongOpenHashSet();
+        LongArrayFIFOQueue queue = new LongArrayFIFOQueue();
+        component.add(start);
+        queue.enqueue(start);
+        while (!queue.isEmpty()) {
+            long key = queue.dequeueLong();
+            int x = keyX(key);
+            int z = keyZ(key);
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    if ((dx == 0 && dz == 0) || this.severed(x, z, dx, dz)) continue;
+                    long neighbor = key(WrapMath.canon(x + dx, this.n), WrapMath.canon(z + dz, this.n));
+                    if (allowed.test(neighbor) && component.add(neighbor)) queue.enqueue(neighbor);
+                }
+            }
+        }
+        return component;
     }
 }

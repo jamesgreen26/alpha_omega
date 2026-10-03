@@ -32,6 +32,14 @@ public class IslandGameTests {
     private static final String PLAYER_BATCH = "alpha_omega_islands";
     private static final int W = Wrap.PERIOD;
     private static final int N = Wrap.CHUNK_PERIOD;
+    /**
+     * Tests that build islands far from the test area each use their own region (a chunk offset along z), so
+     * leftover chunks from one test never touch another's.
+     */
+    static final int SEED_REGION = N / 2;
+    static final int MERGE_REGION = N / 2 + 64;
+    static final int RECENTER_REGION = N / 2 + 128;
+    static final int BAND_REGION = N / 2 + 192;
 
     @GameTest(template = TEMPLATE)
     public static void loadedChunksAreInConsistentIslands(GameTestHelper helper) {
@@ -79,7 +87,7 @@ public class IslandGameTests {
         BlockPos test = helper.absolutePos(BlockPos.ZERO);
         // Half a world from the test, two laps up: nothing is loaded there yet.
         int x = Wrap.canonBlock(test.getX() + W / 2) + 2 * W;
-        int z = Wrap.canonBlock(test.getZ() + W / 2) - W;
+        int z = Wrap.canonBlock(test.getZ() + (SEED_REGION << 4)) - W;
         int y = level.getMaxBuildHeight() - 10;
         ServerPlayer player = helper.makeMockServerPlayerInLevel();
         player.moveTo(x + 0.5, y, z + 0.5);
@@ -130,7 +138,7 @@ public class IslandGameTests {
         ServerLevel level = helper.getLevel();
         BlockPos test = helper.absolutePos(BlockPos.ZERO);
         int cx = Wrap.canonChunk((test.getX() >> 4) + N / 2);
-        int cz = Wrap.canonChunk((test.getZ() >> 4) + N / 2);
+        int cz = Wrap.canonChunk((test.getZ() >> 4) + MERGE_REGION);
         int bx = Wrap.canonChunk(cx + 8);
         int y = level.getMaxBuildHeight() - 10;
 

@@ -3,7 +3,12 @@ package g_mungus.alpha_omega.island;
 import g_mungus.alpha_omega.mixin.server.entity.PersistentEntitySectionManagerAccessor;
 import g_mungus.alpha_omega.mixin.server.ServerLevelAccessor;
 import g_mungus.alpha_omega.wrap.Wrap;
+import it.unimi.dsi.fastutil.longs.Long2LongMap;
+import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.objects.Reference2LongMap;
+import it.unimi.dsi.fastutil.objects.Reference2LongOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceLinkedOpenHashSet;
 import java.util.List;
 import net.minecraft.core.SectionPos;
@@ -69,11 +74,20 @@ public final class IslandManager {
 
     /** At most this many merges per tick; any left over continue next tick. */
     private static final int MAX_MERGES_PER_TICK = 64;
+    /** How often cuts are re-evaluated and islands recentered. */
+    private static final int MAINTENANCE_INTERVAL = 100;
+    /** Islands drifting more than this many laps from the origin are shifted back (§5.9). */
+    public static final int RECENTER_LAPS = Math.max(1, 5_000_000 / Wrap.PERIOD);
 
     /** End of the server tick: lazy splits, merges (shifting the lighter island), then entity frame checks. */
     public void tick() {
         this.graph.processSplits();
         this.resolveMerges();
+        this.resolveLoops();
+        if (this.level.getGameTime() % MAINTENANCE_INTERVAL == 0) {
+            this.maintainCuts();
+            this.recenter();
+        }
 
         if (!this.joinedChunks.isEmpty()) {
             EntitySectionStorage<Entity> sections = this.sections();
@@ -138,6 +152,104 @@ public final class IslandManager {
 
     private EntitySectionStorage<Entity> sections() {
         return ((PersistentEntitySectionManagerAccessor) ((ServerLevelAccessor) this.level).alpha_omega$getEntityManager()).alpha_omega$getSectionStorage();
+    }
+
+    // ---- cuts (§5.7) ----
+
+    /** Every island about to wrap all the way around the world gets a cut, placed where it disturbs least. */
+    private void resolveLoops() {
+        for (int guard = 0; guard < 4 && !this.graph.loops().isEmpty(); guard++) {
+            int island = this.graph.loops().iterator().nextInt();
+            boolean xAxis = this.graph.wrapsAlongX(island);
+            this.graph.addCut(xAxis, this.quietestBoundary(xAxis));
+            this.applyLapChanges(this.graph.relayout(this::anchor));
+        }
+    }
+
+    /** Cuts move away from approaching players, and disappear once nothing is loaded across them. */
+    private void maintainCuts() {
+        for (boolean xAxis : new boolean[] {true, false}) {
+            for (int boundary : this.graph.cuts(xAxis).toIntArray()) {
+                if (!this.graph.cutInUse(xAxis, boundary)) {
+                    this.graph.removeCut(xAxis, boundary);
+                } else if (this.playerNear(xAxis, boundary)) {
+                    int moved = this.quietestBoundary(xAxis);
+                    if (moved == boundary) continue;
+                    this.graph.removeCut(xAxis, boundary);
+                    this.graph.addCut(xAxis, moved);
+                    this.applyLapChanges(this.graph.relayout(this::anchor));
+                }
+            }
+        }
+    }
+
+    /** The boundary with no player within view distance and the fewest entities around it. */
+    private int quietestBoundary(boolean xAxis) {
+        int n = Wrap.CHUNK_PERIOD;
+        long[] entities = new long[n];
+        for (Entity entity : this.level.getAllEntities()) {
+            entities[Wrap.canonChunk(xAxis ? entity.chunkPosition().x : entity.chunkPosition().z)]++;
+        }
+        int best = 0;
+        long bestScore = Long.MAX_VALUE;
+        for (int boundary = 0; boundary < n; boundary++) {
+            long score = this.playerNear(xAxis, boundary) ? 1L << 40 : 0;
+            for (int d = -2; d <= 1; d++) score += entities[Wrap.canonChunk(boundary + d)];
+            if (score < bestScore) {
+                bestScore = score;
+                best = boundary;
+            }
+        }
+        return best;
+    }
+
+    private boolean playerNear(boolean xAxis, int boundary) {
+        int range = this.level.getServer().getPlayerList().getViewDistance() + 2;
+        for (ServerPlayer player : this.level.players()) {
+            int chunk = xAxis ? player.chunkPosition().x : player.chunkPosition().z;
+            if (Math.abs(Wrap.minChunkDelta(chunk, boundary)) <= range || Math.abs(Wrap.minChunkDelta(chunk, boundary - 1)) <= range) return true;
+        }
+        return false;
+    }
+
+    /** When a component is re-lifted, a chunk with a player keeps its lift, so players never jump frames. */
+    private long anchor(LongOpenHashSet component) {
+        for (ServerPlayer player : this.level.players()) {
+            long key = IslandGraph.key(Wrap.canonChunk(player.chunkPosition().x), Wrap.canonChunk(player.chunkPosition().z));
+            if (component.contains(key)) return key;
+        }
+        return component.iterator().nextLong();
+    }
+
+    /** Moves the entities of every re-lifted chunk by its lap change. */
+    private void applyLapChanges(Long2LongOpenHashMap changes) {
+        if (changes.isEmpty()) return;
+        EntitySectionStorage<Entity> sections = this.sections();
+        Reference2LongOpenHashMap<Entity> roots = new Reference2LongOpenHashMap<>();
+        for (Long2LongMap.Entry change : changes.long2LongEntrySet()) {
+            long key = change.getLongKey();
+            sections.getExistingSectionsInChunk(ChunkPos.asLong(IslandGraph.keyX(key), IslandGraph.keyZ(key)))
+                .forEach(section -> section.getEntities().forEach(entity -> roots.putIfAbsent(entity.getRootVehicle(), change.getLongValue())));
+        }
+        for (Reference2LongMap.Entry<Entity> entry : roots.reference2LongEntrySet()) {
+            long laps = entry.getLongValue();
+            EntityFrames.translate(entry.getKey(), (double) IslandGraph.lapX(laps) * Wrap.PERIOD, (double) IslandGraph.lapZ(laps) * Wrap.PERIOD);
+        }
+    }
+
+    // ---- recentering (§5.9) ----
+
+    /** Islands that have drifted many laps from the origin shift back, keeping coordinates far from the limits. */
+    public void recenter() {
+        for (IslandGraph.Island island : List.copyOf(this.graph.islands())) {
+            long key = island.chunks().iterator().nextLong();
+            long laps = this.graph.laps(IslandGraph.keyX(key), IslandGraph.keyZ(key));
+            int lx = IslandGraph.lapX(laps);
+            int lz = IslandGraph.lapZ(laps);
+            if (Math.abs(lx) > RECENTER_LAPS || Math.abs(lz) > RECENTER_LAPS) {
+                this.shift(island.id, Math.abs(lx) > RECENTER_LAPS ? -lx : 0, Math.abs(lz) > RECENTER_LAPS ? -lz : 0);
+            }
+        }
     }
 
     // ---- join policy ----

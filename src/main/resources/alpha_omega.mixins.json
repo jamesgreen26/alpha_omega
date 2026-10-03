@@ -22,6 +22,7 @@
     "server.MapItemMixin",
     "server.MapItemSavedDataMixin",
     "server.NaturalSpawnerMixin",
+    "server.NetherPortalBlockMixin",
     "server.PlayerChunkSenderMixin",
     "server.PlayerListMixin",
     "server.PoiManagerMixin",

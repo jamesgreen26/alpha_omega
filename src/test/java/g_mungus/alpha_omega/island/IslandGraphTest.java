@@ -94,6 +94,45 @@ class IslandGraphTest {
         }
     }
 
+    @Test
+    void aBandAroundTheWorldLoopsUntilCut() {
+        int n = 16;
+        IslandGraph graph = new IslandGraph(n);
+        for (int x = 0; x < n; x++) graph.join(x, 3, (cx, cz) -> IslandGraph.packLaps(0, 0), NO_WEIGHTS);
+        assertEquals(1, graph.loops().size(), "a closed band must be flagged as a loop");
+
+        graph.addCut(true, 5);
+        graph.relayout(component -> IslandGraph.key(0, 3));
+        assertTrue(graph.loops().isEmpty(), "cut band still loops");
+        assertEquals(1, graph.islands().size());
+        assertTrue(graph.islands().iterator().next().extentX() == n, "the band is unrolled into one strip");
+        assertEquals(0, IslandGraph.lapX(graph.laps(0, 3)), "anchor kept its lap");
+        assertInvariants(graph);
+
+        // Moving the cut re-lifts the strip around the same anchor.
+        graph.removeCut(true, 5);
+        graph.addCut(true, 11);
+        graph.relayout(component -> IslandGraph.key(0, 3));
+        assertTrue(graph.loops().isEmpty());
+        assertEquals(0, IslandGraph.lapX(graph.laps(0, 3)));
+        assertInvariants(graph);
+    }
+
+    @Test
+    void aFullyLoadedTorusNeedsACutOnEachAxis() {
+        int n = 10;
+        IslandGraph graph = new IslandGraph(n);
+        for (int x = 0; x < n; x++) for (int z = 0; z < n; z++) graph.join(x, z, (cx, cz) -> IslandGraph.packLaps(0, 0), NO_WEIGHTS);
+        assertTrue(!graph.loops().isEmpty());
+        graph.addCut(true, 0);
+        graph.relayout(component -> component.iterator().nextLong());
+        assertTrue(!graph.loops().isEmpty(), "still wraps along z");
+        graph.addCut(false, 0);
+        graph.relayout(component -> component.iterator().nextLong());
+        assertTrue(graph.loops().isEmpty());
+        assertInvariants(graph);
+    }
+
     /** I1, I2 (except in islands flagged as looping), connectivity, exact bounding boxes, and disagreements. */
     private static void assertInvariants(IslandGraph graph) {
         int n = graph.period();
@@ -118,6 +157,7 @@ class IslandGraphTest {
                 if (graph.loops().contains(island.id)) continue;
                 for (int dx = -1; dx <= 1; dx++) {
                     for (int dz = -1; dz <= 1; dz++) {
+                        if (graph.severed(x, z, dx, dz)) continue;
                         int nx = WrapMath.canon(x + dx, n);
                         int nz = WrapMath.canon(z + dz, n);
                         if (graph.islandOf(nx, nz) != island.id) continue;
@@ -129,7 +169,7 @@ class IslandGraphTest {
             }
             assertEquals(maxX - minX + 1, island.extentX(), "bounding box x");
             assertEquals(maxZ - minZ + 1, island.extentZ(), "bounding box z");
-            assertTrue(connected(island, n), "island not connected after splits");
+            assertTrue(connected(graph, island, n), "island not connected after splits");
         }
         assertEquals(graph.chunkCount(), total, "I1: chunk count mismatch");
         for (IslandGraph.PendingMerge merge : graph.disagreements()) {
@@ -138,7 +178,7 @@ class IslandGraphTest {
         }
     }
 
-    private static boolean connected(IslandGraph.Island island, int n) {
+    private static boolean connected(IslandGraph graph, IslandGraph.Island island, int n) {
         LongOpenHashSet remaining = new LongOpenHashSet(island.chunks());
         long start = remaining.iterator().nextLong();
         remaining.remove(start);
@@ -148,6 +188,7 @@ class IslandGraphTest {
             long key = queue.dequeueLong();
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dz = -1; dz <= 1; dz++) {
+                    if (graph.severed(IslandGraph.keyX(key), IslandGraph.keyZ(key), dx, dz)) continue;
                     long neighbor = IslandGraph.key(WrapMath.canon(IslandGraph.keyX(key) + dx, n), WrapMath.canon(IslandGraph.keyZ(key) + dz, n));
                     if (remaining.remove(neighbor)) queue.enqueue(neighbor);
                 }

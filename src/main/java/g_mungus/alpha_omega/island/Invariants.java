@@ -35,7 +35,7 @@ public final class Invariants {
                     for (int dz = -1; dz <= 1; dz++) {
                         int nx = WrapMath.canon(x + dx, n);
                         int nz = WrapMath.canon(z + dz, n);
-                        if ((dx == 0 && dz == 0) || graph.islandOf(nx, nz) != island.id) continue;
+                        if ((dx == 0 && dz == 0) || graph.severed(x, z, dx, dz) || graph.islandOf(nx, nz) != island.id) continue;
                         long neighbor = graph.laps(nx, nz);
                         if (x + IslandGraph.lapX(laps) * n + dx != nx + IslandGraph.lapX(neighbor) * n
                             || z + IslandGraph.lapZ(laps) * n + dz != nz + IslandGraph.lapZ(neighbor) * n) {
