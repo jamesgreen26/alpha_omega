@@ -3,6 +3,7 @@ package g_mungus.alpha_omega;
 import com.mojang.logging.LogUtils;
 import g_mungus.alpha_omega.gametest.ModLoadGameTests;
 import g_mungus.alpha_omega.gametest.SeamGameTests;
+import g_mungus.alpha_omega.gametest.WorldgenGameTests;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
@@ -21,5 +22,6 @@ public class AlphaOmegaMod {
     private static void registerGameTests(RegisterGameTestsEvent event) {
         event.register(ModLoadGameTests.class);
         event.register(SeamGameTests.class);
+        event.register(WorldgenGameTests.class);
     }
 }

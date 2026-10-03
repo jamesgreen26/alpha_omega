@@ -12,8 +12,12 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class Wrap {
 
-    /** {@code W}: world period in blocks on each horizontal axis. A multiple of 3072 (see design doc §4.1). */
-    public static final int PERIOD = 3072;
+    /**
+     * {@code W}: world period in blocks on each horizontal axis. A multiple of 3072 (see design doc §4.1), and of
+     * 4096 so the lowest climate octaves (temperature, at a quarter scale and 2^-10) span a whole number of lattice
+     * cells and keep their vanilla size. Large Biomes would need a multiple of 16384 for the same.
+     */
+    public static final int PERIOD = 12288;
     /** {@code N}: world period in chunks (and sections). */
     public static final int CHUNK_PERIOD = PERIOD >> 4;
 
@@ -92,6 +96,20 @@ public final class Wrap {
 
     public static int minChunkDelta(int a, int b) {
         return WrapMath.minDelta(a, b, CHUNK_PERIOD);
+    }
+
+    /** The whole-lap offset (a multiple of {@code W}) that moves block coordinate {@code x} nearest to {@code ref}. */
+    public static int lapOffset(int x, int ref) {
+        return nearestBlock(x, ref) - x;
+    }
+
+    /** The divisor of {@code N} closest to {@code value} (the larger one on a tie), for grids that must tile the world. */
+    public static int nearestChunkPeriodDivisor(int value) {
+        int best = 1;
+        for (int d = 1; d <= CHUNK_PERIOD; d++) {
+            if (CHUNK_PERIOD % d == 0 && Math.abs(d - value) <= Math.abs(best - value)) best = d;
+        }
+        return best;
     }
 
     /** The image of {@code pos} nearest to the block containing {@code ref}. */

@@ -16,6 +16,8 @@ class WrapTest {
     @Test
     void periodsAreConsistent() {
         assertEquals(0, W % 3072);
+        // The lowest temperature octave (quarter scale, 2^-10) must span whole lattice cells.
+        assertEquals(0, W % 4096);
         assertEquals(W, N * 16);
     }
 
