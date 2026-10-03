@@ -22,6 +22,6 @@ abstract class GameEventListenerMixin {
     @ModifyVariable(method = "handleGameEvent", at = @At("HEAD"), argsOnly = true)
     private Vec3 alpha_omega$nearestImage(Vec3 eventPos, @Local(argsOnly = true) ServerLevel level) {
         Optional<Vec3> listener = ((GameEventListener) this).getListenerSource().getPosition(level);
-        return listener.isPresent() ? Wrap.nearest(eventPos, listener.get()) : eventPos;
+        return listener.isPresent() ? Wrap.of(level).nearest(eventPos, listener.get()) : eventPos;
     }
 }

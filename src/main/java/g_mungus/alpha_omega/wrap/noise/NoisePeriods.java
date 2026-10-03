@@ -33,6 +33,12 @@ public final class NoisePeriods {
         }
     }
 
+    /** Makes {@code noise} periodic with exactly these periods, replacing any it had (for shared, long-lived noise). */
+    public static void reconfigure(NormalNoise noise, double px, double py, double pz) {
+        ((PeriodicNormalNoise) noise).alpha_omega$setPeriods(null);
+        configure(noise, px, py, pz);
+    }
+
     /**
      * Makes {@code noise} periodic, merging with any periods it already has on other axes.
      *

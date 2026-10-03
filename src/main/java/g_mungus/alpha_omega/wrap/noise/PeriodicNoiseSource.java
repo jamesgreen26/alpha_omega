@@ -1,5 +1,6 @@
 package g_mungus.alpha_omega.wrap.noise;
 
+import g_mungus.alpha_omega.wrap.WrapHolder;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.levelgen.DensityFunction;
 import net.minecraft.world.level.levelgen.synth.NormalNoise;
@@ -9,7 +10,7 @@ import net.minecraft.world.level.levelgen.synth.NormalNoise;
  * if the same instance is already needed at a different period (one noise sampled at two scales), a fresh,
  * identically seeded instance is created for the new use.
  */
-public interface PeriodicNoiseSource {
+public interface PeriodicNoiseSource extends WrapHolder {
 
     NormalNoise alpha_omega$periodic(ResourceKey<NormalNoise.NoiseParameters> key, NormalNoise noise, double px, double py, double pz);
 

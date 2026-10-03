@@ -50,20 +50,20 @@ abstract class LevelChunkMixin {
         "removeBlockEntityTicker",
     }, at = @At("HEAD"), argsOnly = true)
     private BlockPos alpha_omega$canonPos(BlockPos pos) {
-        return this.level.isClientSide ? pos : Wrap.canon(pos);
+        return this.level.isClientSide ? pos : Wrap.of(this.level).canon(pos);
     }
 
     @ModifyArg(method = "setBlockState",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/block/EntityBlock;newBlockEntity(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Lnet/minecraft/world/level/block/entity/BlockEntity;"))
     private BlockPos alpha_omega$canonNewBlockEntity(BlockPos pos) {
-        return this.level.isClientSide ? pos : Wrap.canon(pos);
+        return this.level.isClientSide ? pos : Wrap.of(this.level).canon(pos);
     }
 
     @Inject(method = "setBlockEntity", at = @At("HEAD"))
     private void alpha_omega$canonBlockEntity(BlockEntity blockEntity, CallbackInfo ci) {
         if (this.level.isClientSide) return;
         BlockPos pos = blockEntity.getBlockPos();
-        BlockPos canon = Wrap.canon(pos);
+        BlockPos canon = Wrap.of(this.level).canon(pos);
         if (canon != pos) ((BlockEntityAccessor) blockEntity).alpha_omega$setWorldPosition(canon);
     }
 }

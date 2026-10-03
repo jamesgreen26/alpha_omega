@@ -3,12 +3,16 @@ package g_mungus.alpha_omega.mixin.worldgen.structure;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.llamalad7.mixinextras.sugar.Local;
 import g_mungus.alpha_omega.wrap.Wrap;
+import g_mungus.alpha_omega.wrap.WrapHolder;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
+import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.structure.placement.ConcentricRingsStructurePlacement;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 
 /**
@@ -18,12 +22,18 @@ import org.spongepowered.asm.mixin.injection.At;
 @Mixin(ChunkGeneratorStructureState.class)
 abstract class ChunkGeneratorStructureStateMixin {
 
+    @Shadow
+    @Final
+    private RandomState randomState;
+
     @ModifyReturnValue(method = "generateRingPositions", at = @At("RETURN"))
     private CompletableFuture<List<ChunkPos>> alpha_omega$innerRingCanonical(CompletableFuture<List<ChunkPos>> positions,
                                                                            @Local(argsOnly = true) ConcentricRingsStructurePlacement placement) {
+        Wrap wrap = WrapHolder.of(this.randomState);
+        if (!wrap.enabled()) return positions;
         return positions.thenApply(list -> list.stream()
             .limit(Math.max(1, placement.spread()))
-            .map(Wrap::canon)
+            .map(wrap::canon)
             .distinct()
             .toList());
     }

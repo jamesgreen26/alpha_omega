@@ -1,5 +1,6 @@
 package g_mungus.alpha_omega.mixin.worldgen.structure;
 
+import g_mungus.alpha_omega.mixin.server.StructureManagerAccessor;
 import g_mungus.alpha_omega.wrap.Wrap;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ObjectList;
@@ -29,14 +30,15 @@ abstract class BeardifierMixin {
 
     @Inject(method = "forStructuresInChunk", at = @At("HEAD"), cancellable = true)
     private static void alpha_omega$forStructuresInChunk(StructureManager structureManager, ChunkPos chunkPos, CallbackInfoReturnable<Beardifier> cir) {
+        Wrap wrap = Wrap.of(((StructureManagerAccessor) structureManager).alpha_omega$getLevel());
         int minX = chunkPos.getMinBlockX();
         int minZ = chunkPos.getMinBlockZ();
         ObjectList<Beardifier.Rigid> rigids = new ObjectArrayList<>(10);
         ObjectList<JigsawJunction> junctions = new ObjectArrayList<>(32);
         structureManager.startsForStructure(chunkPos, structure -> structure.terrainAdaptation() != TerrainAdjustment.NONE).forEach(start -> {
             TerrainAdjustment adjustment = start.getStructure().terrainAdaptation();
-            int dx = Wrap.lapOffset(start.getBoundingBox().getCenter().getX(), chunkPos.getMiddleBlockX());
-            int dz = Wrap.lapOffset(start.getBoundingBox().getCenter().getZ(), chunkPos.getMiddleBlockZ());
+            int dx = wrap.lapOffset(start.getBoundingBox().getCenter().getX(), chunkPos.getMiddleBlockX());
+            int dz = wrap.lapOffset(start.getBoundingBox().getCenter().getZ(), chunkPos.getMiddleBlockZ());
             // The chunk, expressed in the structure's own frame, for the vanilla proximity test.
             ChunkPos local = new ChunkPos(chunkPos.x - (dx >> 4), chunkPos.z - (dz >> 4));
 

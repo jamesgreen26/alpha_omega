@@ -1,6 +1,5 @@
 package g_mungus.alpha_omega.wrap.noise;
 
-import g_mungus.alpha_omega.wrap.Wrap;
 import java.util.Arrays;
 import net.minecraft.world.level.levelgen.DensityFunction;
 
@@ -36,7 +35,7 @@ public final class RarityNoises {
         for (int i = 0; i < rarities.length; i++) {
             if (rarities[i] == rarity) return this.noises[i];
         }
-        double period = Wrap.PERIOD / rarity;
+        double period = this.source.alpha_omega$wrap().period / rarity;
         DensityFunction.NoiseHolder periodic = this.source.alpha_omega$periodic(this.noise, period, 0, period);
         DensityFunction.NoiseHolder[] noises = Arrays.copyOf(this.noises, rarities.length + 1);
         noises[rarities.length] = periodic;

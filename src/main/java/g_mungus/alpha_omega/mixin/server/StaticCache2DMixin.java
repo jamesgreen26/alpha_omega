@@ -1,6 +1,6 @@
 package g_mungus.alpha_omega.mixin.server;
 
-import g_mungus.alpha_omega.wrap.Wrap;
+import g_mungus.alpha_omega.wrap.WrapHolder;
 import net.minecraft.util.StaticCache2D;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -31,11 +31,11 @@ abstract class StaticCache2DMixin {
 
     @ModifyVariable(method = {"get", "contains"}, at = @At("HEAD"), argsOnly = true, ordinal = 0)
     private int alpha_omega$nearestX(int x) {
-        return Wrap.nearestChunk(x, this.minX + this.sizeX / 2);
+        return WrapHolder.of(this).nearestChunk(x, this.minX + this.sizeX / 2);
     }
 
     @ModifyVariable(method = {"get", "contains"}, at = @At("HEAD"), argsOnly = true, ordinal = 1)
     private int alpha_omega$nearestZ(int z) {
-        return Wrap.nearestChunk(z, this.minZ + this.sizeZ / 2);
+        return WrapHolder.of(this).nearestChunk(z, this.minZ + this.sizeZ / 2);
     }
 }

@@ -1,6 +1,5 @@
 package g_mungus.alpha_omega.mixin.worldgen.noise;
 
-import g_mungus.alpha_omega.wrap.Wrap;
 import g_mungus.alpha_omega.wrap.noise.NoisePeriods;
 import g_mungus.alpha_omega.wrap.noise.PeriodicNoiseSource;
 import g_mungus.alpha_omega.wrap.noise.PeriodicNoiseUser;
@@ -38,16 +37,17 @@ abstract class BlendedNoiseMixin implements PeriodicNoiseUser {
 
     @Override
     public void alpha_omega$makePeriodic(PeriodicNoiseSource source) {
+        int period = source.alpha_omega$wrap().period;
         double scale = 1.0;
         for (int i = 0; i < 8; i++) {
-            alpha_omega$configure(this.mainNoise.getOctaveNoise(i), Wrap.PERIOD * this.xzMultiplier / this.xzFactor * scale);
+            alpha_omega$configure(this.mainNoise.getOctaveNoise(i), period * this.xzMultiplier / this.xzFactor * scale);
             scale /= 2.0;
         }
         scale = 1.0;
         for (int j = 0; j < 16; j++) {
-            double period = Wrap.PERIOD * this.xzMultiplier * scale;
-            alpha_omega$configure(this.minLimitNoise.getOctaveNoise(j), period);
-            alpha_omega$configure(this.maxLimitNoise.getOctaveNoise(j), period);
+            double limitPeriod = period * this.xzMultiplier * scale;
+            alpha_omega$configure(this.minLimitNoise.getOctaveNoise(j), limitPeriod);
+            alpha_omega$configure(this.maxLimitNoise.getOctaveNoise(j), limitPeriod);
             scale /= 2.0;
         }
     }

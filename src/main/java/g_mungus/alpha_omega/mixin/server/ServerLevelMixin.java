@@ -48,7 +48,7 @@ abstract class ServerLevelMixin implements IslandManager.Holder {
     /** Respawn positions are block-side state: stored canonically, lifted on use. */
     @ModifyVariable(method = "setDefaultSpawnPos", at = @At("HEAD"), argsOnly = true)
     private BlockPos alpha_omega$canonSpawn(BlockPos pos) {
-        return Wrap.canon(pos);
+        return Wrap.of((ServerLevel) (Object) this).canon(pos);
     }
 
     // ---- R4: execution entry points ----
@@ -73,7 +73,7 @@ abstract class ServerLevelMixin implements IslandManager.Holder {
     /** Block events (pistons, note blocks, chests) are queued canonically (R1), so images of one event merge... */
     @ModifyVariable(method = "blockEvent", at = @At("HEAD"), argsOnly = true)
     private BlockPos alpha_omega$canonBlockEvent(BlockPos pos) {
-        return Wrap.canon(pos);
+        return Wrap.of((ServerLevel) (Object) this).canon(pos);
     }
 
     /** ...and run lifted. */
@@ -88,17 +88,17 @@ abstract class ServerLevelMixin implements IslandManager.Holder {
     @WrapOperation(method = "sendParticles(Lnet/minecraft/server/level/ServerPlayer;ZDDDLnet/minecraft/network/protocol/Packet;)Z",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/core/BlockPos;closerToCenterThan(Lnet/minecraft/core/Position;D)Z"))
     private boolean alpha_omega$particlesNearestImage(BlockPos player, Position pos, double distance, Operation<Boolean> original) {
-        return original.call(player, Wrap.nearest(new Vec3(pos.x(), pos.y(), pos.z()), Vec3.atCenterOf(player)), distance);
+        return original.call(player, Wrap.of((ServerLevel) (Object) this).nearest(new Vec3(pos.x(), pos.y(), pos.z()), Vec3.atCenterOf(player)), distance);
     }
 
     @WrapOperation(method = "destroyBlockProgress", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayer;getX()D"))
     private double alpha_omega$destroyProgressNearestX(ServerPlayer player, Operation<Double> original, @Local(argsOnly = true) BlockPos pos) {
-        return Wrap.nearest(original.call(player), pos.getX());
+        return Wrap.of((ServerLevel) (Object) this).nearest(original.call(player), pos.getX());
     }
 
     @WrapOperation(method = "destroyBlockProgress", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayer;getZ()D"))
     private double alpha_omega$destroyProgressNearestZ(ServerPlayer player, Operation<Double> original, @Local(argsOnly = true) BlockPos pos) {
-        return Wrap.nearest(original.call(player), pos.getZ());
+        return Wrap.of((ServerLevel) (Object) this).nearest(original.call(player), pos.getZ());
     }
 
     /**
@@ -133,9 +133,10 @@ abstract class ServerLevelMixin implements IslandManager.Holder {
 
     @Unique
     private static double alpha_omega$distanceSqr(Entity entity, double x, double y, double z) {
-        double dx = Wrap.minDelta(entity.getX(), x);
+        Wrap wrap = Wrap.of(entity.level());
+        double dx = wrap.minDelta(entity.getX(), x);
         double dy = entity.getY() - y;
-        double dz = Wrap.minDelta(entity.getZ(), z);
+        double dz = wrap.minDelta(entity.getZ(), z);
         return dx * dx + dy * dy + dz * dz;
     }
 }

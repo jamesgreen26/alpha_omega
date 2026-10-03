@@ -28,10 +28,12 @@ public final class Frames {
      * as two ints; read it with {@link #offsetX} and {@link #offsetZ}.
      */
     public static long lapOffset(ServerLevel level, int chunkX, int chunkZ) {
+        Wrap wrap = Wrap.of(level);
+        if (!wrap.enabled()) return 0;
         long laps = IslandManager.of(level).laps(chunkX, chunkZ);
-        if (laps == IslandGraph.ABSENT) return nearestPlayerOffset(level, chunkX, chunkZ);
-        int dx = (Wrap.canonChunk(chunkX) + IslandGraph.lapX(laps) * Wrap.CHUNK_PERIOD - chunkX) << 4;
-        int dz = (Wrap.canonChunk(chunkZ) + IslandGraph.lapZ(laps) * Wrap.CHUNK_PERIOD - chunkZ) << 4;
+        if (laps == IslandGraph.ABSENT) return nearestPlayerOffset(level, wrap, chunkX, chunkZ);
+        int dx = (wrap.canonChunk(chunkX) + IslandGraph.lapX(laps) * wrap.chunkPeriod - chunkX) << 4;
+        int dz = (wrap.canonChunk(chunkZ) + IslandGraph.lapZ(laps) * wrap.chunkPeriod - chunkZ) << 4;
         return pack(dx, dz);
     }
 
@@ -47,14 +49,14 @@ public final class Frames {
         return ((long) dx << 32) | (dz & 0xFFFFFFFFL);
     }
 
-    private static long nearestPlayerOffset(ServerLevel level, int chunkX, int chunkZ) {
+    private static long nearestPlayerOffset(ServerLevel level, Wrap wrap, int chunkX, int chunkZ) {
         int x = SectionPos.sectionToBlockCoord(chunkX, 8);
         int z = SectionPos.sectionToBlockCoord(chunkZ, 8);
         ServerPlayer nearest = null;
         double best = Double.MAX_VALUE;
         for (ServerPlayer player : level.players()) {
-            double dx = Wrap.minDelta(player.getX(), x);
-            double dz = Wrap.minDelta(player.getZ(), z);
+            double dx = wrap.minDelta(player.getX(), x);
+            double dz = wrap.minDelta(player.getZ(), z);
             double distance = dx * dx + dz * dz;
             if (distance < best) {
                 best = distance;
@@ -62,6 +64,6 @@ public final class Frames {
             }
         }
         if (nearest == null) return 0;
-        return pack(Wrap.lapOffset(x, nearest.getBlockX()), Wrap.lapOffset(z, nearest.getBlockZ()));
+        return pack(wrap.lapOffset(x, nearest.getBlockX()), wrap.lapOffset(z, nearest.getBlockZ()));
     }
 }

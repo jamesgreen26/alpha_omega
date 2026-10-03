@@ -1,6 +1,6 @@
 package g_mungus.alpha_omega.mixin.server;
 
-import g_mungus.alpha_omega.wrap.Wrap;
+import g_mungus.alpha_omega.wrap.WrapHolder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.ticks.LevelTicks;
 import net.minecraft.world.ticks.ScheduledTick;
@@ -14,12 +14,12 @@ abstract class LevelTicksMixin<T> {
 
     @ModifyVariable(method = "schedule", at = @At("HEAD"), argsOnly = true)
     private ScheduledTick<T> alpha_omega$canonTick(ScheduledTick<T> tick) {
-        BlockPos pos = Wrap.canon(tick.pos());
+        BlockPos pos = WrapHolder.of(this).canon(tick.pos());
         return pos == tick.pos() ? tick : new ScheduledTick<>(tick.type(), pos, tick.triggerTick(), tick.priority(), tick.subTickOrder());
     }
 
     @ModifyVariable(method = {"hasScheduledTick", "willTickThisTick"}, at = @At("HEAD"), argsOnly = true)
     private BlockPos alpha_omega$canonPos(BlockPos pos) {
-        return Wrap.canon(pos);
+        return WrapHolder.of(this).canon(pos);
     }
 }

@@ -3,6 +3,7 @@ package g_mungus.alpha_omega.gametest;
 import g_mungus.alpha_omega.AlphaOmegaMod;
 import g_mungus.alpha_omega.frame.Frames;
 import g_mungus.alpha_omega.wrap.Wrap;
+import g_mungus.alpha_omega.wrap.Wraps;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -35,12 +36,23 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @PrefixGameTestTemplate(false)
 public class FrameGameTests {
 
+    private static Wrap wrap() {
+        return Wraps.overworld();
+    }
+
+    private static int period() {
+        return wrap().period;
+    }
+
+    private static int chunks() {
+        return wrap().chunkPeriod;
+    }
+
     private static final String TEMPLATE = "gametest/flat_7x4x7";
     /** Tests that place a mock player change how chunks lift, so they run apart from everything else. */
     private static final String PLAYER_BATCH = "alpha_omega_players";
-    private static final int W = Wrap.PERIOD;
-    private static final int LAP_X = W;
-    private static final int LAP_Z = -2 * W;
+    private static final int LAP_X = period();
+    private static final int LAP_Z = -2 * period();
 
     /** The hopper searches from its own position; the item lies above an image of it. */
     @GameTest(template = TEMPLATE)
@@ -69,7 +81,7 @@ public class FrameGameTests {
             int before = pois.getFreeTickets(bell);
             Optional<BlockPos> taken = pois.take(type -> type.is(PoiTypes.MEETING), (type, pos) -> true, origin, 16);
             helper.assertTrue(taken.isPresent() && taken.get().equals(bell), "take returned " + taken);
-            helper.assertTrue(pois.getFreeTickets(Wrap.canon(bell)) == before - 1, "ticket not taken from the stored record");
+            helper.assertTrue(pois.getFreeTickets(wrap().canon(bell)) == before - 1, "ticket not taken from the stored record");
             pois.release(taken.get());
             helper.assertTrue(pois.getFreeTickets(bell) == before, "ticket not released");
         });
@@ -87,8 +99,8 @@ public class FrameGameTests {
 
     @GameTest(template = TEMPLATE)
     public static void mapCentersAreCanonical(GameTestHelper helper) {
-        MapItemSavedData map = MapItemSavedData.createFresh(-5000.0, 3.0 * W + 20.0, (byte) 0, false, false, Level.OVERWORLD);
-        helper.assertTrue(map.centerX >= 0 && map.centerX < W && map.centerZ >= 0 && map.centerZ < W,
+        MapItemSavedData map = MapItemSavedData.createFresh(-5000.0, 3.0 * period() + 20.0, (byte) 0, false, false, Level.OVERWORLD);
+        helper.assertTrue(map.centerX >= 0 && map.centerX < period() && map.centerZ >= 0 && map.centerZ < period(),
             "map center not canonical: " + map.centerX + ", " + map.centerZ);
         helper.succeed();
     }
@@ -107,7 +119,7 @@ public class FrameGameTests {
 
         helper.runAfterDelay(1, () -> {
             BlockPos lifted = Frames.lift(level, playerImage);
-            helper.assertTrue(Wrap.canon(lifted).equals(Wrap.canon(block)), "lift changed the canonical position");
+            helper.assertTrue(wrap().canon(lifted).equals(wrap().canon(block)), "lift changed the canonical position");
             helper.assertTrue(player.blockPosition().equals(lifted), "player " + player.blockPosition() + " not in the terrain's frame " + lifted);
 
             // R5 player proximity, from an image in another frame than the player.

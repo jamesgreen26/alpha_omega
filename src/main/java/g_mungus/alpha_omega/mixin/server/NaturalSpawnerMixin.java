@@ -27,7 +27,8 @@ abstract class NaturalSpawnerMixin {
     /** No spawning within 24 blocks of any image of the world spawn. */
     @WrapOperation(method = "isRightDistanceToPlayerAndSpawnPoint",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/core/BlockPos;closerToCenterThan(Lnet/minecraft/core/Position;D)Z"))
-    private static boolean alpha_omega$spawnPointNearestImage(BlockPos spawn, Position pos, double distance, Operation<Boolean> original) {
-        return original.call(spawn, Wrap.nearest(new Vec3(pos.x(), pos.y(), pos.z()), Vec3.atCenterOf(spawn)), distance);
+    private static boolean alpha_omega$spawnPointNearestImage(BlockPos spawn, Position pos, double distance, Operation<Boolean> original,
+                                                              @Local(argsOnly = true) ServerLevel level) {
+        return original.call(spawn, Wrap.of(level).nearest(new Vec3(pos.x(), pos.y(), pos.z()), Vec3.atCenterOf(spawn)), distance);
     }
 }

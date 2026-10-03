@@ -33,26 +33,30 @@ abstract class EntityMixin {
     @Inject(method = "saveWithoutId", at = @At("RETURN"))
     private void alpha_omega$tagFrame(CompoundTag tag, CallbackInfoReturnable<CompoundTag> cir) {
         if (this.level() == null || this.level().isClientSide || !tag.contains("Pos", Tag.TAG_LIST)) return;
+        Wrap wrap = Wrap.of(this.level());
+        if (!wrap.enabled()) return;
         ListTag pos = tag.getList("Pos", Tag.TAG_DOUBLE);
-        int lapX = Math.floorDiv((int) Math.floor(pos.getDouble(0)), Wrap.PERIOD);
-        int lapZ = Math.floorDiv((int) Math.floor(pos.getDouble(2)), Wrap.PERIOD);
+        int lapX = wrap.lap((int) Math.floor(pos.getDouble(0)));
+        int lapZ = wrap.lap((int) Math.floor(pos.getDouble(2)));
         tag.putIntArray(LAP_TAG, new int[] {lapX, lapZ});
-        pos.set(0, DoubleTag.valueOf(pos.getDouble(0) - (double) lapX * Wrap.PERIOD));
-        pos.set(2, DoubleTag.valueOf(pos.getDouble(2) - (double) lapZ * Wrap.PERIOD));
+        pos.set(0, DoubleTag.valueOf(pos.getDouble(0) - (double) lapX * wrap.period));
+        pos.set(2, DoubleTag.valueOf(pos.getDouble(2) - (double) lapZ * wrap.period));
     }
 
     @ModifyVariable(method = "load", at = @At("HEAD"), argsOnly = true)
     private CompoundTag alpha_omega$restoreFrame(CompoundTag tag) {
         int[] laps = tag.getIntArray(LAP_TAG);
-        if (laps.length != 2 || !tag.contains("Pos", Tag.TAG_LIST)) return tag;
+        if (laps.length != 2 || !tag.contains("Pos", Tag.TAG_LIST) || this.level() == null) return tag;
+        Wrap wrap = Wrap.of(this.level());
+        if (!wrap.enabled()) return tag;
         CompoundTag copy = tag.copy();
         ListTag pos = copy.getList("Pos", Tag.TAG_DOUBLE);
         // Pos may have been rewritten since (e.g. a structure template placing the entity): restore the tagged lap
         // relative to wherever it now is, keeping its canonical position.
         double x = pos.getDouble(0);
         double z = pos.getDouble(2);
-        pos.set(0, DoubleTag.valueOf(Wrap.canon(x) + (double) laps[0] * Wrap.PERIOD));
-        pos.set(2, DoubleTag.valueOf(Wrap.canon(z) + (double) laps[1] * Wrap.PERIOD));
+        pos.set(0, DoubleTag.valueOf(wrap.canon(x) + (double) laps[0] * wrap.period));
+        pos.set(2, DoubleTag.valueOf(wrap.canon(z) + (double) laps[1] * wrap.period));
         return copy;
     }
 }

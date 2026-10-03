@@ -1,6 +1,6 @@
 package g_mungus.alpha_omega.mixin.server;
 
-import g_mungus.alpha_omega.wrap.Wrap;
+import g_mungus.alpha_omega.wrap.WrapHolder;
 import net.minecraft.world.level.chunk.storage.SectionStorage;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -13,6 +13,6 @@ abstract class SectionStorageMixin {
     @ModifyVariable(method = {"get(J)Ljava/util/Optional;", "getOrLoad(J)Ljava/util/Optional;", "getOrCreate(J)Ljava/lang/Object;", "setDirty(J)V", "remove(J)V"},
         at = @At("HEAD"), argsOnly = true)
     private long alpha_omega$canonSection(long sectionKey) {
-        return Wrap.canonSectionKey(sectionKey);
+        return WrapHolder.of(this).canonSectionKey(sectionKey);
     }
 }

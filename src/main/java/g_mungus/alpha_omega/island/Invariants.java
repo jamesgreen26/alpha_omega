@@ -18,6 +18,8 @@ public final class Invariants {
     public static List<String> check(ServerLevel level) {
         List<String> violations = new ArrayList<>();
         IslandGraph graph = IslandManager.of(level).graph();
+        if (graph == null) return violations;
+        Wrap wrap = Wrap.of(level);
         int n = graph.period();
         int counted = 0;
         for (IslandGraph.Island island : graph.islands()) {
@@ -50,7 +52,7 @@ public final class Invariants {
         for (Entity entity : level.getAllEntities()) {
             int chunkX = entity.chunkPosition().x;
             int chunkZ = entity.chunkPosition().z;
-            long laps = graph.laps(Wrap.canonChunk(chunkX), Wrap.canonChunk(chunkZ));
+            long laps = graph.laps(wrap.canonChunk(chunkX), wrap.canonChunk(chunkZ));
             if (laps == IslandGraph.ABSENT) continue;
             if (Math.floorDiv(chunkX, n) != IslandGraph.lapX(laps) || Math.floorDiv(chunkZ, n) != IslandGraph.lapZ(laps)) {
                 violations.add("I4: " + entity + " is in lap " + Math.floorDiv(chunkX, n) + "," + Math.floorDiv(chunkZ, n)

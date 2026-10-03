@@ -68,6 +68,8 @@ public final class ClientboundNormalizer {
         ClientLevel level = mc.level;
         if (level == null) return;
 
+        Wrap wrap = Wrap.of(level);
+        if (!wrap.enabled()) return;
         ViewCenter center = (ViewCenter) level.getChunkSource();
         int cx = center.alpha_omega$viewCenterX();
         int cz = center.alpha_omega$viewCenterZ();
@@ -76,79 +78,79 @@ public final class ClientboundNormalizer {
             // ---- chunks ----
             case ClientboundLevelChunkWithLightPacket p -> {
                 LevelChunkWithLightPacketAccessor a = (LevelChunkWithLightPacketAccessor) p;
-                a.alpha_omega$setX(Wrap.nearestChunk(p.getX(), cx));
-                a.alpha_omega$setZ(Wrap.nearestChunk(p.getZ(), cz));
+                a.alpha_omega$setX(wrap.nearestChunk(p.getX(), cx));
+                a.alpha_omega$setZ(wrap.nearestChunk(p.getZ(), cz));
             }
             case ClientboundLightUpdatePacket p -> {
                 LightUpdatePacketAccessor a = (LightUpdatePacketAccessor) p;
-                a.alpha_omega$setX(Wrap.nearestChunk(p.getX(), cx));
-                a.alpha_omega$setZ(Wrap.nearestChunk(p.getZ(), cz));
+                a.alpha_omega$setX(wrap.nearestChunk(p.getX(), cx));
+                a.alpha_omega$setZ(wrap.nearestChunk(p.getZ(), cz));
             }
             case ClientboundForgetLevelChunkPacket p ->
-                ((ForgetLevelChunkPacketAccessor) (Object) p).alpha_omega$setPos(Wrap.nearest(p.pos(), cx, cz));
+                ((ForgetLevelChunkPacketAccessor) (Object) p).alpha_omega$setPos(wrap.nearest(p.pos(), cx, cz));
             case ClientboundChunksBiomesPacket p ->
                 ((ChunksBiomesPacketAccessor) (Object) p).alpha_omega$setChunkBiomeData(p.chunkBiomeData().stream()
-                    .map(d -> new ClientboundChunksBiomesPacket.ChunkBiomeData(Wrap.nearest(d.pos(), cx, cz), d.buffer()))
+                    .map(d -> new ClientboundChunksBiomesPacket.ChunkBiomeData(wrap.nearest(d.pos(), cx, cz), d.buffer()))
                     .toList());
             case ClientboundSetChunkCacheCenterPacket p -> {
                 // The center follows the player, so it is resolved against the player's chunk.
                 if (mc.player == null) return;
                 ChunkPos player = mc.player.chunkPosition();
                 SetChunkCacheCenterPacketAccessor a = (SetChunkCacheCenterPacketAccessor) p;
-                a.alpha_omega$setX(Wrap.nearestChunk(p.getX(), player.x));
-                a.alpha_omega$setZ(Wrap.nearestChunk(p.getZ(), player.z));
+                a.alpha_omega$setX(wrap.nearestChunk(p.getX(), player.x));
+                a.alpha_omega$setZ(wrap.nearestChunk(p.getZ(), player.z));
             }
 
             // ---- blocks ----
             case ClientboundBlockUpdatePacket p ->
-                ((BlockUpdatePacketAccessor) p).alpha_omega$setPos(Wrap.nearest(p.getPos(), reference(mc, cx, cz)));
+                ((BlockUpdatePacketAccessor) p).alpha_omega$setPos(wrap.nearest(p.getPos(), reference(mc, cx, cz)));
             case ClientboundSectionBlocksUpdatePacket p -> {
                 SectionBlocksUpdatePacketAccessor a = (SectionBlocksUpdatePacketAccessor) p;
                 SectionPos s = a.alpha_omega$getSectionPos();
                 a.alpha_omega$setSectionPos(
-                    SectionPos.of(Wrap.nearestChunk(s.x(), cx), s.y(), Wrap.nearestChunk(s.z(), cz)));
+                    SectionPos.of(wrap.nearestChunk(s.x(), cx), s.y(), wrap.nearestChunk(s.z(), cz)));
             }
             case ClientboundBlockEntityDataPacket p ->
-                ((BlockEntityDataPacketAccessor) p).alpha_omega$setPos(Wrap.nearest(p.getPos(), reference(mc, cx, cz)));
+                ((BlockEntityDataPacketAccessor) p).alpha_omega$setPos(wrap.nearest(p.getPos(), reference(mc, cx, cz)));
             case ClientboundBlockEventPacket p ->
-                ((BlockEventPacketAccessor) p).alpha_omega$setPos(Wrap.nearest(p.getPos(), reference(mc, cx, cz)));
+                ((BlockEventPacketAccessor) p).alpha_omega$setPos(wrap.nearest(p.getPos(), reference(mc, cx, cz)));
             case ClientboundBlockDestructionPacket p ->
-                ((BlockDestructionPacketAccessor) p).alpha_omega$setPos(Wrap.nearest(p.getPos(), reference(mc, cx, cz)));
+                ((BlockDestructionPacketAccessor) p).alpha_omega$setPos(wrap.nearest(p.getPos(), reference(mc, cx, cz)));
 
             // ---- entities ----
             case ClientboundAddEntityPacket p -> {
                 Vec3 ref = reference(mc, cx, cz);
                 AddEntityPacketAccessor a = (AddEntityPacketAccessor) p;
-                a.alpha_omega$setX(Wrap.nearest(p.getX(), ref.x));
-                a.alpha_omega$setZ(Wrap.nearest(p.getZ(), ref.z));
+                a.alpha_omega$setX(wrap.nearest(p.getX(), ref.x));
+                a.alpha_omega$setZ(wrap.nearest(p.getZ(), ref.z));
             }
             case ClientboundAddExperienceOrbPacket p -> {
                 Vec3 ref = reference(mc, cx, cz);
                 AddExperienceOrbPacketAccessor a = (AddExperienceOrbPacketAccessor) p;
-                a.alpha_omega$setX(Wrap.nearest(p.getX(), ref.x));
-                a.alpha_omega$setZ(Wrap.nearest(p.getZ(), ref.z));
+                a.alpha_omega$setX(wrap.nearest(p.getX(), ref.x));
+                a.alpha_omega$setZ(wrap.nearest(p.getZ(), ref.z));
             }
             case ClientboundTeleportEntityPacket p -> {
                 // Existing entity: stay continuous with where the client already has it.
                 Entity entity = level.getEntity(p.getId());
                 Vec3 ref = entity != null ? entity.position() : reference(mc, cx, cz);
                 TeleportEntityPacketAccessor a = (TeleportEntityPacketAccessor) p;
-                a.alpha_omega$setX(Wrap.nearest(p.getX(), ref.x));
-                a.alpha_omega$setZ(Wrap.nearest(p.getZ(), ref.z));
+                a.alpha_omega$setX(wrap.nearest(p.getX(), ref.x));
+                a.alpha_omega$setZ(wrap.nearest(p.getZ(), ref.z));
             }
             case ClientboundMoveVehiclePacket p -> {
                 if (mc.player == null) return;
                 Vec3 ref = mc.player.getRootVehicle().position();
                 ClientboundMoveVehiclePacketAccessor a = (ClientboundMoveVehiclePacketAccessor) p;
-                a.alpha_omega$setX(Wrap.nearest(p.getX(), ref.x));
-                a.alpha_omega$setZ(Wrap.nearest(p.getZ(), ref.z));
+                a.alpha_omega$setX(wrap.nearest(p.getX(), ref.x));
+                a.alpha_omega$setZ(wrap.nearest(p.getZ(), ref.z));
             }
             case ClientboundPlayerPositionPacket p -> {
                 // A server-side shift by k*W normalizes to a zero-distance update.
                 if (mc.player == null) return;
                 PlayerPositionPacketAccessor a = (PlayerPositionPacketAccessor) p;
-                if (!p.getRelativeArguments().contains(RelativeMovement.X)) a.alpha_omega$setX(Wrap.nearest(p.getX(), mc.player.getX()));
-                if (!p.getRelativeArguments().contains(RelativeMovement.Z)) a.alpha_omega$setZ(Wrap.nearest(p.getZ(), mc.player.getZ()));
+                if (!p.getRelativeArguments().contains(RelativeMovement.X)) a.alpha_omega$setX(wrap.nearest(p.getX(), mc.player.getX()));
+                if (!p.getRelativeArguments().contains(RelativeMovement.Z)) a.alpha_omega$setZ(wrap.nearest(p.getZ(), mc.player.getZ()));
             }
 
             // ---- effects ----
@@ -156,20 +158,20 @@ public final class ClientboundNormalizer {
                 // Positions are fixed point (x8).
                 Vec3 ref = reference(mc, cx, cz);
                 SoundPacketAccessor a = (SoundPacketAccessor) p;
-                a.alpha_omega$setX(WrapMath.nearestImage((int) (p.getX() * 8), (int) (ref.x * 8), Wrap.PERIOD * 8));
-                a.alpha_omega$setZ(WrapMath.nearestImage((int) (p.getZ() * 8), (int) (ref.z * 8), Wrap.PERIOD * 8));
+                a.alpha_omega$setX(WrapMath.nearestImage((int) (p.getX() * 8), (int) (ref.x * 8), wrap.period * 8));
+                a.alpha_omega$setZ(WrapMath.nearestImage((int) (p.getZ() * 8), (int) (ref.z * 8), wrap.period * 8));
             }
             case ClientboundLevelParticlesPacket p -> {
                 Vec3 ref = reference(mc, cx, cz);
                 LevelParticlesPacketAccessor a = (LevelParticlesPacketAccessor) p;
-                a.alpha_omega$setX(Wrap.nearest(p.getX(), ref.x));
-                a.alpha_omega$setZ(Wrap.nearest(p.getZ(), ref.z));
+                a.alpha_omega$setX(wrap.nearest(p.getX(), ref.x));
+                a.alpha_omega$setZ(wrap.nearest(p.getZ(), ref.z));
             }
             case ClientboundExplodePacket p -> {
                 // The explosion center and every destroyed block move together, so they stay one image.
                 Vec3 ref = reference(mc, cx, cz);
-                double dx = Wrap.nearest(p.getX(), ref.x) - p.getX();
-                double dz = Wrap.nearest(p.getZ(), ref.z) - p.getZ();
+                double dx = wrap.nearest(p.getX(), ref.x) - p.getX();
+                double dz = wrap.nearest(p.getZ(), ref.z) - p.getZ();
                 if (dx != 0 || dz != 0) {
                     ExplodePacketAccessor a = (ExplodePacketAccessor) p;
                     a.alpha_omega$setX(p.getX() + dx);
@@ -178,7 +180,7 @@ public final class ClientboundNormalizer {
                 }
             }
             case ClientboundLevelEventPacket p ->
-                ((LevelEventPacketAccessor) p).alpha_omega$setPos(Wrap.nearest(p.getPos(), reference(mc, cx, cz)));
+                ((LevelEventPacketAccessor) p).alpha_omega$setPos(wrap.nearest(p.getPos(), reference(mc, cx, cz)));
             default -> {
             }
         }

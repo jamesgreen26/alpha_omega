@@ -5,6 +5,8 @@ import g_mungus.alpha_omega.mixin.server.entity.BrainAccessor;
 import g_mungus.alpha_omega.mixin.server.entity.EyeOfEnderAccessor;
 import g_mungus.alpha_omega.mixin.server.entity.PhantomAccessor;
 import g_mungus.alpha_omega.mixin.server.entity.TurtleAccessor;
+import g_mungus.alpha_omega.wrap.Wrap;
+import g_mungus.alpha_omega.wrap.WrapHolder;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -78,7 +80,9 @@ public final class BuiltinFrameTranslators {
             SectionPos last = player.getLastSectionPos();
             player.setLastSectionPos(SectionPos.of(last.x() + sx, last.y(), last.z() + sz));
             if (player.getChunkTrackingView() instanceof ChunkTrackingView.Positioned view) {
-                player.setChunkTrackingView(ChunkTrackingView.of(new ChunkPos(view.center().x + sx, view.center().z + sz), view.viewDistance()));
+                ChunkTrackingView moved = ChunkTrackingView.of(new ChunkPos(view.center().x + sx, view.center().z + sz), view.viewDistance());
+                WrapHolder.set(moved, Wrap.of(player.level()));
+                player.setChunkTrackingView(moved);
             }
         });
     }

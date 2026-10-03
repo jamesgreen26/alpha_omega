@@ -30,7 +30,9 @@ public final class IslandManager {
     }
 
     private final ServerLevel level;
-    private final IslandGraph graph = new IslandGraph(Wrap.CHUNK_PERIOD);
+    private final Wrap wrap;
+    /** Null for a level that does not wrap: the manager is then inert. */
+    private final IslandGraph graph;
     /** Entities whose frame must be checked at the end of the tick (they moved into another section or lap). */
     private final ReferenceLinkedOpenHashSet<Entity> frameChecks = new ReferenceLinkedOpenHashSet<>();
     /** Chunks that joined this tick, whose entities must be brought into the chunk's frame. */
@@ -38,6 +40,8 @@ public final class IslandManager {
 
     public IslandManager(ServerLevel level) {
         this.level = level;
+        this.wrap = Wrap.of(level);
+        this.graph = this.wrap.enabled() ? new IslandGraph(this.wrap.chunkPeriod) : null;
     }
 
     public static IslandManager of(ServerLevel level) {
@@ -50,25 +54,29 @@ public final class IslandManager {
 
     /** The lap pair of a chunk (any image), or {@link IslandGraph#ABSENT} if it is not loaded. */
     public long laps(int chunkX, int chunkZ) {
-        return this.graph.laps(Wrap.canonChunk(chunkX), Wrap.canonChunk(chunkZ));
+        if (this.graph == null) return IslandGraph.ABSENT;
+        return this.graph.laps(this.wrap.canonChunk(chunkX), this.wrap.canonChunk(chunkZ));
     }
 
     // ---- chunk lifecycle (server thread) ----
 
     public void onChunkLoaded(ChunkPos pos) {
-        int x = Wrap.canonChunk(pos.x);
-        int z = Wrap.canonChunk(pos.z);
+        if (this.graph == null) return;
+        int x = this.wrap.canonChunk(pos.x);
+        int z = this.wrap.canonChunk(pos.z);
         this.graph.join(x, z, this::seedLaps, this::playerWeight);
         this.joinedChunks.add(IslandGraph.key(x, z));
     }
 
     public void onChunkUnloaded(ChunkPos pos) {
-        this.graph.leave(Wrap.canonChunk(pos.x), Wrap.canonChunk(pos.z));
+        if (this.graph == null) return;
+        this.graph.leave(this.wrap.canonChunk(pos.x), this.wrap.canonChunk(pos.z));
     }
 
     // ---- entities ----
 
     public void queueFrameCheck(Entity entity) {
+        if (this.graph == null) return;
         this.frameChecks.add(entity);
     }
 
@@ -76,11 +84,14 @@ public final class IslandManager {
     private static final int MAX_MERGES_PER_TICK = 64;
     /** How often cuts are re-evaluated and islands recentered. */
     private static final int MAINTENANCE_INTERVAL = 100;
-    /** Islands drifting more than this many laps from the origin are shifted back (§5.9). */
-    public static final int RECENTER_LAPS = Math.max(1, 5_000_000 / Wrap.PERIOD);
+    /** Islands drifting more than this many laps (about 5,000,000 blocks) from the origin are shifted back (§5.9). */
+    public int recenterLaps() {
+        return Math.max(1, 5_000_000 / this.wrap.period);
+    }
 
     /** End of the server tick: lazy splits, merges (shifting the lighter island), then entity frame checks. */
     public void tick() {
+        if (this.graph == null) return;
         this.graph.processSplits();
         this.resolveMerges();
         this.resolveLoops();
@@ -136,6 +147,7 @@ public final class IslandManager {
      * positions they hold. Block-side state is canonical and needs nothing; clients see nothing (R6).
      */
     public void shift(int island, int lapDX, int lapDZ) {
+        if (this.graph == null) return;
         IslandGraph.Island target = this.graph.island(island);
         if (target == null || (lapDX == 0 && lapDZ == 0)) return;
         ReferenceLinkedOpenHashSet<Entity> roots = new ReferenceLinkedOpenHashSet<>();
@@ -145,8 +157,8 @@ public final class IslandManager {
                 .forEach(section -> section.getEntities().forEach(entity -> roots.add(entity.getRootVehicle())));
         }
         this.graph.shift(island, lapDX, lapDZ);
-        double dx = (double) lapDX * Wrap.PERIOD;
-        double dz = (double) lapDZ * Wrap.PERIOD;
+        double dx = (double) lapDX * this.wrap.period;
+        double dz = (double) lapDZ * this.wrap.period;
         for (Entity root : roots) EntityFrames.translate(root, dx, dz);
     }
 
@@ -185,16 +197,16 @@ public final class IslandManager {
 
     /** The boundary with no player within view distance and the fewest entities around it. */
     private int quietestBoundary(boolean xAxis) {
-        int n = Wrap.CHUNK_PERIOD;
+        int n = this.wrap.chunkPeriod;
         long[] entities = new long[n];
         for (Entity entity : this.level.getAllEntities()) {
-            entities[Wrap.canonChunk(xAxis ? entity.chunkPosition().x : entity.chunkPosition().z)]++;
+            entities[this.wrap.canonChunk(xAxis ? entity.chunkPosition().x : entity.chunkPosition().z)]++;
         }
         int best = 0;
         long bestScore = Long.MAX_VALUE;
         for (int boundary = 0; boundary < n; boundary++) {
             long score = this.playerNear(xAxis, boundary) ? 1L << 40 : 0;
-            for (int d = -2; d <= 1; d++) score += entities[Wrap.canonChunk(boundary + d)];
+            for (int d = -2; d <= 1; d++) score += entities[this.wrap.canonChunk(boundary + d)];
             if (score < bestScore) {
                 bestScore = score;
                 best = boundary;
@@ -207,7 +219,7 @@ public final class IslandManager {
         int range = this.level.getServer().getPlayerList().getViewDistance() + 2;
         for (ServerPlayer player : this.level.players()) {
             int chunk = xAxis ? player.chunkPosition().x : player.chunkPosition().z;
-            if (Math.abs(Wrap.minChunkDelta(chunk, boundary)) <= range || Math.abs(Wrap.minChunkDelta(chunk, boundary - 1)) <= range) return true;
+            if (Math.abs(this.wrap.minChunkDelta(chunk, boundary)) <= range || Math.abs(this.wrap.minChunkDelta(chunk, boundary - 1)) <= range) return true;
         }
         return false;
     }
@@ -215,7 +227,7 @@ public final class IslandManager {
     /** When a component is re-lifted, a chunk with a player keeps its lift, so players never jump frames. */
     private long anchor(LongOpenHashSet component) {
         for (ServerPlayer player : this.level.players()) {
-            long key = IslandGraph.key(Wrap.canonChunk(player.chunkPosition().x), Wrap.canonChunk(player.chunkPosition().z));
+            long key = IslandGraph.key(this.wrap.canonChunk(player.chunkPosition().x), this.wrap.canonChunk(player.chunkPosition().z));
             if (component.contains(key)) return key;
         }
         return component.iterator().nextLong();
@@ -233,7 +245,7 @@ public final class IslandManager {
         }
         for (Reference2LongMap.Entry<Entity> entry : roots.reference2LongEntrySet()) {
             long laps = entry.getLongValue();
-            EntityFrames.translate(entry.getKey(), (double) IslandGraph.lapX(laps) * Wrap.PERIOD, (double) IslandGraph.lapZ(laps) * Wrap.PERIOD);
+            EntityFrames.translate(entry.getKey(), (double) IslandGraph.lapX(laps) * this.wrap.period, (double) IslandGraph.lapZ(laps) * this.wrap.period);
         }
     }
 
@@ -241,13 +253,15 @@ public final class IslandManager {
 
     /** Islands that have drifted many laps from the origin shift back, keeping coordinates far from the limits. */
     public void recenter() {
+        if (this.graph == null) return;
+        int limit = this.recenterLaps();
         for (IslandGraph.Island island : List.copyOf(this.graph.islands())) {
             long key = island.chunks().iterator().nextLong();
             long laps = this.graph.laps(IslandGraph.keyX(key), IslandGraph.keyZ(key));
             int lx = IslandGraph.lapX(laps);
             int lz = IslandGraph.lapZ(laps);
-            if (Math.abs(lx) > RECENTER_LAPS || Math.abs(lz) > RECENTER_LAPS) {
-                this.shift(island.id, Math.abs(lx) > RECENTER_LAPS ? -lx : 0, Math.abs(lz) > RECENTER_LAPS ? -lz : 0);
+            if (Math.abs(lx) > limit || Math.abs(lz) > limit) {
+                this.shift(island.id, Math.abs(lx) > limit ? -lx : 0, Math.abs(lz) > limit ? -lz : 0);
             }
         }
     }
@@ -263,8 +277,8 @@ public final class IslandManager {
         ServerPlayer nearest = null;
         int best = Integer.MAX_VALUE;
         for (ServerPlayer player : this.level.players()) {
-            int dx = Math.abs(Wrap.minChunkDelta(x, SectionPos.blockToSectionCoord(player.getBlockX())));
-            int dz = Math.abs(Wrap.minChunkDelta(z, SectionPos.blockToSectionCoord(player.getBlockZ())));
+            int dx = Math.abs(this.wrap.minChunkDelta(x, SectionPos.blockToSectionCoord(player.getBlockX())));
+            int dz = Math.abs(this.wrap.minChunkDelta(z, SectionPos.blockToSectionCoord(player.getBlockZ())));
             int distance = Math.max(dx, dz);
             if (distance <= range && distance < best) {
                 best = distance;
@@ -272,16 +286,16 @@ public final class IslandManager {
             }
         }
         if (nearest == null) return IslandGraph.packLaps(0, 0);
-        int liftedX = Wrap.nearestChunk(x, SectionPos.blockToSectionCoord(nearest.getBlockX()));
-        int liftedZ = Wrap.nearestChunk(z, SectionPos.blockToSectionCoord(nearest.getBlockZ()));
-        return IslandGraph.packLaps(Math.floorDiv(liftedX, Wrap.CHUNK_PERIOD), Math.floorDiv(liftedZ, Wrap.CHUNK_PERIOD));
+        int liftedX = this.wrap.nearestChunk(x, SectionPos.blockToSectionCoord(nearest.getBlockX()));
+        int liftedZ = this.wrap.nearestChunk(z, SectionPos.blockToSectionCoord(nearest.getBlockZ()));
+        return IslandGraph.packLaps(Math.floorDiv(liftedX, this.wrap.chunkPeriod), Math.floorDiv(liftedZ, this.wrap.chunkPeriod));
     }
 
     /** Islands with players win joins and merges, so players are never the ones re-framed. */
     private long playerWeight(int island) {
         long players = 0;
         for (ServerPlayer player : this.level.players()) {
-            if (this.graph.islandOf(Wrap.canonChunk(player.chunkPosition().x), Wrap.canonChunk(player.chunkPosition().z)) == island) players++;
+            if (this.graph.islandOf(this.wrap.canonChunk(player.chunkPosition().x), this.wrap.canonChunk(player.chunkPosition().z)) == island) players++;
         }
         return players;
     }

@@ -17,11 +17,11 @@ abstract class NetherPortalBlockMixin {
 
     @WrapOperation(method = "getPortalDestination", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;getX()D"))
     private double alpha_omega$canonicalX(Entity entity, Operation<Double> original) {
-        return Wrap.canon(original.call(entity));
+        return Wrap.of(entity.level()).canon(original.call(entity));
     }
 
     @WrapOperation(method = "getPortalDestination", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;getZ()D"))
     private double alpha_omega$canonicalZ(Entity entity, Operation<Double> original) {
-        return Wrap.canon(original.call(entity));
+        return Wrap.of(entity.level()).canon(original.call(entity));
     }
 }

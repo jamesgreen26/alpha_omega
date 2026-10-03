@@ -1,6 +1,5 @@
 package g_mungus.alpha_omega.mixin.worldgen.noise;
 
-import g_mungus.alpha_omega.wrap.Wrap;
 import g_mungus.alpha_omega.wrap.noise.PeriodicNoiseSource;
 import g_mungus.alpha_omega.wrap.noise.PeriodicNoiseUser;
 import net.minecraft.world.level.levelgen.DensityFunction;
@@ -23,6 +22,6 @@ abstract class ShiftedNoiseMixin implements PeriodicNoiseUser {
     private double xzScale;
     @Override
     public void alpha_omega$makePeriodic(PeriodicNoiseSource source) {
-        this.noise = source.alpha_omega$periodic(this.noise, Wrap.PERIOD * this.xzScale, 0, Wrap.PERIOD * this.xzScale);
+        this.noise = source.alpha_omega$periodic(this.noise, source.alpha_omega$wrap().period * this.xzScale, 0, source.alpha_omega$wrap().period * this.xzScale);
     }
 }

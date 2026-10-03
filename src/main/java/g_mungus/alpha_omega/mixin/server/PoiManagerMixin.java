@@ -3,6 +3,7 @@ package g_mungus.alpha_omega.mixin.server;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.llamalad7.mixinextras.sugar.Local;
 import g_mungus.alpha_omega.wrap.Wrap;
+import g_mungus.alpha_omega.wrap.WrapHolder;
 import g_mungus.alpha_omega.wrap.poi.PoiRecordImage;
 import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
@@ -19,7 +20,7 @@ abstract class PoiManagerMixin {
 
     @ModifyVariable(method = {"add", "remove", "release", "exists", "getType", "getFreeTickets"}, at = @At("HEAD"), argsOnly = true)
     private BlockPos alpha_omega$canonPos(BlockPos pos) {
-        return Wrap.canon(pos);
+        return WrapHolder.of(this).canon(pos);
     }
 
     /**
@@ -29,8 +30,9 @@ abstract class PoiManagerMixin {
      */
     @ModifyReturnValue(method = "getInChunk", at = @At("RETURN"))
     private Stream<PoiRecord> alpha_omega$atRequestedImage(Stream<PoiRecord> records, @Local(argsOnly = true) ChunkPos chunk) {
-        int dx = (chunk.x - Wrap.canonChunk(chunk.x)) << 4;
-        int dz = (chunk.z - Wrap.canonChunk(chunk.z)) << 4;
+        Wrap wrap = WrapHolder.of(this);
+        int dx = (chunk.x - wrap.canonChunk(chunk.x)) << 4;
+        int dz = (chunk.z - wrap.canonChunk(chunk.z)) << 4;
         return dx == 0 && dz == 0 ? records : records.map(record -> new PoiRecordImage(record, dx, dz));
     }
 }

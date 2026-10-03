@@ -16,11 +16,11 @@ abstract class MapItemMixin {
 
     @WrapOperation(method = "update", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;getX()D"))
     private double alpha_omega$holderX(Entity holder, Operation<Double> original, @Local(argsOnly = true) MapItemSavedData data) {
-        return Wrap.nearest(original.call(holder), data.centerX);
+        return Wrap.of(data.dimension).nearest(original.call(holder), data.centerX);
     }
 
     @WrapOperation(method = "update", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;getZ()D"))
     private double alpha_omega$holderZ(Entity holder, Operation<Double> original, @Local(argsOnly = true) MapItemSavedData data) {
-        return Wrap.nearest(original.call(holder), data.centerZ);
+        return Wrap.of(data.dimension).nearest(original.call(holder), data.centerZ);
     }
 }

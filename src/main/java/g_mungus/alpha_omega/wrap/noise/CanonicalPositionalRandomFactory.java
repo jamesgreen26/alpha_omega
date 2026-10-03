@@ -8,14 +8,16 @@ import net.minecraft.world.level.levelgen.PositionalRandomFactory;
 public final class CanonicalPositionalRandomFactory implements PositionalRandomFactory {
 
     private final PositionalRandomFactory delegate;
+    private final Wrap wrap;
 
-    public CanonicalPositionalRandomFactory(PositionalRandomFactory delegate) {
+    public CanonicalPositionalRandomFactory(PositionalRandomFactory delegate, Wrap wrap) {
         this.delegate = delegate;
+        this.wrap = wrap;
     }
 
     @Override
     public RandomSource at(int x, int y, int z) {
-        return this.delegate.at(Wrap.canonBlock(x), y, Wrap.canonBlock(z));
+        return this.delegate.at(this.wrap.canonBlock(x), y, this.wrap.canonBlock(z));
     }
 
     @Override

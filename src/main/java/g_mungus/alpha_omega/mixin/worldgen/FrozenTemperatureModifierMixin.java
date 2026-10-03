@@ -3,6 +3,7 @@ package g_mungus.alpha_omega.mixin.worldgen;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import g_mungus.alpha_omega.wrap.Wrap;
+import g_mungus.alpha_omega.wrap.Wraps;
 import g_mungus.alpha_omega.wrap.noise.PeriodicSimplex;
 import net.minecraft.world.level.levelgen.synth.PerlinSimplexNoise;
 import org.spongepowered.asm.mixin.Mixin;
@@ -18,16 +19,19 @@ abstract class FrozenTemperatureModifierMixin {
 
     @WrapOperation(method = "modifyTemperature", at = @At(value = "INVOKE", target = GET_VALUE, ordinal = 0))
     private double alpha_omega$periodicFrozen(PerlinSimplexNoise noise, double u, double v, boolean offsets, Operation<Double> original) {
-        return PeriodicSimplex.sample(noise, u, v, offsets, Wrap.PERIOD * 0.05);
+        Wrap wrap = Wraps.overworld();
+        return wrap.enabled() ? PeriodicSimplex.sample(noise, u, v, offsets, wrap.period * 0.05) : original.call(noise, u, v, offsets);
     }
 
     @WrapOperation(method = "modifyTemperature", at = @At(value = "INVOKE", target = GET_VALUE, ordinal = 1))
     private double alpha_omega$periodicInfo(PerlinSimplexNoise noise, double u, double v, boolean offsets, Operation<Double> original) {
-        return PeriodicSimplex.sample(noise, u, v, offsets, Wrap.PERIOD * 0.2);
+        Wrap wrap = Wraps.overworld();
+        return wrap.enabled() ? PeriodicSimplex.sample(noise, u, v, offsets, wrap.period * 0.2) : original.call(noise, u, v, offsets);
     }
 
     @WrapOperation(method = "modifyTemperature", at = @At(value = "INVOKE", target = GET_VALUE, ordinal = 2))
     private double alpha_omega$periodicInfoFine(PerlinSimplexNoise noise, double u, double v, boolean offsets, Operation<Double> original) {
-        return PeriodicSimplex.sample(noise, u, v, offsets, Wrap.PERIOD * 0.09);
+        Wrap wrap = Wraps.overworld();
+        return wrap.enabled() ? PeriodicSimplex.sample(noise, u, v, offsets, wrap.period * 0.09) : original.call(noise, u, v, offsets);
     }
 }

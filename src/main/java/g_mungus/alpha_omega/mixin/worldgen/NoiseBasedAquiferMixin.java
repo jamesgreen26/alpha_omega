@@ -1,7 +1,12 @@
 package g_mungus.alpha_omega.mixin.worldgen;
 
 import g_mungus.alpha_omega.wrap.Wrap;
+import g_mungus.alpha_omega.wrap.WrapHolder;
+import net.minecraft.world.level.levelgen.NoiseChunk;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 
@@ -14,41 +19,52 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
 @Mixin(targets = "net.minecraft.world.level.levelgen.Aquifer$NoiseBasedAquifer")
 abstract class NoiseBasedAquiferMixin {
 
+    @Shadow
+    @Final
+    private NoiseChunk noiseChunk;
+
     @ModifyArg(method = "computeSubstance",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/levelgen/PositionalRandomFactory;at(III)Lnet/minecraft/util/RandomSource;"),
         index = 0)
     private int alpha_omega$canonCellX(int cellX) {
-        return Wrap.canonChunk(cellX);
+        return WrapHolder.of(this.noiseChunk).canonChunk(cellX);
     }
 
     @ModifyArg(method = "computeSubstance",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/levelgen/PositionalRandomFactory;at(III)Lnet/minecraft/util/RandomSource;"),
         index = 2)
     private int alpha_omega$canonCellZ(int cellZ) {
-        return Wrap.canonChunk(cellZ);
+        return WrapHolder.of(this.noiseChunk).canonChunk(cellZ);
     }
 
     @ModifyArg(method = "computeRandomizedFluidSurfaceLevel",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/levelgen/DensityFunction$SinglePointContext;<init>(III)V"), index = 0)
     private int alpha_omega$canonSpreadCellX(int cellX) {
-        return Math.floorMod(cellX, Wrap.PERIOD / 16);
+        return alpha_omega$wrapCell(cellX, 16);
     }
 
     @ModifyArg(method = "computeRandomizedFluidSurfaceLevel",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/levelgen/DensityFunction$SinglePointContext;<init>(III)V"), index = 2)
     private int alpha_omega$canonSpreadCellZ(int cellZ) {
-        return Math.floorMod(cellZ, Wrap.PERIOD / 16);
+        return alpha_omega$wrapCell(cellZ, 16);
     }
 
     @ModifyArg(method = "computeFluidType",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/levelgen/DensityFunction$SinglePointContext;<init>(III)V"), index = 0)
     private int alpha_omega$canonLavaCellX(int cellX) {
-        return Math.floorMod(cellX, Wrap.PERIOD / 64);
+        return alpha_omega$wrapCell(cellX, 64);
     }
 
     @ModifyArg(method = "computeFluidType",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/levelgen/DensityFunction$SinglePointContext;<init>(III)V"), index = 2)
     private int alpha_omega$canonLavaCellZ(int cellZ) {
-        return Math.floorMod(cellZ, Wrap.PERIOD / 64);
+        return alpha_omega$wrapCell(cellZ, 64);
+    }
+
+    /** Wraps a cell index for cells {@code size} blocks wide (the size divides every supported period). */
+    @Unique
+    private int alpha_omega$wrapCell(int cell, int size) {
+        Wrap wrap = WrapHolder.of(this.noiseChunk);
+        return wrap.enabled() ? Math.floorMod(cell, wrap.period / size) : cell;
     }
 }

@@ -2,7 +2,10 @@ package g_mungus.alpha_omega.mixin.server;
 
 import g_mungus.alpha_omega.wrap.Wrap;
 import net.minecraft.server.level.ServerChunkCache;
+import net.minecraft.server.level.ServerLevel;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
@@ -10,6 +13,9 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 @Mixin(ServerChunkCache.class)
 abstract class ServerChunkCacheMixin {
 
+    @Shadow
+    @Final
+    public ServerLevel level;
 
     @ModifyVariable(method = {
         "getChunk(IILnet/minecraft/world/level/chunk/status/ChunkStatus;Z)Lnet/minecraft/world/level/chunk/ChunkAccess;",
@@ -19,7 +25,7 @@ abstract class ServerChunkCacheMixin {
         "getChunkForLighting(II)Lnet/minecraft/world/level/chunk/LightChunk;",
     }, at = @At("HEAD"), argsOnly = true, ordinal = 0)
     private int alpha_omega$canonX(int x) {
-        return Wrap.canonChunk(x);
+        return Wrap.of(this.level).canonChunk(x);
     }
 
     @ModifyVariable(method = {
@@ -30,11 +36,11 @@ abstract class ServerChunkCacheMixin {
         "getChunkForLighting(II)Lnet/minecraft/world/level/chunk/LightChunk;",
     }, at = @At("HEAD"), argsOnly = true, ordinal = 1)
     private int alpha_omega$canonZ(int z) {
-        return Wrap.canonChunk(z);
+        return Wrap.of(this.level).canonChunk(z);
     }
 
     @ModifyVariable(method = "isPositionTicking(J)Z", at = @At("HEAD"), argsOnly = true)
     private long alpha_omega$canonKey(long chunkKey) {
-        return Wrap.canonChunkKey(chunkKey);
+        return Wrap.of(this.level).canonChunkKey(chunkKey);
     }
 }

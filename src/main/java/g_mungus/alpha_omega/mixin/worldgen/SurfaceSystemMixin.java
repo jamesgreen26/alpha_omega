@@ -1,7 +1,6 @@
 package g_mungus.alpha_omega.mixin.worldgen;
 
 import com.llamalad7.mixinextras.sugar.Local;
-import g_mungus.alpha_omega.wrap.Wrap;
 import g_mungus.alpha_omega.wrap.noise.PeriodicNoiseSource;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.levelgen.Noises;
@@ -34,6 +33,7 @@ abstract class SurfaceSystemMixin {
     @Inject(method = "<init>", at = @At("RETURN"))
     private void alpha_omega$makePeriodic(CallbackInfo ci, @Local(argsOnly = true) RandomState randomState) {
         PeriodicNoiseSource source = (PeriodicNoiseSource) (Object) randomState;
+        if (!source.alpha_omega$wrap().enabled()) return;
         this.clayBandsOffsetNoise = alpha_omega$periodic(source, Noises.CLAY_BANDS_OFFSET, this.clayBandsOffsetNoise, 1.0);
         this.surfaceNoise = alpha_omega$periodic(source, Noises.SURFACE, this.surfaceNoise, 1.0);
         this.surfaceSecondaryNoise = alpha_omega$periodic(source, Noises.SURFACE_SECONDARY, this.surfaceSecondaryNoise, 1.0);
@@ -47,6 +47,7 @@ abstract class SurfaceSystemMixin {
 
     @Unique
     private static NormalNoise alpha_omega$periodic(PeriodicNoiseSource source, ResourceKey<NormalNoise.NoiseParameters> key, NormalNoise noise, double scale) {
-        return source.alpha_omega$periodic(key, noise, Wrap.PERIOD * scale, 0, Wrap.PERIOD * scale);
+        int period = source.alpha_omega$wrap().period;
+        return source.alpha_omega$periodic(key, noise, period * scale, 0, period * scale);
     }
 }

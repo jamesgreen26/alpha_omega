@@ -2,6 +2,7 @@ package g_mungus.alpha_omega.gametest;
 
 import g_mungus.alpha_omega.AlphaOmegaMod;
 import g_mungus.alpha_omega.wrap.Wrap;
+import g_mungus.alpha_omega.wrap.Wraps;
 import java.util.List;
 import java.util.Map;
 import net.minecraft.core.QuartPos;
@@ -30,15 +31,26 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 /**
- * Periodic worldgen (design doc §12): generation is a function of position that repeats every {@code W}, so the
- * column at {@code x = 0} continues the column at {@code x = W - 1} with no seam.
+ * Periodic worldgen (design doc §12): generation is a function of position that repeats every {@code period()}, so the
+ * column at {@code x = 0} continues the column at {@code x = period() - 1} with no seam.
  */
 @GameTestHolder(AlphaOmegaMod.MOD_ID)
 @PrefixGameTestTemplate(false)
 public class WorldgenGameTests {
 
+    private static Wrap wrap() {
+        return Wraps.overworld();
+    }
+
+    private static int period() {
+        return wrap().period;
+    }
+
+    private static int chunks() {
+        return wrap().chunkPeriod;
+    }
+
     private static final String TEMPLATE = "gametest/flat_7x4x7";
-    private static final int W = Wrap.PERIOD;
     private static final double TOLERANCE = 1e-6;
 
     @GameTest(template = TEMPLATE)
@@ -69,14 +81,14 @@ public class WorldgenGameTests {
 
         RandomSource random = RandomSource.create(42L);
         for (int sample = 0; sample < 400; sample++) {
-            int x = sample < 50 ? W - 25 + sample : random.nextInt(W);
+            int x = sample < 50 ? period() - 25 + sample : random.nextInt(period());
             int y = random.nextIntBetweenInclusive(-64, 256);
-            int z = random.nextInt(W);
+            int z = random.nextInt(period());
             for (Map.Entry<String, DensityFunction> entry : functions.entrySet()) {
                 double base = entry.getValue().compute(new DensityFunction.SinglePointContext(x, y, z));
-                assertImage(helper, settings + "/" + entry.getKey(), x, z, base, entry.getValue().compute(new DensityFunction.SinglePointContext(x + W, y, z)));
-                assertImage(helper, settings + "/" + entry.getKey(), x, z, base, entry.getValue().compute(new DensityFunction.SinglePointContext(x, y, z - W)));
-                assertImage(helper, settings + "/" + entry.getKey(), x, z, base, entry.getValue().compute(new DensityFunction.SinglePointContext(x - 2 * W, y, z + 3 * W)));
+                assertImage(helper, settings + "/" + entry.getKey(), x, z, base, entry.getValue().compute(new DensityFunction.SinglePointContext(x + period(), y, z)));
+                assertImage(helper, settings + "/" + entry.getKey(), x, z, base, entry.getValue().compute(new DensityFunction.SinglePointContext(x, y, z - period())));
+                assertImage(helper, settings + "/" + entry.getKey(), x, z, base, entry.getValue().compute(new DensityFunction.SinglePointContext(x - 2 * period(), y, z + 3 * period())));
             }
         }
         helper.succeed();
@@ -85,7 +97,7 @@ public class WorldgenGameTests {
     @GameTest(template = TEMPLATE)
     public static void climateIsPeriodic(GameTestHelper helper) {
         Climate.Sampler sampler = randomState(helper.getLevel(), NoiseGeneratorSettings.OVERWORLD).sampler();
-        int quarts = QuartPos.fromBlock(W);
+        int quarts = QuartPos.fromBlock(period());
         RandomSource random = RandomSource.create(7L);
         for (int sample = 0; sample < 200; sample++) {
             int x = random.nextInt(quarts);
@@ -105,14 +117,14 @@ public class WorldgenGameTests {
         RandomState state = randomState(level, NoiseGeneratorSettings.OVERWORLD);
         RandomSource random = RandomSource.create(11L);
         for (int sample = 0; sample < 24; sample++) {
-            int x = sample < 6 ? W - 3 + sample : random.nextInt(W);
-            int z = random.nextInt(W);
+            int x = sample < 6 ? period() - 3 + sample : random.nextInt(period());
+            int z = random.nextInt(period());
             int height = generator.getBaseHeight(x, z, Heightmap.Types.OCEAN_FLOOR_WG, level, state);
-            int imageHeight = generator.getBaseHeight(x + W, z - W, Heightmap.Types.OCEAN_FLOOR_WG, level, state);
+            int imageHeight = generator.getBaseHeight(x + period(), z - period(), Heightmap.Types.OCEAN_FLOOR_WG, level, state);
             helper.assertTrue(height == imageHeight, "height differs between images at " + x + ", " + z + ": " + height + " vs " + imageHeight);
 
             NoiseColumn column = generator.getBaseColumn(x, z, level, state);
-            NoiseColumn image = generator.getBaseColumn(x - W, z + 2 * W, level, state);
+            NoiseColumn image = generator.getBaseColumn(x - period(), z + 2 * period(), level, state);
             for (int y = level.getMinBuildHeight(); y < level.getMaxBuildHeight(); y++) {
                 if (column.getBlock(y) != image.getBlock(y)) {
                     helper.fail("block differs between images at " + x + ", " + y + ", " + z + ": " + column.getBlock(y) + " vs " + image.getBlock(y));
@@ -126,10 +138,13 @@ public class WorldgenGameTests {
     public static void structureGridsTileTheWorld(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         long seed = level.getSeed();
-        int n = Wrap.CHUNK_PERIOD;
+        // Spacing must divide every wrapped dimension's period (the Nether's is the smallest); placements repeat
+        // with the Overworld's.
+        int grid = Wraps.structureGridPeriod();
+        int n = chunks();
         for (StructureSet set : level.registryAccess().registryOrThrow(Registries.STRUCTURE_SET)) {
             if (set.placement() instanceof RandomSpreadStructurePlacement placement) {
-                helper.assertTrue(n % placement.spacing() == 0, "spacing " + placement.spacing() + " does not divide " + n);
+                helper.assertTrue(grid % placement.spacing() == 0, "spacing " + placement.spacing() + " does not divide " + grid);
                 helper.assertTrue(placement.separation() < placement.spacing(), "separation not below spacing");
                 for (int x = -n; x < 2 * n; x += 7) {
                     ChunkPos chunk = placement.getPotentialStructureChunk(seed, x, 5);
@@ -152,7 +167,7 @@ public class WorldgenGameTests {
                     helper.assertTrue(positions != null, "ring positions not ready");
                     helper.assertTrue(!positions.isEmpty() && positions.size() <= placement.spread(), "unexpected ring count " + positions.size());
                     for (ChunkPos pos : positions) {
-                        helper.assertTrue(Wrap.canon(pos) == pos, "ring position not canonical: " + pos);
+                        helper.assertTrue(wrap().canon(pos) == pos, "ring position not canonical: " + pos);
                     }
                 });
                 return;

@@ -1,6 +1,6 @@
 package g_mungus.alpha_omega.mixin.server;
 
-import g_mungus.alpha_omega.wrap.Wrap;
+import g_mungus.alpha_omega.wrap.WrapHolder;
 import net.minecraft.world.level.ChunkPos;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -21,11 +21,11 @@ abstract class ChunkTrackingViewPositionedMixin {
 
     @ModifyVariable(method = "contains(IIZ)Z", at = @At("HEAD"), argsOnly = true, ordinal = 0)
     private int alpha_omega$nearestX(int x) {
-        return Wrap.nearestChunk(x, this.center.x);
+        return WrapHolder.of(this).nearestChunk(x, this.center.x);
     }
 
     @ModifyVariable(method = "contains(IIZ)Z", at = @At("HEAD"), argsOnly = true, ordinal = 1)
     private int alpha_omega$nearestZ(int z) {
-        return Wrap.nearestChunk(z, this.center.z);
+        return WrapHolder.of(this).nearestChunk(z, this.center.z);
     }
 }

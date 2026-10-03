@@ -22,10 +22,11 @@ public final class EntityFrames {
         if (!(entity.level() instanceof ServerLevel level)) return;
         int chunkX = entity.chunkPosition().x;
         int chunkZ = entity.chunkPosition().z;
+        Wrap wrap = Wrap.of(level);
         long laps = IslandManager.of(level).laps(chunkX, chunkZ);
         if (laps == IslandGraph.ABSENT) return;
-        int dx = (Wrap.canonChunk(chunkX) + IslandGraph.lapX(laps) * Wrap.CHUNK_PERIOD - chunkX) << 4;
-        int dz = (Wrap.canonChunk(chunkZ) + IslandGraph.lapZ(laps) * Wrap.CHUNK_PERIOD - chunkZ) << 4;
+        int dx = (wrap.canonChunk(chunkX) + IslandGraph.lapX(laps) * wrap.chunkPeriod - chunkX) << 4;
+        int dz = (wrap.canonChunk(chunkZ) + IslandGraph.lapZ(laps) * wrap.chunkPeriod - chunkZ) << 4;
         if (dx != 0 || dz != 0) translate(entity, dx, dz);
     }
 

@@ -1,6 +1,6 @@
 package g_mungus.alpha_omega.mixin.server;
 
-import g_mungus.alpha_omega.wrap.Wrap;
+import g_mungus.alpha_omega.wrap.WrapHolder;
 import net.minecraft.server.level.TickingTracker;
 import net.minecraft.world.level.ChunkPos;
 import org.spongepowered.asm.mixin.Mixin;
@@ -16,11 +16,11 @@ abstract class TickingTrackerMixin {
         "getTicketDebugString(J)Ljava/lang/String;",
     }, at = @At("HEAD"), argsOnly = true)
     private long alpha_omega$canonKey(long chunkKey) {
-        return Wrap.canonChunkKey(chunkKey);
+        return WrapHolder.of(this).canonChunkKey(chunkKey);
     }
 
     @ModifyVariable(method = "getLevel(Lnet/minecraft/world/level/ChunkPos;)I", at = @At("HEAD"), argsOnly = true)
     private ChunkPos alpha_omega$canonPos(ChunkPos pos) {
-        return Wrap.canon(pos);
+        return WrapHolder.of(this).canon(pos);
     }
 }

@@ -5,6 +5,7 @@ import g_mungus.alpha_omega.island.IslandGraph;
 import g_mungus.alpha_omega.island.IslandManager;
 import g_mungus.alpha_omega.island.Invariants;
 import g_mungus.alpha_omega.wrap.Wrap;
+import g_mungus.alpha_omega.wrap.Wraps;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
@@ -28,18 +29,39 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @PrefixGameTestTemplate(false)
 public class IslandGameTests {
 
+    private static Wrap wrap() {
+        return Wraps.overworld();
+    }
+
+    private static int period() {
+        return wrap().period;
+    }
+
+    private static int chunks() {
+        return wrap().chunkPeriod;
+    }
+
     private static final String TEMPLATE = "gametest/flat_7x4x7";
     private static final String PLAYER_BATCH = "alpha_omega_islands";
-    private static final int W = Wrap.PERIOD;
-    private static final int N = Wrap.CHUNK_PERIOD;
     /**
      * Tests that build islands far from the test area each use their own region (a chunk offset along z), so
      * leftover chunks from one test never touch another's.
      */
-    static final int SEED_REGION = N / 2;
-    static final int MERGE_REGION = N / 2 + 64;
-    static final int RECENTER_REGION = N / 2 + 128;
-    static final int BAND_REGION = N / 2 + 192;
+    static int seedRegion() {
+        return chunks() / 2;
+    }
+
+    static int mergeRegion() {
+        return chunks() / 2 + 64;
+    }
+
+    static int recenterRegion() {
+        return chunks() / 2 + 128;
+    }
+
+    static int bandRegion() {
+        return chunks() / 2 + 192;
+    }
 
     @GameTest(template = TEMPLATE)
     public static void loadedChunksAreInConsistentIslands(GameTestHelper helper) {
@@ -55,10 +77,10 @@ public class IslandGameTests {
         ServerLevel level = helper.getLevel();
         BlockPos pos = helper.absolutePos(new BlockPos(3, 1, 3));
         Pig pig = EntityType.PIG.create(level);
-        pig.moveTo(pos.getX() + 0.5 + 3 * W, pos.getY(), pos.getZ() + 0.5 - W);
+        pig.moveTo(pos.getX() + 0.5 + 3 * period(), pos.getY(), pos.getZ() + 0.5 - period());
         level.addFreshEntity(pig);
         helper.assertTrue(inFrame(level, pig), "pig not moved into its island's frame: " + pig.position());
-        helper.assertTrue(Wrap.canon(pig.blockPosition()).equals(Wrap.canon(pos)), "pig changed canonical position");
+        helper.assertTrue(wrap().canon(pig.blockPosition()).equals(wrap().canon(pos)), "pig changed canonical position");
         pig.discard();
         helper.succeed();
     }
@@ -69,7 +91,7 @@ public class IslandGameTests {
         ServerLevel level = helper.getLevel();
         Pig pig = helper.spawn(EntityType.PIG, new BlockPos(3, 1, 3));
         pig.setNoAi(true);
-        pig.teleportTo(pig.getX() - 2 * W, pig.getY(), pig.getZ() + W);
+        pig.teleportTo(pig.getX() - 2 * period(), pig.getY(), pig.getZ() + period());
         helper.runAfterDelay(1, () -> {
             helper.assertTrue(inFrame(level, pig), "pig not back in frame after teleport: " + pig.position());
             pig.discard();
@@ -86,8 +108,8 @@ public class IslandGameTests {
         ServerLevel level = helper.getLevel();
         BlockPos test = helper.absolutePos(BlockPos.ZERO);
         // Half a world from the test, two laps up: nothing is loaded there yet.
-        int x = Wrap.canonBlock(test.getX() + W / 2) + 2 * W;
-        int z = Wrap.canonBlock(test.getZ() + (SEED_REGION << 4)) - W;
+        int x = wrap().canonBlock(test.getX() + period() / 2) + 2 * period();
+        int z = wrap().canonBlock(test.getZ() + (seedRegion() << 4)) - period();
         int y = level.getMaxBuildHeight() - 10;
         ServerPlayer player = helper.makeMockServerPlayerInLevel();
         player.moveTo(x + 0.5, y, z + 0.5);
@@ -105,21 +127,21 @@ public class IslandGameTests {
 
             // An entity spawned at the canonical position joins the player's frame.
             Pig pig = EntityType.PIG.create(level);
-            pig.moveTo(Wrap.canonBlock(x) + 2.5, y, Wrap.canonBlock(z) + 0.5);
+            pig.moveTo(wrap().canonBlock(x) + 2.5, y, wrap().canonBlock(z) + 0.5);
             pig.setNoGravity(true);
             level.addFreshEntity(pig);
-            helper.assertTrue(pig.getX() > 2 * W && pig.getZ() < 0, "pig not lifted into the player's frame: " + pig.position());
+            helper.assertTrue(pig.getX() > 2 * period() && pig.getZ() < 0, "pig not lifted into the player's frame: " + pig.position());
 
             CompoundTag saved = new CompoundTag();
             pig.save(saved);
             double savedX = saved.getList("Pos", Tag.TAG_DOUBLE).getDouble(0);
-            helper.assertTrue(savedX >= 0 && savedX < W, "saved Pos is not canonical: " + savedX);
+            helper.assertTrue(savedX >= 0 && savedX < period(), "saved Pos is not canonical: " + savedX);
             int[] tag = saved.getIntArray("alpha_omega:Lap");
             helper.assertTrue(tag.length == 2 && tag[0] == 2 && tag[1] == -1, "lap tag missing or wrong");
             pig.discard();
 
             Entity loaded = EntityType.loadEntityRecursive(saved, level, e -> e);
-            helper.assertTrue(loaded != null && loaded.getX() > 2 * W && loaded.getZ() < 0, "loaded entity not restored to its frame: " + (loaded == null ? null : loaded.position()) + " from " + saved.get("Pos"));
+            helper.assertTrue(loaded != null && loaded.getX() > 2 * period() && loaded.getZ() < 0, "loaded entity not restored to its frame: " + (loaded == null ? null : loaded.position()) + " from " + saved.get("Pos"));
             level.addFreshEntity(loaded);
             helper.assertTrue(inFrame(level, loaded), "loaded entity not in frame");
             loaded.discard();
@@ -137,14 +159,14 @@ public class IslandGameTests {
     public static void meetingIslandsMergeByShiftingTheLighterOne(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos test = helper.absolutePos(BlockPos.ZERO);
-        int cx = Wrap.canonChunk((test.getX() >> 4) + N / 2);
-        int cz = Wrap.canonChunk((test.getZ() >> 4) + MERGE_REGION);
-        int bx = Wrap.canonChunk(cx + 8);
+        int cx = wrap().canonChunk((test.getX() >> 4) + chunks() / 2);
+        int cz = wrap().canonChunk((test.getZ() >> 4) + mergeRegion());
+        int bx = wrap().canonChunk(cx + 8);
         int y = level.getMaxBuildHeight() - 10;
 
         // Island B: forced before any player is near, so it seeds lap 0.
         level.setChunkForced(bx, cz, true);
-        level.setChunkForced(Wrap.canonChunk(bx + 1), cz, true);
+        level.setChunkForced(wrap().canonChunk(bx + 1), cz, true);
         Pig[] pig = new Pig[1];
         Villager[] villager = new Villager[1];
         BlockPos home = new BlockPos((bx << 4) + 20, y - 5, (cz << 4) + 4);
@@ -163,9 +185,9 @@ public class IslandGameTests {
             // Island A: a player in lap 1, whose frame seeds a row of forced chunks reaching towards B.
             player[0] = helper.makeMockServerPlayerInLevel();
             player[0].setNoGravity(true);
-            player[0].moveTo((cx << 4) + 8.5 + W, y, (cz << 4) + 8.5);
+            player[0].moveTo((cx << 4) + 8.5 + period(), y, (cz << 4) + 8.5);
             level.getChunkSource().move(player[0]);
-            for (int x = cx; x < cx + 8; x++) level.setChunkForced(Wrap.canonChunk(x), cz, true);
+            for (int x = cx; x < cx + 8; x++) level.setChunkForced(wrap().canonChunk(x), cz, true);
         });
 
         helper.succeedWhen(() -> {
@@ -176,16 +198,16 @@ public class IslandGameTests {
             long b = islands.laps(bx, cz);
             helper.assertTrue(b == IslandGraph.packLaps(1, 0), "island B did not shift into the player's frame: B lap "
                 + IslandGraph.lapX(b) + "," + IslandGraph.lapZ(b) + ", player " + player[0].position());
-            helper.assertTrue(Math.floorDiv(player[0].getBlockX(), W) == 1, "the player should not have changed frames: " + player[0].position());
-            helper.assertTrue(Math.floorDiv(pig[0].getBlockX(), W) == 1, "pig not shifted: " + pig[0].position());
-            helper.assertTrue(Math.floorDiv(villager[0].getBlockX(), W) == 1, "villager not shifted: " + villager[0].position());
+            helper.assertTrue(Math.floorDiv(player[0].getBlockX(), period()) == 1, "the player should not have changed frames: " + player[0].position());
+            helper.assertTrue(Math.floorDiv(pig[0].getBlockX(), period()) == 1, "pig not shifted: " + pig[0].position());
+            helper.assertTrue(Math.floorDiv(villager[0].getBlockX(), period()) == 1, "villager not shifted: " + villager[0].position());
             GlobalPos remembered = villager[0].getBrain().getMemory(MemoryModuleType.HOME).orElseThrow();
-            helper.assertTrue(remembered.pos().equals(home.offset(W, 0, 0)), "home memory not translated: " + remembered.pos());
+            helper.assertTrue(remembered.pos().equals(home.offset(period(), 0, 0)), "home memory not translated: " + remembered.pos());
             assertNoViolations(helper, level);
 
             pig[0].discard();
             villager[0].discard();
-            for (int x = cx; x < cx + 10; x++) level.setChunkForced(Wrap.canonChunk(x), cz, false);
+            for (int x = cx; x < cx + 10; x++) level.setChunkForced(wrap().canonChunk(x), cz, false);
             level.getServer().getPlayerList().remove(player[0]);
         });
     }
@@ -202,7 +224,7 @@ public class IslandGameTests {
     private static boolean inFrame(ServerLevel level, Entity entity) {
         long laps = IslandManager.of(level).laps(entity.chunkPosition().x, entity.chunkPosition().z);
         return laps == IslandGraph.ABSENT
-            || (Math.floorDiv(entity.chunkPosition().x, N) == IslandGraph.lapX(laps) && Math.floorDiv(entity.chunkPosition().z, N) == IslandGraph.lapZ(laps));
+            || (Math.floorDiv(entity.chunkPosition().x, chunks()) == IslandGraph.lapX(laps) && Math.floorDiv(entity.chunkPosition().z, chunks()) == IslandGraph.lapZ(laps));
     }
 
     private static void assertNoViolations(GameTestHelper helper, ServerLevel level) {

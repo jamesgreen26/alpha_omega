@@ -3,6 +3,7 @@ package g_mungus.alpha_omega.gametest;
 import g_mungus.alpha_omega.AlphaOmegaMod;
 import g_mungus.alpha_omega.network.PacketNormalization;
 import g_mungus.alpha_omega.wrap.Wrap;
+import g_mungus.alpha_omega.wrap.Wraps;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -33,19 +34,29 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @PrefixGameTestTemplate(false)
 public class SeamGameTests {
 
+    private static Wrap wrap() {
+        return Wraps.overworld();
+    }
+
+    private static int period() {
+        return wrap().period;
+    }
+
+    private static int chunks() {
+        return wrap().chunkPeriod;
+    }
+
     private static final String TEMPLATE = "gametest/flat_7x4x7";
-    private static final int W = Wrap.PERIOD;
-    private static final int N = Wrap.CHUNK_PERIOD;
 
     @GameTest(template = TEMPLATE)
     public static void blocksArePeriodic(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos pos = helper.absolutePos(new BlockPos(3, 2, 3));
 
-        level.setBlockAndUpdate(pos.offset(W, 0, -W), Blocks.GOLD_BLOCK.defaultBlockState());
+        level.setBlockAndUpdate(pos.offset(period(), 0, -period()), Blocks.GOLD_BLOCK.defaultBlockState());
 
         helper.assertTrue(level.getBlockState(pos).is(Blocks.GOLD_BLOCK), "block not visible at original image");
-        helper.assertTrue(level.getBlockState(pos.offset(-2 * W, 0, 3 * W)).is(Blocks.GOLD_BLOCK), "block not visible at distant image");
+        helper.assertTrue(level.getBlockState(pos.offset(-2 * period(), 0, 3 * period())).is(Blocks.GOLD_BLOCK), "block not visible at distant image");
         helper.succeed();
     }
 
@@ -53,14 +64,14 @@ public class SeamGameTests {
     public static void blockEntitiesAreStoredCanonically(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos pos = helper.absolutePos(new BlockPos(3, 2, 3));
-        BlockPos image = pos.offset(W, 0, W);
+        BlockPos image = pos.offset(period(), 0, period());
 
         level.setBlockAndUpdate(image, Blocks.CHEST.defaultBlockState());
 
         BlockEntity atPos = level.getBlockEntity(pos);
         helper.assertTrue(atPos != null, "no block entity at original image");
         helper.assertTrue(atPos == level.getBlockEntity(image), "images resolve to different block entities");
-        helper.assertTrue(atPos.getBlockPos().equals(Wrap.canon(pos)), "block entity position is not canonical: " + atPos.getBlockPos());
+        helper.assertTrue(atPos.getBlockPos().equals(wrap().canon(pos)), "block entity position is not canonical: " + atPos.getBlockPos());
         helper.succeed();
     }
 
@@ -69,10 +80,10 @@ public class SeamGameTests {
         ServerLevel level = helper.getLevel();
         BlockPos pos = helper.absolutePos(new BlockPos(3, 2, 3));
 
-        level.scheduleTick(pos.offset(-W, 0, 0), Blocks.REDSTONE_LAMP, 1000);
+        level.scheduleTick(pos.offset(-period(), 0, 0), Blocks.REDSTONE_LAMP, 1000);
 
         helper.assertTrue(level.getBlockTicks().hasScheduledTick(pos, Blocks.REDSTONE_LAMP), "tick not found at original image");
-        helper.assertTrue(level.getBlockTicks().hasScheduledTick(Wrap.canon(pos), Blocks.REDSTONE_LAMP), "tick not found at canonical position");
+        helper.assertTrue(level.getBlockTicks().hasScheduledTick(wrap().canon(pos), Blocks.REDSTONE_LAMP), "tick not found at canonical position");
         helper.succeed();
     }
 
@@ -81,10 +92,10 @@ public class SeamGameTests {
         ServerLevel level = helper.getLevel();
         BlockPos pos = helper.absolutePos(new BlockPos(3, 2, 3));
 
-        level.setBlockAndUpdate(pos.offset(0, 0, W), Blocks.GLOWSTONE.defaultBlockState());
+        level.setBlockAndUpdate(pos.offset(0, 0, period()), Blocks.GLOWSTONE.defaultBlockState());
 
         helper.succeedWhen(() -> {
-            int light = level.getBrightness(LightLayer.BLOCK, pos.above().offset(-W, 0, 0));
+            int light = level.getBrightness(LightLayer.BLOCK, pos.above().offset(-period(), 0, 0));
             helper.assertTrue(light == 14, "expected block light 14 above glowstone, got " + light);
         });
     }
@@ -94,7 +105,7 @@ public class SeamGameTests {
         ServerLevel level = helper.getLevel();
         Pig pig = helper.spawn(EntityType.PIG, new BlockPos(3, 2, 3));
         pig.setNoAi(true);
-        pig.setPos(pig.getX() + W, pig.getY(), pig.getZ() - W);
+        pig.setPos(pig.getX() + period(), pig.getY(), pig.getZ() - period());
 
         List<Pig> found = level.getEntities(EntityType.PIG, new AABB(pig.blockPosition()).inflate(1), p -> p == pig);
         helper.assertTrue(found.size() == 1, "pig not found after moving by a whole lap");
@@ -111,7 +122,7 @@ public class SeamGameTests {
         level.setChunkForced(0, cz, true);
 
         helper.succeedWhen(() -> {
-            helper.assertTrue(level.getChunkSource().hasChunk(N - 1, cz), "neighbor across seam not loaded");
+            helper.assertTrue(level.getChunkSource().hasChunk(chunks() - 1, cz), "neighbor across seam not loaded");
             helper.assertTrue(level.getChunkSource().hasChunk(-1, cz), "neighbor across seam not reachable by lifted coordinate");
             level.setChunkForced(0, cz, false);
         });
@@ -122,22 +133,22 @@ public class SeamGameTests {
     public static void lightCrossesSeam(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         int cz = farChunkZ(helper);
-        level.setChunkForced(N - 1, cz, true);
+        level.setChunkForced(chunks() - 1, cz, true);
         level.setChunkForced(0, cz, true);
-        BlockPos source = new BlockPos(W - 1, level.getMaxBuildHeight() - 8, SectionPos.sectionToBlockCoord(cz, 8));
+        BlockPos source = new BlockPos(period() - 1, level.getMaxBuildHeight() - 8, SectionPos.sectionToBlockCoord(cz, 8));
         boolean[] placed = {false};
 
         helper.succeedWhen(() -> {
             if (!placed[0]) {
-                helper.assertTrue(level.getChunkSource().hasChunk(N - 1, cz) && level.getChunkSource().hasChunk(0, cz), "seam chunks not loaded yet");
+                helper.assertTrue(level.getChunkSource().hasChunk(chunks() - 1, cz) && level.getChunkSource().hasChunk(0, cz), "seam chunks not loaded yet");
                 level.setBlockAndUpdate(source, Blocks.GLOWSTONE.defaultBlockState());
                 placed[0] = true;
             }
             int canonical = level.getBrightness(LightLayer.BLOCK, new BlockPos(0, source.getY(), source.getZ()));
-            int lifted = level.getBrightness(LightLayer.BLOCK, new BlockPos(W, source.getY(), source.getZ()));
+            int lifted = level.getBrightness(LightLayer.BLOCK, new BlockPos(period(), source.getY(), source.getZ()));
             helper.assertTrue(canonical == 14 && lifted == 14, "expected light 14 across seam, got " + canonical + " / " + lifted);
             level.setBlockAndUpdate(source, Blocks.AIR.defaultBlockState());
-            level.setChunkForced(N - 1, cz, false);
+            level.setChunkForced(chunks() - 1, cz, false);
             level.setChunkForced(0, cz, false);
         });
     }
@@ -148,13 +159,13 @@ public class SeamGameTests {
         ServerPlayer player = helper.makeMockServerPlayerInLevel();
         Vec3 at = player.position();
 
-        ServerboundMovePlayerPacket move = new ServerboundMovePlayerPacket.Pos(at.x + 0.5 - 3 * W, at.y, at.z + W, true);
+        ServerboundMovePlayerPacket move = new ServerboundMovePlayerPacket.Pos(at.x + 0.5 - 3 * period(), at.y, at.z + period(), true);
         PacketNormalization.normalize(move, player.connection);
         helper.assertTrue(move.getX(0) == at.x + 0.5 && move.getZ(0) == at.z, "move not normalized: " + move.getX(0) + ", " + move.getZ(0));
 
         BlockPos target = player.blockPosition().below();
         ServerboundUseItemOnPacket use = new ServerboundUseItemOnPacket(InteractionHand.MAIN_HAND,
-            new BlockHitResult(Vec3.atCenterOf(target).add(W, 0, -W), Direction.UP, target.offset(W, 0, -W), false), 0);
+            new BlockHitResult(Vec3.atCenterOf(target).add(period(), 0, -period()), Direction.UP, target.offset(period(), 0, -period()), false), 0);
         PacketNormalization.normalize(use, player.connection);
         helper.assertTrue(use.getHitResult().getBlockPos().equals(target), "use target not normalized: " + use.getHitResult().getBlockPos());
         helper.assertTrue(use.getHitResult().getLocation().equals(Vec3.atCenterOf(target)), "hit location not normalized");
@@ -164,6 +175,6 @@ public class SeamGameTests {
 
     /** A chunk row on the seam that nothing else (spawn chunks, the test itself) keeps loaded. */
     private static int farChunkZ(GameTestHelper helper) {
-        return Wrap.canonChunk(SectionPos.blockToSectionCoord(helper.absolutePos(BlockPos.ZERO).getZ()) + N / 2);
+        return wrap().canonChunk(SectionPos.blockToSectionCoord(helper.absolutePos(BlockPos.ZERO).getZ()) + chunks() / 2);
     }
 }

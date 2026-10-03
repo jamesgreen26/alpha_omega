@@ -36,11 +36,13 @@ abstract class PersistentEntitySectionManagerCallbackMixin {
     @Inject(method = "onMove", at = @At("HEAD"))
     private void alpha_omega$checkFrame(CallbackInfo ci) {
         if (!(this.entity instanceof Entity real) || !(real.level() instanceof ServerLevel level)) return;
+        Wrap wrap = Wrap.of(level);
+        if (!wrap.enabled()) return;
         BlockPos pos = real.blockPosition();
-        long laps = ((long) Math.floorDiv(pos.getX(), Wrap.PERIOD) << 32) | (Math.floorDiv(pos.getZ(), Wrap.PERIOD) & 0xFFFFFFFFL);
+        long laps = ((long) wrap.lap(pos.getX()) << 32) | (wrap.lap(pos.getZ()) & 0xFFFFFFFFL);
         boolean lapChanged = laps != this.alpha_omega$lastLaps;
         this.alpha_omega$lastLaps = laps;
-        if (lapChanged || Wrap.canonSectionKey(SectionPos.asLong(pos)) != this.currentSectionKey) {
+        if (lapChanged || wrap.canonSectionKey(SectionPos.asLong(pos)) != this.currentSectionKey) {
             IslandManager.of(level).queueFrameCheck(real);
         }
     }
@@ -49,6 +51,6 @@ abstract class PersistentEntitySectionManagerCallbackMixin {
     @ModifyExpressionValue(method = "onMove",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/core/SectionPos;asLong(Lnet/minecraft/core/BlockPos;)J"))
     private long alpha_omega$canonSection(long sectionKey) {
-        return Wrap.canonSectionKey(sectionKey);
+        return this.entity instanceof Entity real ? Wrap.of(real.level()).canonSectionKey(sectionKey) : sectionKey;
     }
 }

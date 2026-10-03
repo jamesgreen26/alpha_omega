@@ -27,22 +27,24 @@ final class ServerboundNormalizer {
     }
 
     static void normalize(Packet<?> packet, ServerPlayer player) {
+        Wrap wrap = Wrap.of(player.level());
+        if (!wrap.enabled()) return;
         switch (packet) {
             case ServerboundMovePlayerPacket p when p.hasPosition() -> {
                 ServerboundMovePlayerPacketAccessor a = (ServerboundMovePlayerPacketAccessor) p;
-                a.alpha_omega$setX(Wrap.nearest(p.getX(0), player.getX()));
-                a.alpha_omega$setZ(Wrap.nearest(p.getZ(0), player.getZ()));
+                a.alpha_omega$setX(wrap.nearest(p.getX(0), player.getX()));
+                a.alpha_omega$setZ(wrap.nearest(p.getZ(0), player.getZ()));
             }
             case ServerboundMoveVehiclePacket p -> {
                 Entity vehicle = player.getRootVehicle();
                 ServerboundMoveVehiclePacketAccessor a = (ServerboundMoveVehiclePacketAccessor) p;
-                a.alpha_omega$setX(Wrap.nearest(p.getX(), vehicle.getX()));
-                a.alpha_omega$setZ(Wrap.nearest(p.getZ(), vehicle.getZ()));
+                a.alpha_omega$setX(wrap.nearest(p.getX(), vehicle.getX()));
+                a.alpha_omega$setZ(wrap.nearest(p.getZ(), vehicle.getZ()));
             }
             case ServerboundUseItemOnPacket p -> {
                 BlockHitResult hit = p.getHitResult();
-                Vec3 location = Wrap.nearest(hit.getLocation(), player.position());
-                BlockPos pos = Wrap.nearest(hit.getBlockPos(), player.position());
+                Vec3 location = wrap.nearest(hit.getLocation(), player.position());
+                BlockPos pos = wrap.nearest(hit.getBlockPos(), player.position());
                 if (location != hit.getLocation() || pos != hit.getBlockPos()) {
                     ((UseItemOnPacketAccessor) p).alpha_omega$setBlockHit(hit.getType() == HitResult.Type.MISS
                         ? BlockHitResult.miss(location, hit.getDirection(), pos)
@@ -50,7 +52,7 @@ final class ServerboundNormalizer {
                 }
             }
             case ServerboundPlayerActionPacket p ->
-                ((PlayerActionPacketAccessor) p).alpha_omega$setPos(Wrap.nearest(p.getPos(), player.position()));
+                ((PlayerActionPacketAccessor) p).alpha_omega$setPos(wrap.nearest(p.getPos(), player.position()));
             default -> {
             }
         }

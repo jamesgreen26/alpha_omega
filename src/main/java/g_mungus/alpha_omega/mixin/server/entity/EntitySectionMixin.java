@@ -3,6 +3,7 @@ package g_mungus.alpha_omega.mixin.server.entity;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import g_mungus.alpha_omega.wrap.Wrap;
+import g_mungus.alpha_omega.wrap.WrapHolder;
 import net.minecraft.world.level.entity.EntitySection;
 import net.minecraft.world.phys.AABB;
 import org.spongepowered.asm.mixin.Mixin;
@@ -25,13 +26,15 @@ abstract class EntitySectionMixin {
     private boolean alpha_omega$intersectsAnyImage(AABB entity, AABB query, Operation<Boolean> original) {
         if (original.call(entity, query)) return true;
         // Only boxes more than half a world apart can overlap through another image.
-        double dx = alpha_omega$lapShift(entity.minX - query.minX);
-        double dz = alpha_omega$lapShift(entity.minZ - query.minZ);
+        Wrap wrap = WrapHolder.of(this);
+        if (!wrap.enabled()) return false;
+        double dx = alpha_omega$lapShift(wrap, entity.minX - query.minX);
+        double dz = alpha_omega$lapShift(wrap, entity.minZ - query.minZ);
         return (dx != 0 || dz != 0) && original.call(entity.move(dx, 0, dz), query);
     }
 
     @Unique
-    private static double alpha_omega$lapShift(double delta) {
-        return Math.abs(delta) > Wrap.PERIOD / 2.0 ? -Math.round(delta / Wrap.PERIOD) * (double) Wrap.PERIOD : 0;
+    private static double alpha_omega$lapShift(Wrap wrap, double delta) {
+        return Math.abs(delta) > wrap.period / 2.0 ? -Math.round(delta / wrap.period) * (double) wrap.period : 0;
     }
 }

@@ -3,6 +3,8 @@ package g_mungus.alpha_omega.mixin.worldgen.noise;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.mojang.logging.LogUtils;
+import g_mungus.alpha_omega.wrap.Wrap;
+import g_mungus.alpha_omega.wrap.WrapContext;
 import g_mungus.alpha_omega.wrap.noise.CanonicalPositionalRandomFactory;
 import g_mungus.alpha_omega.wrap.noise.NoisePeriods;
 import g_mungus.alpha_omega.wrap.noise.PeriodicNoiseSource;
@@ -45,6 +47,10 @@ abstract class RandomStateMixin implements PeriodicNoiseSource {
     @Final
     private HolderGetter<NormalNoise.NoiseParameters> noises;
 
+    /** The dimension this noise generates: captured while its level is constructed (the Overworld otherwise). */
+    @Unique
+    private Wrap alpha_omega$wrap = WrapContext.currentOrOverworld();
+
     /** Copies made because a shared noise was needed at a second period. */
     @Unique
     private final Map<List<Object>, NormalNoise> alpha_omega$copies = new HashMap<>();
@@ -55,6 +61,7 @@ abstract class RandomStateMixin implements PeriodicNoiseSource {
     @ModifyExpressionValue(method = "<init>",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/levelgen/NoiseRouter;mapAll(Lnet/minecraft/world/level/levelgen/DensityFunction$Visitor;)Lnet/minecraft/world/level/levelgen/NoiseRouter;"))
     private NoiseRouter alpha_omega$makeRouterPeriodic(NoiseRouter router) {
+        if (!this.alpha_omega$wrap.enabled()) return router;
         return router.mapAll(function -> {
             if (function instanceof PeriodicNoiseUser user) user.alpha_omega$makePeriodic(this);
             return function;
@@ -66,10 +73,20 @@ abstract class RandomStateMixin implements PeriodicNoiseSource {
     private PositionalRandomFactory alpha_omega$canonicalOreRandom(PositionalRandomFactory factory) {
         PositionalRandomFactory canonical = this.alpha_omega$canonicalOreRandom;
         if (canonical == null) {
-            canonical = new CanonicalPositionalRandomFactory(factory);
+            canonical = new CanonicalPositionalRandomFactory(factory, this.alpha_omega$wrap);
             this.alpha_omega$canonicalOreRandom = canonical;
         }
         return canonical;
+    }
+
+    @Override
+    public Wrap alpha_omega$wrap() {
+        return this.alpha_omega$wrap;
+    }
+
+    @Override
+    public void alpha_omega$setWrap(Wrap wrap) {
+        this.alpha_omega$wrap = wrap;
     }
 
     @Override

@@ -1,6 +1,6 @@
 package g_mungus.alpha_omega.mixin.server;
 
-import g_mungus.alpha_omega.wrap.Wrap;
+import g_mungus.alpha_omega.wrap.WrapHolder;
 import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.DistanceManager;
 import org.spongepowered.asm.mixin.Mixin;
@@ -21,11 +21,11 @@ abstract class DistanceManagerMixin {
         "getTicketDebugString(J)Ljava/lang/String;",
     }, at = @At("HEAD"), argsOnly = true)
     private long alpha_omega$canonKey(long chunkKey) {
-        return Wrap.canonChunkKey(chunkKey);
+        return WrapHolder.of(this).canonChunkKey(chunkKey);
     }
 
     @ModifyVariable(method = {"addPlayer", "removePlayer"}, at = @At("HEAD"), argsOnly = true)
     private SectionPos alpha_omega$canonPlayerSection(SectionPos pos) {
-        return Wrap.canon(pos);
+        return WrapHolder.of(this).canon(pos);
     }
 }
