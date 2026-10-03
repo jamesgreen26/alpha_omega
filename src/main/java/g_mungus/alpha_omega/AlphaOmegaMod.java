@@ -6,6 +6,7 @@ import g_mungus.alpha_omega.gametest.IslandGameTests;
 import g_mungus.alpha_omega.gametest.ModLoadGameTests;
 import g_mungus.alpha_omega.gametest.SeamGameTests;
 import g_mungus.alpha_omega.gametest.WorldgenGameTests;
+import g_mungus.alpha_omega.island.BuiltinFrameTranslators;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForge;
@@ -22,6 +23,7 @@ public class AlphaOmegaMod {
 
     public AlphaOmegaMod(IEventBus modEventBus) {
         modEventBus.addListener(AlphaOmegaMod::registerGameTests);
+        BuiltinFrameTranslators.register();
         if (Boolean.getBoolean("alpha_omega.auditMixins")) {
             NeoForge.EVENT_BUS.addListener(AlphaOmegaMod::auditMixins);
         }

@@ -80,6 +80,8 @@ public final class IslandGraph {
     private final Int2ObjectOpenHashMap<Island> islands = new Int2ObjectOpenHashMap<>();
     private final IntSet loops = new IntOpenHashSet();
     private int nextId = 1;
+    /** Set when a join leaves two islands touching in disagreeing frames; cleared by {@link #takeDisagreementFlag}. */
+    private boolean disagreementPending;
 
     public IslandGraph(int n) {
         this.n = n;
@@ -195,6 +197,18 @@ public final class IslandGraph {
         return this.loops;
     }
 
+    /** Re-arms {@link #takeDisagreementFlag} (merges left over for the next tick). */
+    public void markDisagreementPending() {
+        this.disagreementPending = true;
+    }
+
+    /** Whether islands may have started touching in disagreeing frames since the last call. */
+    public boolean takeDisagreementFlag() {
+        boolean pending = this.disagreementPending;
+        this.disagreementPending = false;
+        return pending;
+    }
+
     // ---- join / leave ----
 
     public void join(int x, int z, Seeds seeds, Weights weights) {
@@ -250,8 +264,11 @@ public final class IslandGraph {
 
         // Islands already in the same frame merge by relabeling (§5.6). The rest stay separate until shifted.
         for (Int2LongMap.Entry entry : chosen.int2LongEntrySet()) {
-            if (entry.getIntKey() != target && entry.getLongValue() == targetLaps) {
+            if (entry.getIntKey() == target) continue;
+            if (entry.getLongValue() == targetLaps) {
                 this.absorb(this.islands.get(entry.getIntKey()), targetIsland);
+            } else {
+                this.disagreementPending = true;
             }
         }
         this.checkExtent(targetIsland);
@@ -354,6 +371,31 @@ public final class IslandGraph {
         target.splitPending |= source.splitPending;
         if (this.loops.remove(source.id)) this.loops.add(target.id);
         this.islands.remove(source.id);
+
+        // Agreeing where they met does not mean agreeing everywhere they touch: a second contact that disagrees
+        // means the merged island wraps around the world (R7).
+        LongIterator check = source.chunks.iterator();
+        while (check.hasNext() && !this.loops.contains(target.id)) {
+            long key = check.nextLong();
+            if (!this.contiguousWithNeighbors(key, target.id)) this.loops.add(target.id);
+        }
+    }
+
+    private boolean contiguousWithNeighbors(long key, int island) {
+        int x = keyX(key);
+        int z = keyZ(key);
+        long info = this.info.get(key);
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                int nx = WrapMath.canon(x + dx, this.n);
+                int nz = WrapMath.canon(z + dz, this.n);
+                long neighbor = this.info.get(key(nx, nz));
+                if (neighbor == ABSENT || infoId(neighbor) != island) continue;
+                if (x + infoLapX(info) * this.n + dx != nx + infoLapX(neighbor) * this.n) return false;
+                if (z + infoLapZ(info) * this.n + dz != nz + infoLapZ(neighbor) * this.n) return false;
+            }
+        }
+        return true;
     }
 
     private void removeIsland(int id) {

@@ -5,6 +5,7 @@ import g_mungus.alpha_omega.mixin.server.ServerLevelAccessor;
 import g_mungus.alpha_omega.wrap.Wrap;
 import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceLinkedOpenHashSet;
+import java.util.List;
 import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -66,12 +67,16 @@ public final class IslandManager {
         this.frameChecks.add(entity);
     }
 
-    /** End of the server tick: lazy splits, then entities that may have left their frame. */
+    /** At most this many merges per tick; any left over continue next tick. */
+    private static final int MAX_MERGES_PER_TICK = 64;
+
+    /** End of the server tick: lazy splits, merges (shifting the lighter island), then entity frame checks. */
     public void tick() {
         this.graph.processSplits();
+        this.resolveMerges();
 
         if (!this.joinedChunks.isEmpty()) {
-            EntitySectionStorage<Entity> sections = ((PersistentEntitySectionManagerAccessor) ((ServerLevelAccessor) this.level).alpha_omega$getEntityManager()).alpha_omega$getSectionStorage();
+            EntitySectionStorage<Entity> sections = this.sections();
             for (long key : this.joinedChunks) {
                 sections.getExistingSectionsInChunk(ChunkPos.asLong(IslandGraph.keyX(key), IslandGraph.keyZ(key)))
                     .forEach(section -> section.getEntities().forEach(this.frameChecks::add));
@@ -83,6 +88,56 @@ public final class IslandManager {
             Entity entity = this.frameChecks.removeFirst();
             if (!entity.isRemoved() && entity.level() == this.level) EntityFrames.reframe(entity);
         }
+    }
+
+    // ---- merges and shifts (§6.5) ----
+
+    private void resolveMerges() {
+        if (!this.graph.takeDisagreementFlag()) return;
+        for (int i = 0; i < MAX_MERGES_PER_TICK; i++) {
+            List<IslandGraph.PendingMerge> merges = this.graph.disagreements();
+            if (merges.isEmpty()) return;
+            IslandGraph.PendingMerge merge = merges.get(0);
+            // The island with fewer players (then fewer chunks) moves, so the shift touches the fewest entities.
+            if (this.lighter(merge.from(), merge.into())) {
+                this.shift(merge.from(), merge.lapDX(), merge.lapDZ());
+                this.graph.merge(merge.from(), merge.into());
+            } else {
+                this.shift(merge.into(), -merge.lapDX(), -merge.lapDZ());
+                this.graph.merge(merge.into(), merge.from());
+            }
+        }
+        this.graph.markDisagreementPending();
+    }
+
+    private boolean lighter(int a, int b) {
+        long pa = this.playerWeight(a);
+        long pb = this.playerWeight(b);
+        if (pa != pb) return pa < pb;
+        return this.graph.island(a).size() <= this.graph.island(b).size();
+    }
+
+    /**
+     * Translates a whole island by whole laps: its lift table, and every entity in it with all the absolute
+     * positions they hold. Block-side state is canonical and needs nothing; clients see nothing (R6).
+     */
+    public void shift(int island, int lapDX, int lapDZ) {
+        IslandGraph.Island target = this.graph.island(island);
+        if (target == null || (lapDX == 0 && lapDZ == 0)) return;
+        ReferenceLinkedOpenHashSet<Entity> roots = new ReferenceLinkedOpenHashSet<>();
+        EntitySectionStorage<Entity> sections = this.sections();
+        for (long key : target.chunks()) {
+            sections.getExistingSectionsInChunk(ChunkPos.asLong(IslandGraph.keyX(key), IslandGraph.keyZ(key)))
+                .forEach(section -> section.getEntities().forEach(entity -> roots.add(entity.getRootVehicle())));
+        }
+        this.graph.shift(island, lapDX, lapDZ);
+        double dx = (double) lapDX * Wrap.PERIOD;
+        double dz = (double) lapDZ * Wrap.PERIOD;
+        for (Entity root : roots) EntityFrames.translate(root, dx, dz);
+    }
+
+    private EntitySectionStorage<Entity> sections() {
+        return ((PersistentEntitySectionManagerAccessor) ((ServerLevelAccessor) this.level).alpha_omega$getEntityManager()).alpha_omega$getSectionStorage();
     }
 
     // ---- join policy ----

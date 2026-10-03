@@ -7,6 +7,7 @@ import g_mungus.alpha_omega.island.Invariants;
 import g_mungus.alpha_omega.wrap.Wrap;
 import java.util.List;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
@@ -15,7 +16,10 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.animal.Pig;
+import net.minecraft.world.entity.npc.Villager;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -115,6 +119,76 @@ public class IslandGameTests {
             assertNoViolations(helper, level);
             level.getServer().getPlayerList().remove(player);
         });
+    }
+
+    /**
+     * Phase 4: an island with no players meeting a player's island in a different frame shifts into it. Its
+     * entities move by whole laps, together with the absolute positions they remember.
+     */
+    @GameTest(template = TEMPLATE, batch = PLAYER_BATCH, timeoutTicks = 600)
+    public static void meetingIslandsMergeByShiftingTheLighterOne(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos test = helper.absolutePos(BlockPos.ZERO);
+        int cx = Wrap.canonChunk((test.getX() >> 4) + N / 2);
+        int cz = Wrap.canonChunk((test.getZ() >> 4) + N / 2);
+        int bx = Wrap.canonChunk(cx + 8);
+        int y = level.getMaxBuildHeight() - 10;
+
+        // Island B: forced before any player is near, so it seeds lap 0.
+        level.setChunkForced(bx, cz, true);
+        level.setChunkForced(Wrap.canonChunk(bx + 1), cz, true);
+        Pig[] pig = new Pig[1];
+        Villager[] villager = new Villager[1];
+        BlockPos home = new BlockPos((bx << 4) + 20, y - 5, (cz << 4) + 4);
+        ServerPlayer[] player = new ServerPlayer[1];
+        boolean[] started = {false};
+
+        helper.onEachTick(() -> {
+            IslandManager islands = IslandManager.of(level);
+            if (started[0] || islands.laps(bx, cz) == IslandGraph.ABSENT || islands.laps(bx + 1, cz) == IslandGraph.ABSENT) return;
+            started[0] = true;
+            helper.assertTrue(islands.laps(bx, cz) == IslandGraph.packLaps(0, 0), "island B should seed lap 0");
+            pig[0] = spawnFloating(level, EntityType.PIG, (bx << 4) + 4, y, (cz << 4) + 4);
+            villager[0] = spawnFloating(level, EntityType.VILLAGER, (bx << 4) + 8, y, (cz << 4) + 4);
+            villager[0].getBrain().setMemory(MemoryModuleType.HOME, GlobalPos.of(level.dimension(), home));
+
+            // Island A: a player in lap 1, whose frame seeds a row of forced chunks reaching towards B.
+            player[0] = helper.makeMockServerPlayerInLevel();
+            player[0].setNoGravity(true);
+            player[0].moveTo((cx << 4) + 8.5 + W, y, (cz << 4) + 8.5);
+            level.getChunkSource().move(player[0]);
+            for (int x = cx; x < cx + 8; x++) level.setChunkForced(Wrap.canonChunk(x), cz, true);
+        });
+
+        helper.succeedWhen(() -> {
+            IslandManager islands = IslandManager.of(level);
+            helper.assertTrue(started[0], "island B not loaded yet");
+            int a = islands.graph().islandOf(cx, cz);
+            helper.assertTrue(a != 0 && a == islands.graph().islandOf(bx, cz), "islands not merged yet");
+            long b = islands.laps(bx, cz);
+            helper.assertTrue(b == IslandGraph.packLaps(1, 0), "island B did not shift into the player's frame: B lap "
+                + IslandGraph.lapX(b) + "," + IslandGraph.lapZ(b) + ", player " + player[0].position());
+            helper.assertTrue(Math.floorDiv(player[0].getBlockX(), W) == 1, "the player should not have changed frames: " + player[0].position());
+            helper.assertTrue(Math.floorDiv(pig[0].getBlockX(), W) == 1, "pig not shifted: " + pig[0].position());
+            helper.assertTrue(Math.floorDiv(villager[0].getBlockX(), W) == 1, "villager not shifted: " + villager[0].position());
+            GlobalPos remembered = villager[0].getBrain().getMemory(MemoryModuleType.HOME).orElseThrow();
+            helper.assertTrue(remembered.pos().equals(home.offset(W, 0, 0)), "home memory not translated: " + remembered.pos());
+            assertNoViolations(helper, level);
+
+            pig[0].discard();
+            villager[0].discard();
+            for (int x = cx; x < cx + 10; x++) level.setChunkForced(Wrap.canonChunk(x), cz, false);
+            level.getServer().getPlayerList().remove(player[0]);
+        });
+    }
+
+    private static <T extends Mob> T spawnFloating(ServerLevel level, EntityType<T> type, double x, double y, double z) {
+        T mob = type.create(level);
+        mob.moveTo(x + 0.5, y, z + 0.5);
+        mob.setNoAi(true);
+        mob.setNoGravity(true);
+        level.addFreshEntity(mob);
+        return mob;
     }
 
     private static boolean inFrame(ServerLevel level, Entity entity) {
