@@ -8,6 +8,7 @@ import g_mungus.alpha_omega.mixin.network.BlockEventPacketAccessor;
 import g_mungus.alpha_omega.mixin.network.BlockUpdatePacketAccessor;
 import g_mungus.alpha_omega.mixin.network.ChunksBiomesPacketAccessor;
 import g_mungus.alpha_omega.mixin.network.ClientboundMoveVehiclePacketAccessor;
+import g_mungus.alpha_omega.mixin.network.ExplodePacketAccessor;
 import g_mungus.alpha_omega.mixin.network.ForgetLevelChunkPacketAccessor;
 import g_mungus.alpha_omega.mixin.network.LevelChunkWithLightPacketAccessor;
 import g_mungus.alpha_omega.mixin.network.LevelEventPacketAccessor;
@@ -34,6 +35,7 @@ import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.network.protocol.game.ClientboundBlockEventPacket;
 import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
 import net.minecraft.network.protocol.game.ClientboundChunksBiomesPacket;
+import net.minecraft.network.protocol.game.ClientboundExplodePacket;
 import net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
 import net.minecraft.network.protocol.game.ClientboundLevelEventPacket;
@@ -162,6 +164,18 @@ public final class ClientboundNormalizer {
                 LevelParticlesPacketAccessor a = (LevelParticlesPacketAccessor) p;
                 a.alpha_omega$setX(Wrap.nearest(p.getX(), ref.x));
                 a.alpha_omega$setZ(Wrap.nearest(p.getZ(), ref.z));
+            }
+            case ClientboundExplodePacket p -> {
+                // The explosion center and every destroyed block move together, so they stay one image.
+                Vec3 ref = reference(mc, cx, cz);
+                double dx = Wrap.nearest(p.getX(), ref.x) - p.getX();
+                double dz = Wrap.nearest(p.getZ(), ref.z) - p.getZ();
+                if (dx != 0 || dz != 0) {
+                    ExplodePacketAccessor a = (ExplodePacketAccessor) p;
+                    a.alpha_omega$setX(p.getX() + dx);
+                    a.alpha_omega$setZ(p.getZ() + dz);
+                    a.alpha_omega$setToBlow(p.getToBlow().stream().map(pos -> pos.offset((int) dx, 0, (int) dz)).toList());
+                }
             }
             case ClientboundLevelEventPacket p ->
                 ((LevelEventPacketAccessor) p).alpha_omega$setPos(Wrap.nearest(p.getPos(), reference(mc, cx, cz)));

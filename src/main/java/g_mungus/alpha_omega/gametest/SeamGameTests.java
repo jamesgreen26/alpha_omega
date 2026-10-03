@@ -158,6 +158,7 @@ public class SeamGameTests {
         PacketNormalization.normalize(use, player.connection);
         helper.assertTrue(use.getHitResult().getBlockPos().equals(target), "use target not normalized: " + use.getHitResult().getBlockPos());
         helper.assertTrue(use.getHitResult().getLocation().equals(Vec3.atCenterOf(target)), "hit location not normalized");
+        helper.getLevel().getServer().getPlayerList().remove(player);
         helper.succeed();
     }
 

@@ -90,6 +90,11 @@ public final class Wrap {
         return WrapMath.nearestImage(x, ref, PERIOD);
     }
 
+    public static double canon(double x) {
+        double c = x % PERIOD;
+        return c < 0 ? c + PERIOD : c;
+    }
+
     public static double minDelta(double a, double b) {
         return WrapMath.minDelta(a, b, PERIOD);
     }
