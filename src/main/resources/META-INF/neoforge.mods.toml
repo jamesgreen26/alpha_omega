@@ -1,0 +1,28 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "MIT"
+
+[[mods]]
+modId = "alpha_omega"
+version = "${version}"
+displayName = "Alpha Omega"
+authors = "G_Mungus"
+description = '''
+'''
+
+[[mixins]]
+config = "alpha_omega.mixins.json"
+
+[[dependencies.alpha_omega]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.alpha_omega]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,1.22)"
+ordering = "NONE"
+side = "BOTH"

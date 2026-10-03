@@ -1,0 +1,15 @@
+.gradle/
+.idea/
+build/
+lib/
+run/
+bin/
+run-data/
+logs/
+.settings/
+.project
+.classpath
+**/.DS_Store
+/local
+/gametest_run.log
+design_docs/
