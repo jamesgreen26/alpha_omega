@@ -1,7 +1,9 @@
 package g_mungus.alpha_omega.mixin.server;
 
+import g_mungus.alpha_omega.island.IslandManager;
 import g_mungus.alpha_omega.wrap.Wrap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -24,6 +26,20 @@ abstract class LevelChunkMixin {
     @Shadow
     @Final
     Level level;
+
+    @Shadow
+    private boolean loaded;
+
+    /** A chunk joins its island when it becomes a loaded full chunk, and leaves when it unloads (§5.4, §5.5). */
+    @Inject(method = "setLoaded", at = @At("HEAD"))
+    private void alpha_omega$joinIsland(boolean loaded, CallbackInfo ci) {
+        if (loaded == this.loaded || !(this.level instanceof ServerLevel server)) return;
+        if (loaded) {
+            IslandManager.of(server).onChunkLoaded(((LevelChunk) (Object) this).getPos());
+        } else {
+            IslandManager.of(server).onChunkUnloaded(((LevelChunk) (Object) this).getPos());
+        }
+    }
 
     @ModifyVariable(method = {
         "getBlockEntity(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/chunk/LevelChunk$EntityCreationType;)Lnet/minecraft/world/level/block/entity/BlockEntity;",

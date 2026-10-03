@@ -93,23 +93,30 @@ public class FrameGameTests {
         helper.succeed();
     }
 
+    /**
+     * A player arriving at another image of loaded terrain is brought into the terrain's island frame, block-side
+     * code there lifts into that same frame, and proximity checks from any image find the player.
+     */
     @GameTest(template = TEMPLATE, batch = PLAYER_BATCH)
-    public static void chunksLiftToTheNearestPlayersFrame(GameTestHelper helper) {
+    public static void playersJoinTheTerrainsFrame(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos block = helper.absolutePos(new BlockPos(3, 1, 3));
         BlockPos playerImage = block.offset(LAP_X, 0, LAP_Z);
         ServerPlayer player = helper.makeMockServerPlayerInLevel();
         player.moveTo(playerImage.getX() + 0.5, playerImage.getY(), playerImage.getZ() + 0.5);
 
-        helper.assertTrue(Frames.lift(level, block).equals(playerImage), "did not lift to the player's frame: " + Frames.lift(level, block));
-        helper.assertTrue(Frames.lift(level, Wrap.canon(block)).equals(playerImage), "canonical position did not lift to the player's frame");
+        helper.runAfterDelay(1, () -> {
+            BlockPos lifted = Frames.lift(level, playerImage);
+            helper.assertTrue(Wrap.canon(lifted).equals(Wrap.canon(block)), "lift changed the canonical position");
+            helper.assertTrue(player.blockPosition().equals(lifted), "player " + player.blockPosition() + " not in the terrain's frame " + lifted);
 
-        // R5 player proximity, from a position in another frame than the player.
-        helper.assertTrue(level.hasNearbyAlivePlayer(block.getX(), block.getY(), block.getZ(), 4.0), "player near an image not detected");
-        helper.assertTrue(level.getNearestPlayer(block.getX(), block.getY(), block.getZ(), 4.0, false) == player, "nearest player not found across frames");
+            // R5 player proximity, from an image in another frame than the player.
+            helper.assertTrue(level.hasNearbyAlivePlayer(playerImage.getX(), playerImage.getY(), playerImage.getZ(), 4.0), "player near an image not detected");
+            helper.assertTrue(level.getNearestPlayer(playerImage.getX(), playerImage.getY(), playerImage.getZ(), 4.0, false) == player, "nearest player not found across frames");
 
-        level.getServer().getPlayerList().remove(player);
-        helper.succeed();
+            level.getServer().getPlayerList().remove(player);
+            helper.succeed();
+        });
     }
 
     /** A spawner runs for a player near an image of it (its ticker is lifted into the player's frame). */

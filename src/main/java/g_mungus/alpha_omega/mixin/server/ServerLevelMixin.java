@@ -6,7 +6,8 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 import g_mungus.alpha_omega.frame.Frames;
 import g_mungus.alpha_omega.wrap.Wrap;
-import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
+import g_mungus.alpha_omega.island.IslandManager;
+import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Position;
@@ -22,36 +23,32 @@ import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ServerLevel.class)
-abstract class ServerLevelMixin implements Frames.Cache {
+abstract class ServerLevelMixin implements IslandManager.Holder {
 
     @Unique
-    private final Long2LongOpenHashMap alpha_omega$lapOffsets = alpha_omega$newOffsets();
-    @Unique
-    private long alpha_omega$lapOffsetsTick = Long.MIN_VALUE;
-
-    @Unique
-    private static Long2LongOpenHashMap alpha_omega$newOffsets() {
-        Long2LongOpenHashMap map = new Long2LongOpenHashMap();
-        map.defaultReturnValue(Long.MIN_VALUE);
-        return map;
-    }
+    private IslandManager alpha_omega$islands;
 
     @Override
-    public Long2LongOpenHashMap alpha_omega$lapOffsets() {
-        return this.alpha_omega$lapOffsets;
+    public IslandManager alpha_omega$islands() {
+        if (this.alpha_omega$islands == null) this.alpha_omega$islands = new IslandManager((ServerLevel) (Object) this);
+        return this.alpha_omega$islands;
     }
 
-    @Override
-    public long alpha_omega$lapOffsetsTick() {
-        return this.alpha_omega$lapOffsetsTick;
+    /** End of the level tick: island splits and entity frame checks (shifts run when no entity is mid-update). */
+    @Inject(method = "tick", at = @At("TAIL"))
+    private void alpha_omega$tickIslands(BooleanSupplier hasTimeLeft, CallbackInfo ci) {
+        this.alpha_omega$islands().tick();
     }
 
-    @Override
-    public void alpha_omega$setLapOffsetsTick(long tick) {
-        this.alpha_omega$lapOffsetsTick = tick;
+    /** Respawn positions are block-side state: stored canonically, lifted on use. */
+    @ModifyVariable(method = "setDefaultSpawnPos", at = @At("HEAD"), argsOnly = true)
+    private BlockPos alpha_omega$canonSpawn(BlockPos pos) {
+        return Wrap.canon(pos);
     }
 
     // ---- R4: execution entry points ----

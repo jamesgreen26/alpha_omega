@@ -1,34 +1,21 @@
 package g_mungus.alpha_omega.frame;
 
 import g_mungus.alpha_omega.wrap.Wrap;
-import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
+import g_mungus.alpha_omega.island.IslandGraph;
+import g_mungus.alpha_omega.island.IslandManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.ChunkPos;
 
 /**
  * Lifts canonical block-side positions into the simulation frame where block-side code starts executing (design
- * doc §7.3, rule R4).
- * <p>
- * Provisional, until islands exist (phase 3): a chunk lifts to its image nearest the closest player, which is
- * the frame that player and everything around them live in. With no players a chunk stays canonical. The island
- * lift table replaces {@link #lapOffset} without changing any caller.
+ * doc §7.3, rule R4): the frame of the chunk's island. A chunk outside every island (not loaded) falls back to the
+ * image nearest the closest player.
  */
 public final class Frames {
 
     private Frames() {
-    }
-
-    /** Per-level cache of chunk lap offsets, valid for one game tick. */
-    public interface Cache {
-
-        Long2LongOpenHashMap alpha_omega$lapOffsets();
-
-        long alpha_omega$lapOffsetsTick();
-
-        void alpha_omega$setLapOffsetsTick(long tick);
     }
 
     public static BlockPos lift(ServerLevel level, BlockPos pos) {
@@ -41,21 +28,11 @@ public final class Frames {
      * as two ints; read it with {@link #offsetX} and {@link #offsetZ}.
      */
     public static long lapOffset(ServerLevel level, int chunkX, int chunkZ) {
-        if (level.players().isEmpty()) return 0;
-        Cache cache = (Cache) level;
-        Long2LongOpenHashMap offsets = cache.alpha_omega$lapOffsets();
-        long tick = level.getGameTime();
-        if (cache.alpha_omega$lapOffsetsTick() != tick) {
-            offsets.clear();
-            cache.alpha_omega$setLapOffsetsTick(tick);
-        }
-        long key = ChunkPos.asLong(chunkX, chunkZ);
-        long offset = offsets.get(key);
-        if (offset == Long.MIN_VALUE) {
-            offset = computeLapOffset(level, chunkX, chunkZ);
-            offsets.put(key, offset);
-        }
-        return offset;
+        long laps = IslandManager.of(level).laps(chunkX, chunkZ);
+        if (laps == IslandGraph.ABSENT) return nearestPlayerOffset(level, chunkX, chunkZ);
+        int dx = (Wrap.canonChunk(chunkX) + IslandGraph.lapX(laps) * Wrap.CHUNK_PERIOD - chunkX) << 4;
+        int dz = (Wrap.canonChunk(chunkZ) + IslandGraph.lapZ(laps) * Wrap.CHUNK_PERIOD - chunkZ) << 4;
+        return pack(dx, dz);
     }
 
     public static int offsetX(long offset) {
@@ -66,7 +43,11 @@ public final class Frames {
         return (int) offset;
     }
 
-    private static long computeLapOffset(ServerLevel level, int chunkX, int chunkZ) {
+    private static long pack(int dx, int dz) {
+        return ((long) dx << 32) | (dz & 0xFFFFFFFFL);
+    }
+
+    private static long nearestPlayerOffset(ServerLevel level, int chunkX, int chunkZ) {
         int x = SectionPos.sectionToBlockCoord(chunkX, 8);
         int z = SectionPos.sectionToBlockCoord(chunkZ, 8);
         ServerPlayer nearest = null;
@@ -81,8 +62,6 @@ public final class Frames {
             }
         }
         if (nearest == null) return 0;
-        int dx = Wrap.lapOffset(x, nearest.getBlockX());
-        int dz = Wrap.lapOffset(z, nearest.getBlockZ());
-        return ((long) dx << 32) | (dz & 0xFFFFFFFFL);
+        return pack(Wrap.lapOffset(x, nearest.getBlockX()), Wrap.lapOffset(z, nearest.getBlockZ()));
     }
 }

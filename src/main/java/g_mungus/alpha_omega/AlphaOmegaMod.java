@@ -2,6 +2,7 @@ package g_mungus.alpha_omega;
 
 import com.mojang.logging.LogUtils;
 import g_mungus.alpha_omega.gametest.FrameGameTests;
+import g_mungus.alpha_omega.gametest.IslandGameTests;
 import g_mungus.alpha_omega.gametest.ModLoadGameTests;
 import g_mungus.alpha_omega.gametest.SeamGameTests;
 import g_mungus.alpha_omega.gametest.WorldgenGameTests;
@@ -41,5 +42,6 @@ public class AlphaOmegaMod {
         event.register(SeamGameTests.class);
         event.register(WorldgenGameTests.class);
         event.register(FrameGameTests.class);
+        event.register(IslandGameTests.class);
     }
 }
