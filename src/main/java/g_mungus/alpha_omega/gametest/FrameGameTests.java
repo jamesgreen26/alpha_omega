@@ -11,6 +11,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.Container;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ai.village.poi.PoiManager;
 import net.minecraft.world.entity.ai.village.poi.PoiTypes;
@@ -30,7 +31,7 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 /**
  * Phase 2: block-side code meeting entities across frames. Each test puts the entity side a whole number of laps
- * away from the block side ({@link #LAP_X}, {@link #LAP_Z}), wherever the test area happens to be.
+ * away from the block side ({@link #lapX()}, {@link #lapZ()}), wherever the test area happens to be.
  */
 @GameTestHolder(AlphaOmegaMod.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -51,15 +52,21 @@ public class FrameGameTests {
     private static final String TEMPLATE = "gametest/flat_7x4x7";
     /** Tests that place a mock player change how chunks lift, so they run apart from everything else. */
     private static final String PLAYER_BATCH = "alpha_omega_players";
-    private static final int LAP_X = period();
-    private static final int LAP_Z = -2 * period();
+    /** The entity side sits this far from the block side (a method: the period is only known once a world loads). */
+    private static int lapX() {
+        return period();
+    }
+
+    private static int lapZ() {
+        return -2 * period();
+    }
 
     /** The hopper searches from its own position; the item lies above an image of it. */
     @GameTest(template = TEMPLATE)
     public static void hopperCollectsItemsAcrossFrames(GameTestHelper helper) {
         BlockPos hopper = new BlockPos(3, 1, 3);
         helper.setBlock(hopper, Blocks.HOPPER);
-        Vec3 above = Vec3.atCenterOf(helper.absolutePos(hopper.above())).add(LAP_X, 0, LAP_Z);
+        Vec3 above = Vec3.atCenterOf(helper.absolutePos(hopper.above())).add(lapX(), 0, lapZ());
         helper.getLevel().addFreshEntity(new ItemEntity(helper.getLevel(), above.x, above.y, above.z, new ItemStack(Items.DIAMOND)));
         helper.succeedWhen(() -> helper.assertContainerContains(hopper, Items.DIAMOND));
     }
@@ -75,8 +82,8 @@ public class FrameGameTests {
             PoiManager pois = level.getPoiManager();
             Optional<BlockPos> found = pois.findClosest(type -> type.is(PoiTypes.MEETING), origin, 16, PoiManager.Occupancy.ANY);
             helper.assertTrue(found.isPresent() && found.get().equals(bell), "expected bell at " + bell + ", found " + found);
-            Optional<BlockPos> image = pois.findClosest(type -> type.is(PoiTypes.MEETING), origin.offset(LAP_X, 0, LAP_Z), 16, PoiManager.Occupancy.ANY);
-            helper.assertTrue(image.isPresent() && image.get().equals(bell.offset(LAP_X, 0, LAP_Z)), "query from another image found " + image);
+            Optional<BlockPos> image = pois.findClosest(type -> type.is(PoiTypes.MEETING), origin.offset(lapX(), 0, lapZ()), 16, PoiManager.Occupancy.ANY);
+            helper.assertTrue(image.isPresent() && image.get().equals(bell.offset(lapX(), 0, lapZ())), "query from another image found " + image);
 
             int before = pois.getFreeTickets(bell);
             Optional<BlockPos> taken = pois.take(type -> type.is(PoiTypes.MEETING), (type, pos) -> true, origin, 16);
@@ -92,7 +99,7 @@ public class FrameGameTests {
     public static void sculkSensorHearsAcrossFrames(GameTestHelper helper) {
         BlockPos sensor = new BlockPos(3, 1, 3);
         helper.setBlock(sensor, Blocks.SCULK_SENSOR);
-        Vec3 source = Vec3.atCenterOf(helper.absolutePos(new BlockPos(1, 1, 3))).add(LAP_X, 0, LAP_Z);
+        Vec3 source = Vec3.atCenterOf(helper.absolutePos(new BlockPos(1, 1, 3))).add(lapX(), 0, lapZ());
         helper.runAfterDelay(2, () -> helper.getLevel().gameEvent(GameEvent.BLOCK_PLACE, source, GameEvent.Context.of(Blocks.STONE.defaultBlockState())));
         helper.succeedWhen(() -> helper.assertBlockProperty(sensor, SculkSensorBlock.PHASE, SculkSensorPhase.ACTIVE));
     }
@@ -113,7 +120,7 @@ public class FrameGameTests {
     public static void playersJoinTheTerrainsFrame(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos block = helper.absolutePos(new BlockPos(3, 1, 3));
-        BlockPos playerImage = block.offset(LAP_X, 0, LAP_Z);
+        BlockPos playerImage = block.offset(lapX(), 0, lapZ());
         ServerPlayer player = helper.makeMockServerPlayerInLevel();
         player.moveTo(playerImage.getX() + 0.5, playerImage.getY(), playerImage.getZ() + 0.5);
 
@@ -131,6 +138,33 @@ public class FrameGameTests {
         });
     }
 
+    /**
+     * Containers keep their block entity at the canonical position; a player standing next to another image of it
+     * can still use it (menus check reach every tick and would close at once otherwise).
+     */
+    @GameTest(template = TEMPLATE, batch = PLAYER_BATCH)
+    public static void containersStayOpenAcrossFrames(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos chest = new BlockPos(3, 1, 3);
+        BlockPos furnace = new BlockPos(4, 1, 3);
+        helper.setBlock(chest, Blocks.CHEST);
+        helper.setBlock(furnace, Blocks.FURNACE);
+        BlockPos stand = helper.absolutePos(new BlockPos(3, 1, 4)).offset(lapX(), 0, lapZ());
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        player.moveTo(stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5);
+
+        Container chestContainer = helper.getBlockEntity(chest);
+        Container furnaceContainer = helper.getBlockEntity(furnace);
+        boolean chestValid = chestContainer.stillValid(player);
+        boolean furnaceValid = furnaceContainer.stillValid(player);
+        boolean reach = player.canInteractWithBlock(helper.absolutePos(chest), 1.0);
+        level.getServer().getPlayerList().remove(player);
+        helper.assertTrue(chestValid, "chest menu would close for a player next to another image of it");
+        helper.assertTrue(furnaceValid, "furnace menu would close for a player next to another image of it");
+        helper.assertTrue(reach, "player cannot reach a block next to it from another frame");
+        helper.succeed();
+    }
+
     /** A spawner runs for a player near an image of it (its ticker is lifted into the player's frame). */
     @GameTest(template = TEMPLATE, batch = PLAYER_BATCH)
     public static void spawnerSeesPlayerAcrossFrames(GameTestHelper helper) {
@@ -140,7 +174,7 @@ public class FrameGameTests {
         SpawnerBlockEntity blockEntity = helper.getBlockEntity(spawner);
         blockEntity.setEntityId(EntityType.PIG, level.getRandom());
 
-        BlockPos near = helper.absolutePos(spawner).offset(2 + LAP_X, 0, LAP_Z);
+        BlockPos near = helper.absolutePos(spawner).offset(2 + lapX(), 0, lapZ());
         ServerPlayer player = helper.makeMockServerPlayerInLevel();
         player.moveTo(near.getX() + 0.5, near.getY(), near.getZ() + 0.5);
 

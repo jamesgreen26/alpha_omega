@@ -58,6 +58,7 @@
     "server.entity.PersistentEntitySectionManagerCallbackMixin",
     "server.entity.PersistentEntitySectionManagerMixin",
     "server.entity.PhantomAccessor",
+    "server.entity.PlayerMixin",
     "server.entity.TurtleAccessor",
     "server.light.BlockLightEngineMixin",
     "server.light.LayerLightSectionStorageMixin",
