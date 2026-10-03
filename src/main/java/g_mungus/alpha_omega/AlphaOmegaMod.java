@@ -1,12 +1,14 @@
 package g_mungus.alpha_omega;
 
 import com.mojang.logging.LogUtils;
+import g_mungus.alpha_omega.command.WrapCommand;
 import g_mungus.alpha_omega.config.AlphaOmegaConfig;
 import g_mungus.alpha_omega.gametest.CutGameTests;
 import g_mungus.alpha_omega.gametest.DimensionGameTests;
 import g_mungus.alpha_omega.gametest.FrameGameTests;
 import g_mungus.alpha_omega.gametest.IslandGameTests;
 import g_mungus.alpha_omega.gametest.ModLoadGameTests;
+import g_mungus.alpha_omega.gametest.PolishGameTests;
 import g_mungus.alpha_omega.gametest.SeamGameTests;
 import g_mungus.alpha_omega.gametest.WorldgenGameTests;
 import g_mungus.alpha_omega.island.BuiltinFrameTranslators;
@@ -19,6 +21,7 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
@@ -44,6 +47,7 @@ public class AlphaOmegaMod {
         // A world's wrapping is decided before any of its levels is constructed, and forgotten when it stops.
         NeoForge.EVENT_BUS.addListener((ServerAboutToStartEvent event) -> WorldWrapStore.load(event.getServer()));
         NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> Wraps.reset());
+        NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent event) -> WrapCommand.register(event.getDispatcher()));
         if (Boolean.getBoolean("alpha_omega.auditMixins")) {
             NeoForge.EVENT_BUS.addListener(AlphaOmegaMod::auditMixins);
         }
@@ -76,5 +80,6 @@ public class AlphaOmegaMod {
         event.register(IslandGameTests.class);
         event.register(CutGameTests.class);
         event.register(DimensionGameTests.class);
+        event.register(PolishGameTests.class);
     }
 }
