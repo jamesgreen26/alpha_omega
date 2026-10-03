@@ -6,6 +6,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import org.spongepowered.asm.mixin.MixinEnvironment;
 
 @GameTestHolder(AlphaOmegaMod.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -16,6 +17,13 @@ public class ModLoadGameTests {
     @GameTest(template = TEMPLATE)
     public static void modIsLoaded(GameTestHelper helper) {
         helper.assertTrue(ModList.get().isLoaded(AlphaOmegaMod.MOD_ID), "alpha_omega is not in the mod list");
+        helper.succeed();
+    }
+
+    /** Loads every mixin target, so a stale injection point fails here instead of when the class first loads in play. */
+    @GameTest(template = TEMPLATE)
+    public static void mixinsApply(GameTestHelper helper) {
+        MixinEnvironment.getCurrentEnvironment().audit();
         helper.succeed();
     }
 }
