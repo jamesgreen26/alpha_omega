@@ -1,7 +1,9 @@
 package g_mungus.alpha_omega.mixin.worldgen.noise;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.mojang.logging.LogUtils;
+import g_mungus.alpha_omega.wrap.noise.CanonicalPositionalRandomFactory;
 import g_mungus.alpha_omega.wrap.noise.NoisePeriods;
 import g_mungus.alpha_omega.wrap.noise.PeriodicNoiseSource;
 import g_mungus.alpha_omega.wrap.noise.PeriodicNoiseUser;
@@ -47,6 +49,9 @@ abstract class RandomStateMixin implements PeriodicNoiseSource {
     @Unique
     private final Map<List<Object>, NormalNoise> alpha_omega$copies = new HashMap<>();
 
+    @Unique
+    private volatile PositionalRandomFactory alpha_omega$canonicalOreRandom;
+
     @ModifyExpressionValue(method = "<init>",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/levelgen/NoiseRouter;mapAll(Lnet/minecraft/world/level/levelgen/DensityFunction$Visitor;)Lnet/minecraft/world/level/levelgen/NoiseRouter;"))
     private NoiseRouter alpha_omega$makeRouterPeriodic(NoiseRouter router) {
@@ -54,6 +59,17 @@ abstract class RandomStateMixin implements PeriodicNoiseSource {
             if (function instanceof PeriodicNoiseUser user) user.alpha_omega$makePeriodic(this);
             return function;
         });
+    }
+
+    /** Ore vein blocks are picked with a per-block random from this factory; seed it with the canonical position. */
+    @ModifyReturnValue(method = "oreRandom", at = @At("RETURN"))
+    private PositionalRandomFactory alpha_omega$canonicalOreRandom(PositionalRandomFactory factory) {
+        PositionalRandomFactory canonical = this.alpha_omega$canonicalOreRandom;
+        if (canonical == null) {
+            canonical = new CanonicalPositionalRandomFactory(factory);
+            this.alpha_omega$canonicalOreRandom = canonical;
+        }
+        return canonical;
     }
 
     @Override

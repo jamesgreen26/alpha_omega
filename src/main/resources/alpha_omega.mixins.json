@@ -1,7 +1,6 @@
 {
   "required": true,
   "package": "g_mungus.alpha_omega.mixin",
-  "refmap": "alpha_omega.mixins.refmap.json",
   "compatibilityLevel": "JAVA_21",
   "minVersion": "0.8",
   "client": [
@@ -63,7 +62,6 @@
     "worldgen.NoiseBasedStateProviderMixin",
     "worldgen.NoiseThresholdConditionSourceMixin",
     "worldgen.NoiseThresholdCountPlacementMixin",
-    "worldgen.OreVeinifierMixin",
     "worldgen.SurfaceSystemMixin",
     "worldgen.SwampGrassColorModifierMixin",
     "worldgen.WorldGenRegionMixin",

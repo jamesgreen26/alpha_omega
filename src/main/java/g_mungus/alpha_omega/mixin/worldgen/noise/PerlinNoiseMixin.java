@@ -1,14 +1,14 @@
 package g_mungus.alpha_omega.mixin.worldgen.noise;
 
-import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.llamalad7.mixinextras.sugar.Local;
 import g_mungus.alpha_omega.wrap.noise.PeriodicLattice;
+import it.unimi.dsi.fastutil.doubles.DoubleList;
 import net.minecraft.world.level.levelgen.synth.ImprovedNoise;
 import net.minecraft.world.level.levelgen.synth.PerlinNoise;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Overwrite;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
-import org.spongepowered.asm.mixin.injection.At;
 
 /**
  * Vanilla keeps octave inputs small by subtracting multiples of 2^25 once they pass 2^24. That is not a multiple
@@ -18,22 +18,52 @@ import org.spongepowered.asm.mixin.injection.At;
 @Mixin(PerlinNoise.class)
 abstract class PerlinNoiseMixin {
 
-    @Unique
-    private static final String WRAP = "Lnet/minecraft/world/level/levelgen/synth/PerlinNoise;wrap(D)D";
+    @Shadow @Final private ImprovedNoise[] noiseLevels;
+    @Shadow @Final private DoubleList amplitudes;
+    @Shadow @Final private double lowestFreqValueFactor;
+    @Shadow @Final private double lowestFreqInputFactor;
 
-    @WrapOperation(method = "getValue(DDDDDZ)D", at = @At(value = "INVOKE", target = WRAP, ordinal = 0))
-    private double alpha_omega$wrapX(double input, Operation<Double> original, @Local ImprovedNoise octave) {
-        return alpha_omega$reduce(input, ((PeriodicLattice) (Object) octave).alpha_omega$inputPeriodX(), original);
+    @Shadow
+    public static double wrap(double input) {
+        throw new AssertionError();
     }
 
-    @WrapOperation(method = "getValue(DDDDDZ)D", at = @At(value = "INVOKE", target = WRAP, ordinal = 2))
-    private double alpha_omega$wrapZ(double input, Operation<Double> original, @Local ImprovedNoise octave) {
-        return alpha_omega$reduce(input, ((PeriodicLattice) (Object) octave).alpha_omega$inputPeriodZ(), original);
+    /**
+     * @author alpha_omega
+     * @reason The reduction depends on the octave being sampled, which an injector can only reach through the
+     * local variable table, and production Minecraft's local names are obfuscated. Identical to vanilla for
+     * octaves that are not periodic.
+     */
+    @Overwrite
+    public double getValue(double x, double y, double z, double yScale, double yMax, boolean useFixedY) {
+        double total = 0.0;
+        double frequency = this.lowestFreqInputFactor;
+        double amplitude = this.lowestFreqValueFactor;
+
+        for (int i = 0; i < this.noiseLevels.length; i++) {
+            ImprovedNoise octave = this.noiseLevels[i];
+            if (octave != null) {
+                PeriodicLattice lattice = (PeriodicLattice) (Object) octave;
+                double value = octave.noise(
+                    alpha_omega$reduce(x * frequency, lattice.alpha_omega$inputPeriodX()),
+                    useFixedY ? -octave.yo : wrap(y * frequency),
+                    alpha_omega$reduce(z * frequency, lattice.alpha_omega$inputPeriodZ()),
+                    yScale * frequency,
+                    yMax * frequency
+                );
+                total += this.amplitudes.getDouble(i) * value * amplitude;
+            }
+
+            frequency *= 2.0;
+            amplitude /= 2.0;
+        }
+
+        return total;
     }
 
     @Unique
-    private static double alpha_omega$reduce(double input, double period, Operation<Double> original) {
-        if (period == 0) return original.call(input);
+    private static double alpha_omega$reduce(double input, double period) {
+        if (period == 0) return wrap(input);
         double reduced = input % period;
         return reduced < 0 ? reduced + period : reduced;
     }

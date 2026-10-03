@@ -2,7 +2,9 @@ package g_mungus.alpha_omega.mixin.worldgen.noise;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import com.llamalad7.mixinextras.sugar.Local;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.sugar.Share;
+import com.llamalad7.mixinextras.sugar.ref.LocalDoubleRef;
 import g_mungus.alpha_omega.wrap.noise.PeriodicNoiseSource;
 import g_mungus.alpha_omega.wrap.noise.PeriodicNoiseUser;
 import g_mungus.alpha_omega.wrap.noise.RarityNoises;
@@ -41,11 +43,19 @@ abstract class WeirdScaledSamplerMixin implements PeriodicNoiseUser {
         return copy;
     }
 
+    /** Remember the rarity for the noise call below (shared slot; production local variable names are obfuscated). */
+    @ModifyExpressionValue(method = "transform",
+        at = @At(value = "INVOKE", target = "Lit/unimi/dsi/fastutil/doubles/Double2DoubleFunction;get(D)D"))
+    private double alpha_omega$captureRarity(double rarity, @Share("rarity") LocalDoubleRef shared) {
+        shared.set(rarity);
+        return rarity;
+    }
+
     @WrapOperation(method = "transform",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/levelgen/DensityFunction$NoiseHolder;getValue(DDD)D"))
     private double alpha_omega$sampleForRarity(DensityFunction.NoiseHolder holder, double x, double y, double z,
-                                              Operation<Double> original, @Local(ordinal = 1) double rarity) {
+                                              Operation<Double> original, @Share("rarity") LocalDoubleRef rarity) {
         RarityNoises noises = this.alpha_omega$rarityNoises;
-        return original.call(noises == null ? holder : noises.forRarity(rarity), x, y, z);
+        return original.call(noises == null ? holder : noises.forRarity(rarity.get()), x, y, z);
     }
 }
