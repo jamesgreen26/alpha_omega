@@ -4,6 +4,9 @@
   "plugin": "g_mungus.alpha_omega.compat.CompatMixinPlugin",
   "compatibilityLevel": "JAVA_21",
   "minVersion": "0.8",
+  "mixins": [
+    "sable.PlayerListMixin"
+  ],
   "client": [
     "xaeromap.DistanceUtilsMixin",
     "xaeromap.ElementReaderMixin",

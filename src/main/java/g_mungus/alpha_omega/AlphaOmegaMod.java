@@ -16,6 +16,8 @@ import g_mungus.alpha_omega.network.WrapSettingsPayload;
 import g_mungus.alpha_omega.network.WrapSettingsTask;
 import g_mungus.alpha_omega.wrap.WorldWrapStore;
 import g_mungus.alpha_omega.wrap.Wraps;
+import java.lang.reflect.Field;
+import java.util.Map;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
@@ -29,7 +31,7 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.network.event.RegisterConfigurationTasksEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import org.slf4j.Logger;
-import org.spongepowered.asm.mixin.MixinEnvironment;
+import org.spongepowered.asm.mixin.transformer.Config;
 
 @Mod(AlphaOmegaMod.MOD_ID)
 public class AlphaOmegaMod {
@@ -63,13 +65,37 @@ public class AlphaOmegaMod {
     }
 
     /**
-     * Debug aid for production installs, where dev-only assumptions surface: force-load every mixin target so a
-     * failing injection shows up at startup rather than whenever its class first loads in play.
+     * Debug aid for production installs, where dev-only assumptions surface: force-load every target of our mixins so
+     * a failing injection shows up at startup rather than whenever its class first loads in play. Other mods' targets
+     * are left alone, since some of them cannot load on a dedicated server.
      */
+    @SuppressWarnings("unchecked")
     private static void auditMixins(ServerStartedEvent event) {
         LOGGER.info("Auditing mixins");
-        MixinEnvironment.getCurrentEnvironment().audit();
-        LOGGER.info("Mixin audit complete");
+        Map<String, Config> configs;
+        try {
+            // Mixins.getConfigs() only lists configs not yet selected, which by now is none of them.
+            Field all = Config.class.getDeclaredField("allConfigs");
+            all.setAccessible(true);
+            configs = (Map<String, Config>) all.get(null);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            LOGGER.error("Mixin audit could not list mixin configs", e);
+            return;
+        }
+        int loaded = 0, failures = 0;
+        for (Config config : configs.values()) {
+            if (!config.getName().startsWith(MOD_ID)) continue;
+            for (String target : config.getConfig().getTargets()) {
+                try {
+                    loaded++;
+                    Class.forName(target.replace('/', '.'), false, AlphaOmegaMod.class.getClassLoader());
+                } catch (Throwable t) {
+                    failures++;
+                    LOGGER.error("Mixin audit failed to load {}", target, t);
+                }
+            }
+        }
+        LOGGER.info("Mixin audit complete: {} targets, {} failures", loaded, failures);
     }
 
     private static void registerGameTests(RegisterGameTestsEvent event) {

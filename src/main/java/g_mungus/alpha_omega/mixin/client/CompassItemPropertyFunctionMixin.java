@@ -9,8 +9,11 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
-/** Compasses (spawn, lodestone, recovery) point at the image of their target nearest the holder (§9.4). */
-@Mixin(CompassItemPropertyFunction.class)
+/**
+ * Compasses (spawn, lodestone, recovery) point at the image of their target nearest the holder (§9.4). Priority above
+ * 1000 so it can still inject when Sable overwrites the method.
+ */
+@Mixin(value = CompassItemPropertyFunction.class, priority = 1100)
 abstract class CompassItemPropertyFunctionMixin {
 
     @ModifyVariable(method = "getAngleFromEntityToPos", at = @At("HEAD"), argsOnly = true)
