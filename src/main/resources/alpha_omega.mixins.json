@@ -6,6 +6,7 @@
   "minVersion": "0.8",
   "client": [
     "client.AbstractSoundInstanceAccessor",
+    "client.ChunkBorderRendererMixin",
     "client.ClientChunkCacheMixin",
     "client.ClientLevelMixin",
     "client.CompassItemPropertyFunctionMixin",
