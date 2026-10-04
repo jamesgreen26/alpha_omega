@@ -18,7 +18,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 abstract class CreateWorldScreenWorldTabMixin {
 
     @Unique
-    private static final List<Integer> ALPHA_OMEGA_SIZES = List.of(0, 6144, WorldWrapSettings.DEFAULT_PERIOD, 24576, 49152);
+    private static final List<Integer> ALPHA_OMEGA_SIZES = List.of(0, 3072, 6144, 12288, 24576, 49152);
 
     @Unique
     private GridLayout.RowHelper alpha_omega$rows;
