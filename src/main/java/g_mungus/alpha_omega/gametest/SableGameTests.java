@@ -54,4 +54,29 @@ public class SableGameTests {
             "plot chunk joined an island at its folded position " + foldedX + ", " + foldedZ);
         helper.succeed();
     }
+
+    /** A re-lifted chunk carries the sub-level over it: pose, last pose and physics body move by whole laps. */
+    @GameTest(template = TEMPLATE)
+    public static void subLevelsMoveWithTheirChunks(GameTestHelper helper) {
+        if (!sable(helper)) return;
+        ServerLevel level = helper.getLevel();
+        int period = Wraps.overworld().period;
+        BlockPos anchor = helper.absolutePos(new BlockPos(3, 2, 3));
+        List<BlockPos> blocks = List.of(anchor, anchor.east());
+        for (BlockPos pos : blocks) level.setBlockAndUpdate(pos, Blocks.IRON_BLOCK.defaultBlockState());
+        BlockPos plot = SableTestOps.assemble(level, anchor, blocks);
+        double[] before = SableTestOps.pose(level, plot);
+
+        SableTestOps.relift(level, plot, 1);
+
+        double[] after = SableTestOps.pose(level, plot);
+        helper.assertTrue(after[0] == before[0] + period && after[2] == before[2], "pose did not move one lap: " + before[0] + " -> " + after[0]);
+        helper.assertTrue(after[3] == before[3] + period && after[4] == before[4], "last pose did not move one lap");
+        helper.runAfterDelay(5, () -> {
+            double[] later = SableTestOps.pose(level, plot);
+            helper.assertTrue(Math.abs(later[0] - after[0]) < 4 && Math.abs(later[2] - after[2]) < 4,
+                "physics body did not move with the pose: " + after[0] + " -> " + later[0]);
+            helper.succeed();
+        });
+    }
 }

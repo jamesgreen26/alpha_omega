@@ -1,6 +1,7 @@
 package g_mungus.alpha_omega.api;
 
 import g_mungus.alpha_omega.frame.Frames;
+import g_mungus.alpha_omega.island.FrameParticipants;
 import g_mungus.alpha_omega.island.FrameTranslators;
 import g_mungus.alpha_omega.wrap.Wrap;
 import net.minecraft.core.BlockPos;
@@ -73,5 +74,18 @@ public final class WorldWrap {
     /** Translates the absolute positions entities of {@code type} hold when they move between frames. */
     public static <T extends Entity> void registerFrameTranslator(Class<T> type, FrameTranslators.FrameTranslator<? super T> translator) {
         FrameTranslators.register(type, translator);
+    }
+
+    /** Moves non-entity things that live in lifted frames (moving structures, say) along with the chunks under them. */
+    public static void registerFrameParticipant(FrameParticipants.FrameParticipant participant) {
+        FrameParticipants.register(participant);
+    }
+
+    /**
+     * Excludes chunk coordinates {@code [minChunk, maxChunk)} on each horizontal axis from wrapping, for storage kept
+     * far outside the world. Call during mod construction.
+     */
+    public static void excludeFromWrapping(int minChunk, int maxChunk) {
+        Wrap.excludeFromTorus(minChunk, maxChunk);
     }
 }

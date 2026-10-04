@@ -6,9 +6,13 @@
   "minVersion": "0.8",
   "mixins": [
     "sable.ActiveSableCompanionMixin",
-    "sable.NetherPortalBlockMixin"
+    "sable.NetherPortalBlockMixin",
+    "sable.SubLevelTrackingSystemMixin"
   ],
   "client": [
+    "sable.client.ClientboundRecentlySplitSubLevelPacketMixin",
+    "sable.client.ClientboundStartTrackingSubLevelPacketMixin",
+    "sable.client.SubLevelSnapshotInterpolatorMixin",
     "xaeromap.DistanceUtilsMixin",
     "xaeromap.ElementReaderMixin",
     "xaeromap.GuiMapMixin",

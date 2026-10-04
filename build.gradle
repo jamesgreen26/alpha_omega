@@ -16,6 +16,9 @@ neoForge {
     runs {
         client {
             client()
+            // -PquickPlay=<world> opens that singleplayer world on launch.
+            programArguments.addAll(providers.gradleProperty('quickPlay').map { ['--quickPlaySingleplayer', it] }.orElse([]))
+            if (project.hasProperty('auditMixins')) systemProperty 'alpha_omega.auditMixins', 'true'
         }
         server {
             server()

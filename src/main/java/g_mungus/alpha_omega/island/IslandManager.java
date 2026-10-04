@@ -161,6 +161,10 @@ public final class IslandManager {
         double dx = (double) lapDX * this.wrap.period;
         double dz = (double) lapDZ * this.wrap.period;
         for (Entity root : roots) EntityFrames.translate(root, dx, dz);
+        Long2LongOpenHashMap changes = new Long2LongOpenHashMap(target.chunks().size());
+        long laps = IslandGraph.packLaps(lapDX, lapDZ);
+        for (long key : target.chunks()) changes.put(key, laps);
+        FrameParticipants.translate(this.level, changes);
     }
 
     private EntitySectionStorage<Entity> sections() {
@@ -201,8 +205,10 @@ public final class IslandManager {
         int n = this.wrap.chunkPeriod;
         long[] entities = new long[n];
         for (Entity entity : this.level.getAllEntities()) {
-            entities[this.wrap.canonChunk(xAxis ? entity.chunkPosition().x : entity.chunkPosition().z)]++;
+            int chunk = xAxis ? entity.chunkPosition().x : entity.chunkPosition().z;
+            if (!Wrap.offTorusChunk(chunk)) entities[this.wrap.canonChunk(chunk)]++;
         }
+        FrameParticipants.weighColumns(this.level, xAxis, entities);
         int best = 0;
         long bestScore = Long.MAX_VALUE;
         for (int boundary = 0; boundary < n; boundary++) {
@@ -248,6 +254,7 @@ public final class IslandManager {
             long laps = entry.getLongValue();
             EntityFrames.translate(entry.getKey(), (double) IslandGraph.lapX(laps) * this.wrap.period, (double) IslandGraph.lapZ(laps) * this.wrap.period);
         }
+        FrameParticipants.translate(this.level, changes);
     }
 
     // ---- recentering (§5.9) ----
