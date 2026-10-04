@@ -3,13 +3,19 @@ package g_mungus.alpha_omega.mixin.client;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.mojang.blaze3d.vertex.VertexBuffer;
+import g_mungus.alpha_omega.client.sky.AtmosphereRenderer;
 import g_mungus.alpha_omega.client.sky.ClientSky;
 import g_mungus.alpha_omega.client.sky.SkyState;
 import g_mungus.alpha_omega.sky.LocalSky;
 import javax.annotation.Nullable;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.DimensionSpecialEffects;
 import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.client.renderer.ShaderInstance;
+import net.minecraft.world.level.material.FogType;
+import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -19,6 +25,9 @@ import org.spongepowered.asm.mixin.injection.At;
  * The sky turns about the local celestial pole: vanilla's {@code XP(timeOfDay·360°)} becomes {@code Rz(-φ)·Rx(H)}, so
  * the sun, moon and stars (all drawn in that frame) rise and set at an angle that depends on latitude. The sunrise
  * glow points at the sun's azimuth instead of due east or west, unless the atmosphere is on: it draws its own.
+ *
+ * <p>With the atmosphere on (and the camera in air), the flat-coloured sky dome is replaced by the atmosphere drawn per
+ * pixel. The sun, moon, stars and the dark lower hemisphere are still vanilla's, drawn over it.
  */
 @Mixin(LevelRenderer.class)
 abstract class LevelRendererSkyMixin {
@@ -64,5 +73,18 @@ abstract class LevelRendererSkyMixin {
         target = "Lnet/minecraft/client/renderer/DimensionSpecialEffects;getSunriseColor(FF)[F"))
     private float[] alpha_omega$noSunriseGlow(DimensionSpecialEffects effects, float timeOfDay, float partialTick, Operation<float[]> original) {
         return SkyState.active(this.level) ? null : original.call(effects, timeOfDay, partialTick);
+    }
+
+    @WrapOperation(method = "renderSky", at = @At(value = "INVOKE",
+        target = "Lcom/mojang/blaze3d/vertex/VertexBuffer;drawWithShader(Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;Lnet/minecraft/client/renderer/ShaderInstance;)V",
+        ordinal = 0))
+    private void alpha_omega$atmosphereDome(VertexBuffer dome, Matrix4f modelView, Matrix4f projection, ShaderInstance shader, Operation<Void> original) {
+        boolean inAir = Minecraft.getInstance().gameRenderer.getMainCamera().getFluidInCamera() == FogType.NONE;
+        if (!inAir || !SkyState.active(this.level) || !AtmosphereRenderer.drawSky(this.level, modelView, projection)) {
+            original.call(dome, modelView, projection, shader);
+            return;
+        }
+        // Vanilla unbinds the dome's buffer next; leave it bound as vanilla would.
+        dome.bind();
     }
 }

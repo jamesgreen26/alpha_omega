@@ -1,0 +1,116 @@
+{
+    "vertex": "alpha_omega:atmo_fullscreen",
+    "fragment": "alpha_omega:atmo_skyview",
+    "samplers": [
+        {
+            "name": "Transmittance"
+        },
+        {
+            "name": "MultiScattering"
+        }
+    ],
+    "uniforms": [
+        {
+            "name": "Radii",
+            "type": "float",
+            "count": 2,
+            "values": [
+                6360.0,
+                6460.0
+            ]
+        },
+        {
+            "name": "RayleighScattering",
+            "type": "float",
+            "count": 3,
+            "values": [
+                0.0,
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "name": "RayleighScaleHeight",
+            "type": "float",
+            "count": 1,
+            "values": [
+                8.0
+            ]
+        },
+        {
+            "name": "Mie",
+            "type": "float",
+            "count": 4,
+            "values": [
+                0.0,
+                0.0,
+                1.2,
+                0.8
+            ]
+        },
+        {
+            "name": "OzoneAbsorption",
+            "type": "float",
+            "count": 3,
+            "values": [
+                0.0,
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "name": "Ozone",
+            "type": "float",
+            "count": 2,
+            "values": [
+                25.0,
+                15.0
+            ]
+        },
+        {
+            "name": "SkyViewSize",
+            "type": "float",
+            "count": 2,
+            "values": [
+                192.0,
+                108.0
+            ]
+        },
+        {
+            "name": "SunDir",
+            "type": "float",
+            "count": 3,
+            "values": [
+                0.0,
+                1.0,
+                0.0
+            ]
+        },
+        {
+            "name": "Altitude",
+            "type": "float",
+            "count": 1,
+            "values": [
+                0.2
+            ]
+        },
+        {
+            "name": "MoonIlluminance",
+            "type": "float",
+            "count": 1,
+            "values": [
+                0.0
+            ]
+        },
+        {
+            "name": "Airglow",
+            "type": "float",
+            "count": 3,
+            "values": [
+                0.0,
+                0.0,
+                0.0
+            ]
+        }
+    ]
+}
