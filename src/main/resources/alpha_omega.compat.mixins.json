@@ -28,6 +28,7 @@
     "xaerominimap.GuiAddWaypointMixin",
     "xaerominimap.InfoDisplayRendererMixin",
     "xaerominimap.MinimapElementRendererHandlerMixin",
+    "xaerominimap.SupportXaeroWorldmapMixin",
     "xaerominimap.TemporaryWaypointHandlerMixin",
     "xaerominimap.WaypointRenderersMixin",
     "xaerominimap.WaypointUtilsMixin"

@@ -1,6 +1,7 @@
 package g_mungus.alpha_omega.compat;
 
 import g_mungus.alpha_omega.wrap.Wrap;
+import g_mungus.alpha_omega.wrap.WrapMath;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.minecraft.client.Minecraft;
@@ -10,6 +11,8 @@ import net.minecraft.world.level.Level;
 
 /**
  * Wrapping as Xaero's maps see it. Their map storage is keyed by canonical region, so it loops like the terrain;
+ * canonical regions are the ones holding the canonical window, so they line up with the world save's region files
+ * (which the world map reads in singleplayer) and lap 0 maps to itself;
  * everything drawn on a map (waypoints, markers) is placed at its image nearest the view; and coordinates shown to the
  * player are canonical, matching F3.
  */
@@ -19,6 +22,8 @@ public final class XaeroWraps {
 
     /** Xaero's world map region size, in blocks. */
     public static final int REGION_SIZE = 512;
+    /** Map tile chunks (4×4 chunks) per region side. */
+    public static final int TILE_CHUNKS_PER_REGION = 8;
 
     private XaeroWraps() {
     }
@@ -32,12 +37,37 @@ public final class XaeroWraps {
         return wrap.enabled() && wrap.period % REGION_SIZE == 0 ? wrap.period / REGION_SIZE : 0;
     }
 
-    /** {@code region} canonicalized for a map level whose regions span {@code 2^level} leaf regions. */
-    public static int canonRegion(int region, int regionPeriod, int level) {
+    /**
+     * First canonical region: the one holding the window's first block. Only the leaf level lines up with the window
+     * exactly, and only where it starts on a region boundary (the Overworld's does; a centered 3-region Nether's
+     * does not, so half a region on each side of it is not where the world save keeps it).
+     */
+    public static int regionOrigin(Wrap wrap) {
+        return Math.floorDiv(wrap.minBlock, REGION_SIZE);
+    }
+
+    /**
+     * {@code region} canonicalized for a map level whose regions span {@code 2^level} leaf regions: folded into
+     * {@code [regionOrigin, regionOrigin + regionPeriod)} leaves, where that is a whole number of the level's regions.
+     */
+    public static int canonRegion(int region, int regionPeriod, int regionOrigin, int level) {
         if (regionPeriod == 0) return region;
         int span = 1 << level;
-        if (regionPeriod % span != 0) return region;
-        return Math.floorMod(region, regionPeriod / span);
+        if (regionPeriod % span != 0 || regionOrigin % span != 0) return region;
+        return WrapMath.canon(region, regionPeriod / span, regionOrigin / span);
+    }
+
+    /** Map tile chunk (4×4 chunks) canonicalized: folded into the canonical regions. */
+    public static int canonTileChunk(int tileChunk, Wrap wrap) {
+        int regionPeriod = regionPeriod(wrap);
+        if (regionPeriod == 0) return tileChunk;
+        return WrapMath.canon(tileChunk, regionPeriod * TILE_CHUNKS_PER_REGION, regionOrigin(wrap) * TILE_CHUNKS_PER_REGION);
+    }
+
+    /** Image of map tile chunk {@code tileChunk} nearest {@code ref}. */
+    public static int nearestTileChunk(Wrap wrap, int tileChunk, int ref) {
+        int regionPeriod = regionPeriod(wrap);
+        return regionPeriod == 0 ? tileChunk : WrapMath.nearestImage(tileChunk, ref, regionPeriod * TILE_CHUNKS_PER_REGION);
     }
 
     /**

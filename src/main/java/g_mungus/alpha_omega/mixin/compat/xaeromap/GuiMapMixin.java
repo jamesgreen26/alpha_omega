@@ -5,6 +5,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import g_mungus.alpha_omega.compat.XaeroWorldMapView;
 import g_mungus.alpha_omega.compat.XaeroWraps;
 import g_mungus.alpha_omega.wrap.Wrap;
+import java.util.Arrays;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
@@ -32,7 +33,7 @@ abstract class GuiMapMixin {
     private String alpha_omega$canonicalRightClick(String format, Object[] args, Operation<String> original) {
         Wrap wrap = XaeroWorldMapView.wrap();
         if (wrap.enabled() && format.startsWith("X: %1$d") && args.length >= 3 && args[0] instanceof Integer x && args[2] instanceof Integer z) {
-            args = args.clone();
+            args = Arrays.copyOf(args, args.length);
             args[0] = wrap.canonBlock(x);
             args[2] = wrap.canonBlock(z);
         }

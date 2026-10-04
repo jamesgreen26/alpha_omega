@@ -16,21 +16,13 @@ import xaero.map.MapWriter;
 @Mixin(MapWriter.class)
 abstract class MapWriterMixin {
 
-    /** Tiles of 4×4 chunks per region side. */
-    private static final int TILES_PER_REGION = 8;
-
     @ModifyVariable(method = "writeChunk", at = @At("HEAD"), argsOnly = true, ordinal = 4)
     private int alpha_omega$canonTileX(int tileChunkX, @Local(argsOnly = true) Level level) {
-        return alpha_omega$canonTile(tileChunkX, level);
+        return XaeroWraps.canonTileChunk(tileChunkX, Wrap.of(level));
     }
 
     @ModifyVariable(method = "writeChunk", at = @At("HEAD"), argsOnly = true, ordinal = 5)
     private int alpha_omega$canonTileZ(int tileChunkZ, @Local(argsOnly = true) Level level) {
-        return alpha_omega$canonTile(tileChunkZ, level);
-    }
-
-    private static int alpha_omega$canonTile(int tile, Level level) {
-        int regionPeriod = XaeroWraps.regionPeriod(Wrap.of(level));
-        return regionPeriod == 0 ? tile : Math.floorMod(tile, regionPeriod * TILES_PER_REGION);
+        return XaeroWraps.canonTileChunk(tileChunkZ, Wrap.of(level));
     }
 }
