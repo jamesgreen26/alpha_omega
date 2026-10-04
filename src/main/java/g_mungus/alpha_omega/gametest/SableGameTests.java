@@ -184,7 +184,8 @@ public class SableGameTests {
                     phase[0] = 3;
                 }
                 case 3 -> {
-                    helper.assertTrue(SableTestOps.exists(level, plot[0]), "sub-level did not come back with its chunk");
+                    // Holding storage is read back over a few ticks; the test times out if it never is.
+                    if (!SableTestOps.exists(level, plot[0])) return;
                     double[] back = SableTestOps.pose(level, plot[0]);
                     helper.assertTrue(SableTestOps.inFrame(level, plot[0]), "reloaded sub-level is not in its island's frame");
                     helper.assertTrue(Math.abs(wrap.minDelta(back[0], parked[0])) < 2 && Math.abs(back[1] - parked[1]) < 2 && Math.abs(back[2] - parked[2]) < 2,

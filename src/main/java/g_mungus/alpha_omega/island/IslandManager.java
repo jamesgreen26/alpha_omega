@@ -85,9 +85,17 @@ public final class IslandManager {
     private static final int MAX_MERGES_PER_TICK = 64;
     /** How often cuts are re-evaluated and islands recentered. */
     private static final int MAINTENANCE_INTERVAL = 100;
-    /** Islands drifting more than this many laps (about 5,000,000 blocks) from the origin are shifted back (§5.9). */
+    /** How far, in blocks, an island may drift from the origin before it is shifted back. */
+    private static int recenterDistance = 5_000_000;
+
+    /** Keeps islands closer to the origin, for mods with less coordinate precision (Sable's f32 physics). */
+    public static void limitRecenterDistance(int blocks) {
+        recenterDistance = Math.min(recenterDistance, blocks);
+    }
+
+    /** Islands drifting more than this many laps (about 5,000,000 blocks by default) from the origin are shifted back (§5.9). */
     public int recenterLaps() {
-        return Math.max(1, 5_000_000 / this.wrap.period);
+        return Math.max(1, recenterDistance / this.wrap.period);
     }
 
     /** End of the server tick: lazy splits, merges (shifting the lighter island), then entity frame checks. */
