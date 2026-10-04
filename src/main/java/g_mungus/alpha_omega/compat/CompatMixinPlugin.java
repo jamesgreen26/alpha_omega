@@ -1,5 +1,7 @@
 package g_mungus.alpha_omega.compat;
 
+import com.bawnorton.mixinsquared.canceller.MixinCancellerRegistrar;
+import g_mungus.alpha_omega.compat.c2me.C2meMixinCanceller;
 import java.util.List;
 import java.util.Set;
 import net.neoforged.fml.loading.LoadingModList;
@@ -17,6 +19,7 @@ public final class CompatMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public void onLoad(String mixinPackage) {
+        if (isLoaded("c2me")) MixinCancellerRegistrar.register(new C2meMixinCanceller());
     }
 
     @Override

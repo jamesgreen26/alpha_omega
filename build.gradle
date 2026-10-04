@@ -68,6 +68,19 @@ repositories {
 
 configurations {
     sableMod
+    c2meMod
+}
+
+// C2ME ships its modules as nested jars; compile against the ones compat code uses.
+def c2meModules = ['base', 'opts-dfc', 'rewrites-chunk-system']
+def extractC2meModules = tasks.register('extractC2meModules', Sync) {
+    inputs.property('modules', c2meModules)
+    from({ configurations.c2meMod.collect { zipTree(it) } }) {
+        c2meModules.each { include "META-INF/jars/c2me-neoforge-${it}-mc*.jar" }
+        eachFile { path = name }
+    }
+    includeEmptyDirs = false
+    into layout.buildDirectory.dir('c2me')
 }
 
 dependencies {
@@ -95,6 +108,14 @@ dependencies {
     sableMod("maven.modrinth:sable:fg9dTRz9") {
         transitive = false
     }
+    // C2ME 0.4.0-alpha.0.122; compat code compiles against the modules nested in it.
+    c2meMod("maven.modrinth:c2me-neoforge:yxOYFgnK") {
+        transitive = false
+    }
+    compileOnly(fileTree(layout.buildDirectory.dir('c2me')) {
+        include '*.jar'
+        builtBy extractC2meModules
+    })
 
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.0")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.0")
@@ -104,7 +125,8 @@ test {
     useJUnitPlatform()
 }
 
-// Dev runs load Sable from run/mods only with -PwithSable (it is a full mod with jar-in-jar libraries).
+// Dev runs load Sable and C2ME from run/mods only with -PwithSable / -PwithC2me (they are full mods with jar-in-jar
+// libraries).
 def syncSableMod = tasks.register('syncSableMod') {
     def withSable = project.hasProperty('withSable')
     def mods = file('run/mods')
@@ -114,8 +136,17 @@ def syncSableMod = tasks.register('syncSableMod') {
         if (withSable) project.copy { from sable; into mods }
     }
 }
+def syncC2meMod = tasks.register('syncC2meMod') {
+    def withC2me = project.hasProperty('withC2me')
+    def mods = file('run/mods')
+    def c2me = configurations.c2meMod
+    doLast {
+        project.delete(project.fileTree(mods) { include 'c2me-*.jar' })
+        if (withC2me) project.copy { from c2me; into mods }
+    }
+}
 tasks.matching { it.name ==~ /run[A-Z].*/ }.configureEach {
-    dependsOn syncSableMod
+    dependsOn syncSableMod, syncC2meMod
 }
 
 sourceSets {

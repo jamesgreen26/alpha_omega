@@ -52,6 +52,14 @@ abstract class ImprovedNoiseMixin implements PeriodicLattice {
         return this.alpha_omega$cellsZ == 0 ? 0 : this.alpha_omega$cellsZ / this.alpha_omega$stretchZ;
     }
 
+    @Override
+    public boolean alpha_omega$samePeriods(PeriodicLattice other) {
+        ImprovedNoiseMixin that = (ImprovedNoiseMixin) other;
+        return this.alpha_omega$cellsX == that.alpha_omega$cellsX && this.alpha_omega$cellsY == that.alpha_omega$cellsY
+            && this.alpha_omega$cellsZ == that.alpha_omega$cellsZ && this.alpha_omega$stretchX == that.alpha_omega$stretchX
+            && this.alpha_omega$stretchY == that.alpha_omega$stretchY && this.alpha_omega$stretchZ == that.alpha_omega$stretchZ;
+    }
+
     @Unique
     private static int alpha_omega$cells(double period) {
         return period > 0 ? Math.max(1, (int) Math.round(period)) : 0;

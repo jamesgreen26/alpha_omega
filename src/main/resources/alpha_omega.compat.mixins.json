@@ -5,6 +5,13 @@
   "compatibilityLevel": "JAVA_21",
   "minVersion": "0.8",
   "mixins": [
+    "c2me.ImprovedNoiseEqualityMixin",
+    "c2me.McToAstMixin",
+    "c2me.ServerAccessibleChunkSendingMixin",
+    "c2me.ServerBlockTickingMixin",
+    "c2me.StatusAdvancingSchedulerAccessor",
+    "c2me.StatusAdvancingSchedulerMixin",
+    "c2me.VanillaWorldGenerationDelegateMixin",
     "sable.ActiveSableCompanionMixin",
     "sable.NetherPortalBlockMixin",
     "sable.SubLevelHoldingChunkMapMixin",

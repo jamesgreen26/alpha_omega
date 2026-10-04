@@ -7,6 +7,7 @@ import com.llamalad7.mixinextras.sugar.Share;
 import com.llamalad7.mixinextras.sugar.ref.LocalDoubleRef;
 import g_mungus.alpha_omega.wrap.noise.PeriodicNoiseSource;
 import g_mungus.alpha_omega.wrap.noise.PeriodicNoiseUser;
+import g_mungus.alpha_omega.wrap.noise.PeriodicRaritySampler;
 import g_mungus.alpha_omega.wrap.noise.RarityNoises;
 import net.minecraft.world.level.levelgen.DensityFunction;
 import org.spongepowered.asm.mixin.Final;
@@ -21,7 +22,7 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
  * discrete set. One noise cannot have every period {@code W / r} at once, so each rarity gets its own copy.
  */
 @Mixin(targets = "net.minecraft.world.level.levelgen.DensityFunctions$WeirdScaledSampler")
-abstract class WeirdScaledSamplerMixin implements PeriodicNoiseUser {
+abstract class WeirdScaledSamplerMixin implements PeriodicNoiseUser, PeriodicRaritySampler {
 
     @Shadow
     @Final
@@ -33,6 +34,11 @@ abstract class WeirdScaledSamplerMixin implements PeriodicNoiseUser {
     @Override
     public void alpha_omega$makePeriodic(PeriodicNoiseSource source) {
         this.alpha_omega$rarityNoises = new RarityNoises(source, this.noise);
+    }
+
+    @Override
+    public boolean alpha_omega$isPeriodic() {
+        return this.alpha_omega$rarityNoises != null;
     }
 
     /** {@code mapAll} rebuilds the record; carry the periodic noises over to the copy. */

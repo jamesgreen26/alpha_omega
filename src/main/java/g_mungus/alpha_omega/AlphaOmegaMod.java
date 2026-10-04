@@ -4,6 +4,7 @@ import com.mojang.logging.LogUtils;
 import g_mungus.alpha_omega.command.WrapCommand;
 import g_mungus.alpha_omega.compat.sable.SableCompat;
 import g_mungus.alpha_omega.config.AlphaOmegaConfig;
+import g_mungus.alpha_omega.gametest.C2meGameTests;
 import g_mungus.alpha_omega.gametest.CutGameTests;
 import g_mungus.alpha_omega.gametest.DimensionGameTests;
 import g_mungus.alpha_omega.gametest.FrameGameTests;
@@ -115,5 +116,6 @@ public class AlphaOmegaMod {
         event.register(PolishGameTests.class);
         event.register(SableGameTests.class);
         event.register(LocalTimeGameTests.class);
+        event.register(C2meGameTests.class);
     }
 }

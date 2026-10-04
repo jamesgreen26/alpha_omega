@@ -15,4 +15,7 @@ public interface PeriodicLattice {
 
     /** The period along z in this octave's input units, or 0 if it does not wrap. */
     double alpha_omega$inputPeriodZ();
+
+    /** Whether {@code other} wraps with exactly the same periods (for equality checks that ignore them). */
+    boolean alpha_omega$samePeriods(PeriodicLattice other);
 }

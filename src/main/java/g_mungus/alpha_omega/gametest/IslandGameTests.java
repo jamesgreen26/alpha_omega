@@ -126,7 +126,8 @@ public class IslandGameTests {
      * A player away from loaded terrain seeds new chunks in its own frame (§5.8); an entity saved there is
      * written with a canonical Pos and a lap tag, and comes back into the same frame.
      */
-    @GameTest(template = TEMPLATE, batch = PLAYER_BATCH, timeoutTicks = 400)
+    // Under C2ME a mock player's surroundings can take over 1000 ticks to load (it never acknowledges chunks).
+    @GameTest(template = TEMPLATE, batch = PLAYER_BATCH, timeoutTicks = 2400)
     public static void playersSeedFramesAndSavesRoundTrip(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos test = helper.absolutePos(BlockPos.ZERO);
@@ -144,6 +145,8 @@ public class IslandGameTests {
         helper.succeedWhen(() -> {
             long laps = IslandManager.of(level).laps(x >> 4, z >> 4);
             helper.assertTrue(laps != IslandGraph.ABSENT, "chunks around the player not loaded yet");
+            // The pig below may be in the next chunk, which need not be loaded yet.
+            helper.assertTrue(IslandManager.of(level).laps((x + 2) >> 4, z >> 4) != IslandGraph.ABSENT, "the pig's chunk is not loaded yet");
             helper.assertTrue(IslandGraph.lapX(laps) == 2 && IslandGraph.lapZ(laps) == -1,
                 "seeded lap " + IslandGraph.lapX(laps) + "," + IslandGraph.lapZ(laps) + " is not the player's frame");
             helper.assertTrue(inFrame(level, player), "player not in its island's frame");
