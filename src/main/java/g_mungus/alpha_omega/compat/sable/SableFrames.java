@@ -7,6 +7,7 @@ import dev.ryanhcode.sable.companion.math.Pose3d;
 import dev.ryanhcode.sable.sublevel.ServerSubLevel;
 import g_mungus.alpha_omega.island.FrameParticipants;
 import g_mungus.alpha_omega.island.IslandGraph;
+import g_mungus.alpha_omega.island.IslandManager;
 import g_mungus.alpha_omega.wrap.Wrap;
 import it.unimi.dsi.fastutil.longs.Long2LongMap;
 import net.minecraft.core.SectionPos;
@@ -35,6 +36,26 @@ public final class SableFrames implements FrameParticipants.FrameParticipant {
             if (!lapChanges.containsKey(key)) continue;
             long laps = lapChanges.get(key);
             move(container, subLevel, (double) IslandGraph.lapX(laps) * wrap.period, (double) IslandGraph.lapZ(laps) * wrap.period);
+        }
+    }
+
+    /** Sub-levels assembled, loaded or carried out of their island's frame join it, like entities (I4). */
+    @Override
+    public void checkFrames(ServerLevel level) {
+        ServerSubLevelContainer container = SubLevelContainer.getContainer(level);
+        if (container == null) return;
+        Wrap wrap = Wrap.of(level);
+        IslandManager islands = IslandManager.of(level);
+        for (ServerSubLevel subLevel : container.getAllSubLevels()) {
+            if (subLevel.isRemoved()) continue;
+            Vector3d position = subLevel.logicalPose().position();
+            int chunkX = SectionPos.posToSectionCoord(position.x);
+            int chunkZ = SectionPos.posToSectionCoord(position.z);
+            long laps = islands.laps(chunkX, chunkZ);
+            if (laps == IslandGraph.ABSENT) continue;
+            int dx = (wrap.canonChunk(chunkX) + IslandGraph.lapX(laps) * wrap.chunkPeriod - chunkX) << 4;
+            int dz = (wrap.canonChunk(chunkZ) + IslandGraph.lapZ(laps) * wrap.chunkPeriod - chunkZ) << 4;
+            move(container, subLevel, dx, dz);
         }
     }
 

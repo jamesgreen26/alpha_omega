@@ -4,7 +4,10 @@ import dev.ryanhcode.sable.api.SubLevelAssemblyHelper;
 import dev.ryanhcode.sable.companion.math.BoundingBox3i;
 import dev.ryanhcode.sable.sublevel.ServerSubLevel;
 import dev.ryanhcode.sable.Sable;
+import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.sublevel.SubLevel;
+import dev.ryanhcode.sable.sublevel.storage.SubLevelRemovalReason;
+import g_mungus.alpha_omega.frame.Frames;
 import g_mungus.alpha_omega.island.IslandGraph;
 import g_mungus.alpha_omega.wrap.Wrap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
@@ -43,5 +46,20 @@ public final class SableTestOps {
         changes.put(IslandGraph.key(wrap.canonChunk(SectionPos.posToSectionCoord(position.x())), wrap.canonChunk(SectionPos.posToSectionCoord(position.z()))),
             IslandGraph.packLaps(lapX, 0));
         new SableFrames().translate(level, changes);
+    }
+
+    /** Whether the sub-level owning {@code plot} is in the frame of the island under it. */
+    public static boolean inFrame(ServerLevel level, BlockPos plot) {
+        Vector3dc position = Sable.HELPER.getContaining(level, plot).logicalPose().position();
+        return Frames.lapOffset(level, SectionPos.posToSectionCoord(position.x()), SectionPos.posToSectionCoord(position.z())) == 0;
+    }
+
+    public static boolean exists(ServerLevel level, BlockPos plot) {
+        return Sable.HELPER.getContaining(level, plot) != null;
+    }
+
+    public static void remove(ServerLevel level, BlockPos plot) {
+        SubLevel subLevel = Sable.HELPER.getContaining(level, plot);
+        if (subLevel != null) SubLevelContainer.getContainer(level).removeSubLevel(subLevel, SubLevelRemovalReason.REMOVED);
     }
 }

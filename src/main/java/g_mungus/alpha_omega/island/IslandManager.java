@@ -114,6 +114,7 @@ public final class IslandManager {
             Entity entity = this.frameChecks.removeFirst();
             if (!entity.isRemoved() && entity.level() == this.level) EntityFrames.reframe(entity);
         }
+        FrameParticipants.checkFrames(this.level);
     }
 
     // ---- merges and shifts (§6.5) ----

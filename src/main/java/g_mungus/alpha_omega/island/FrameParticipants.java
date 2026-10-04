@@ -18,6 +18,10 @@ public final class FrameParticipants {
          */
         void translate(ServerLevel level, Long2LongMap lapChanges);
 
+        /** End of every tick: move anything not in the frame of the island under it into that frame (I4). */
+        default void checkFrames(ServerLevel level) {
+        }
+
         /** Adds, per canonical chunk column along the axis, how much a cut through it would disturb. */
         default void weighColumns(ServerLevel level, boolean xAxis, long[] weights) {
         }
@@ -34,6 +38,10 @@ public final class FrameParticipants {
 
     static void translate(ServerLevel level, Long2LongMap lapChanges) {
         for (FrameParticipant participant : PARTICIPANTS) participant.translate(level, lapChanges);
+    }
+
+    static void checkFrames(ServerLevel level) {
+        for (FrameParticipant participant : PARTICIPANTS) participant.checkFrames(level);
     }
 
     static void weighColumns(ServerLevel level, boolean xAxis, long[] weights) {
