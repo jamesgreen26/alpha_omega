@@ -103,7 +103,10 @@ abstract class GuiMapMixin {
         int regionZ = Math.floorDiv(keptZ, perRegion);
         LeveledRegion<?> holder = regionX == region.getRegionX() && regionZ == region.getRegionZ()
             ? region : dimension.getLayeredMapRegions().get(region.getCaveLayer(), regionX, regionZ, level);
-        return holder == null ? null : original.call(holder, Math.floorMod(keptX, perRegion), Math.floorMod(keptZ, perRegion));
+        // The map only asks a region for textures once it has them (a branch region's are null until it loads); the
+        // region drawn was checked, so check the one keeping the texture too.
+        if (holder == null || (holder != region && !holder.hasTextures())) return null;
+        return original.call(holder, Math.floorMod(keptX, perRegion), Math.floorMod(keptZ, perRegion));
     }
 
     /** The cursor coordinates line at the top of the screen. */
