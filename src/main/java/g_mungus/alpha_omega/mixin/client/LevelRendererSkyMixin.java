@@ -7,6 +7,7 @@ import com.mojang.blaze3d.vertex.VertexBuffer;
 import g_mungus.alpha_omega.client.sky.AtmosphereRenderer;
 import g_mungus.alpha_omega.client.sky.ClientSky;
 import g_mungus.alpha_omega.client.sky.SkyState;
+import g_mungus.alpha_omega.client.sky.StarField;
 import g_mungus.alpha_omega.sky.LocalSky;
 import javax.annotation.Nullable;
 import net.minecraft.client.Minecraft;
@@ -28,6 +29,8 @@ import org.spongepowered.asm.mixin.injection.At;
  *
  * <p>With the atmosphere on (and the camera in air), the flat-coloured sky dome is replaced by the atmosphere drawn per
  * pixel. The sun, moon, stars and the dark lower hemisphere are still vanilla's, drawn over it.
+ *
+ * <p>The stars themselves are Genesis's ({@link StarField}), drawn in place of vanilla's star buffer.
  */
 @Mixin(LevelRenderer.class)
 abstract class LevelRendererSkyMixin {
@@ -86,5 +89,13 @@ abstract class LevelRendererSkyMixin {
         }
         // Vanilla unbinds the dome's buffer next; leave it bound as vanilla would.
         dome.bind();
+    }
+
+    /** The second buffer drawn in renderSky is vanilla's stars; draw ours with the same transform and colour. */
+    @WrapOperation(method = "renderSky", at = @At(value = "INVOKE",
+        target = "Lcom/mojang/blaze3d/vertex/VertexBuffer;drawWithShader(Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;Lnet/minecraft/client/renderer/ShaderInstance;)V",
+        ordinal = 1))
+    private void alpha_omega$stars(VertexBuffer stars, Matrix4f modelView, Matrix4f projection, ShaderInstance shader, Operation<Void> original) {
+        StarField.draw(modelView, projection, shader);
     }
 }
