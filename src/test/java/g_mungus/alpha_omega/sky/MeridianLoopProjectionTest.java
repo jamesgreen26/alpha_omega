@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import g_mungus.alpha_omega.sky.PlanetProjection.Position;
 import org.junit.jupiter.api.Test;
 
-class PlanetProjectionTest {
+class MeridianLoopProjectionTest {
+
+    private static final PlanetProjection.Projection PROJECTION = new MeridianLoopProjection();
 
     private static final int W = 12288;
     private static final double EPS = 1e-9;
@@ -80,6 +82,6 @@ class PlanetProjectionTest {
     /** The projection at a world position, as LocalSky feeds it. */
     private static Position project(double x, double z, int period) {
         if (period <= 0) return Position.ORIGIN;
-        return PlanetProjection.project(LocalSky.lapFraction(x, period), LocalSky.lapFraction(z, period));
+        return PROJECTION.project(LocalSky.lapFraction(x, period), LocalSky.lapFraction(z, period));
     }
 }

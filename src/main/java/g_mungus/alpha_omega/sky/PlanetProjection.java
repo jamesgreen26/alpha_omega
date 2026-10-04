@@ -2,8 +2,8 @@ package g_mungus.alpha_omega.sky;
 
 /**
  * Where a world position lies on the planet: the one place that maps the torus onto the sphere. The local sky, the
- * local clock and every gameplay check go through {@link #project}, so trying another projection means changing only
- * that method.
+ * local clock and every gameplay check go through {@link #project}, which delegates to {@link #CURRENT}; to try
+ * another projection, implement {@link Projection} and point {@code CURRENT} at it.
  *
  * <p>Positions come in as fractions of a lap, each in [0, 1). A projection must join up across the edges (0 and 1 are
  * the same place), and should return longitude 0, latitude 0 and heading 0 at (0, 0) so the world looks vanilla at
@@ -12,7 +12,18 @@ package g_mungus.alpha_omega.sky;
  */
 public final class PlanetProjection {
 
+    /** The projection in use. */
+    public static final Projection CURRENT = new MeridianLoopProjection();
+
     private PlanetProjection() {
+    }
+
+    /** A way of placing the world on the planet. */
+    @FunctionalInterface
+    public interface Projection {
+
+        /** The point on the planet at x and z, each a fraction of a lap in [0, 1). */
+        Position project(double x, double z);
     }
 
     /**
@@ -27,18 +38,9 @@ public final class PlanetProjection {
         public static final Position ORIGIN = new Position(0.0, 0.0, 0.0);
     }
 
-    /**
-     * The current projection, for x and z as fractions of a lap in [0, 1). X is longitude, one turn per lap. Z is the
-     * angle round a meridian: walking toward -Z goes over the north pole (a quarter lap), down the far side of the
-     * planet (half a lap away, 12 hours off and facing south) and back up over the south pole, so walking either axis
-     * turns the sky steadily one way.
-     */
+    /** Where x and z, each a fraction of a lap in [0, 1), lie on the planet under the current projection. */
     public static Position project(double x, double z) {
-        double longitude = wrapTurns(x);
-        double meridian = 2.0 * Math.PI * wrapTurns(-z);
-        double latitude = Math.atan2(Math.sin(meridian), Math.abs(Math.cos(meridian)));
-        if (Math.cos(meridian) >= 0.0) return new Position(longitude, latitude, 0.0);
-        return new Position(wrapTurns(longitude + 0.5), latitude, Math.PI);
+        return CURRENT.project(x, z);
     }
 
     /** Turns wrapped into [-0.5, 0.5). */

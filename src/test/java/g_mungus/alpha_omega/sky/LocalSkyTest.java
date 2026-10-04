@@ -216,9 +216,9 @@ class LocalSkyTest {
         }
     }
 
-    /** The projection at a world position, as LocalSky feeds it. */
+    /** The meridian loop projection at a world position, as LocalSky feeds it. */
     private static Position project(double x, double z, int period) {
         if (period <= 0) return Position.ORIGIN;
-        return PlanetProjection.project(LocalSky.lapFraction(x, period), LocalSky.lapFraction(z, period));
+        return new MeridianLoopProjection().project(LocalSky.lapFraction(x, period), LocalSky.lapFraction(z, period));
     }
 }
