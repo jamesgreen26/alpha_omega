@@ -4,21 +4,25 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import g_mungus.alpha_omega.island.Invariants;
+import g_mungus.alpha_omega.sky.LocalSky;
 import g_mungus.alpha_omega.island.IslandGraph;
 import g_mungus.alpha_omega.island.IslandManager;
 import g_mungus.alpha_omega.wrap.Wrap;
 import g_mungus.alpha_omega.wrap.Wraps;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Debug tooling (§13.2): {@code /wrap info}, {@code /wrap islands}, {@code /wrap check}, and
- * {@code /wrap shift <island> <dx> <dz>} (shift an island by whole laps).
+ * {@code /wrap shift <island> <dx> <dz>} (shift an island by whole laps), {@code /wrap time} (the local sun here) and
+ * {@code /wrap time set <ticks>} (set the global time so that the local clock here reads {@code ticks}).
  */
 public final class WrapCommand {
 
@@ -34,7 +38,10 @@ public final class WrapCommand {
             .then(Commands.literal("shift")
                 .then(Commands.argument("island", IntegerArgumentType.integer(1))
                     .then(Commands.argument("dx", IntegerArgumentType.integer())
-                        .then(Commands.argument("dz", IntegerArgumentType.integer()).executes(WrapCommand::shift))))));
+                        .then(Commands.argument("dz", IntegerArgumentType.integer()).executes(WrapCommand::shift)))))
+            .then(Commands.literal("time").executes(WrapCommand::time)
+                .then(Commands.literal("set")
+                    .then(Commands.argument("ticks", IntegerArgumentType.integer(0, 23999)).executes(WrapCommand::setTime)))));
     }
 
     private static int info(CommandContext<CommandSourceStack> context) {
@@ -78,6 +85,37 @@ public final class WrapCommand {
         context.getSource().sendFailure(Component.literal(violations.size() + " invariant violations"));
         violations.stream().limit(10).forEach(violation -> context.getSource().sendFailure(Component.literal("  " + violation)));
         return 0;
+    }
+
+    private static int time(CommandContext<CommandSourceStack> context) {
+        ServerLevel level = context.getSource().getLevel();
+        Vec3 pos = context.getSource().getPosition();
+        if (!LocalSky.active(level)) {
+            context.getSource().sendFailure(Component.literal(level.dimension().location() + " has no local sky"));
+            return 0;
+        }
+        LocalSky.Sample sun = LocalSky.sample(level, pos.x, pos.z);
+        context.getSource().sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
+            "Local clock %.0f (day %d, global %d), latitude %.2f°, longitude %.2f°, sun altitude %.2f° azimuth %.1f°, sky darken %d%s",
+            sun.clock(), sun.day(), level.getDayTime(), Math.toDegrees(sun.latitude()), 360.0 * sun.longitude(),
+            Math.toDegrees(sun.altitude()), Math.toDegrees(sun.azimuth()), LocalSky.skyDarken(level, pos.x, pos.z),
+            LocalSky.isDay(level, pos.x, pos.z) ? ", day" : ", night")), false);
+        return (int) Math.floorMod((long) Math.floor(sun.clock()), 24000L);
+    }
+
+    private static int setTime(CommandContext<CommandSourceStack> context) {
+        ServerLevel level = context.getSource().getLevel();
+        Vec3 pos = context.getSource().getPosition();
+        int ticks = IntegerArgumentType.getInteger(context, "ticks");
+        long local = LocalSky.localDayTime(level, pos.x);
+        long offset = local - level.getDayTime();
+        long target = local - Math.floorMod(local, 24000L) + ticks - offset;
+        long dayTime = target < 0L ? target + 24000L * Math.ceilDiv(-target, 24000L) : target;
+        for (ServerLevel each : context.getSource().getServer().getAllLevels()) {
+            each.setDayTime(dayTime);
+        }
+        context.getSource().sendSuccess(() -> Component.literal("Set the time to " + dayTime + ", local clock " + ticks + " here"), true);
+        return ticks;
     }
 
     private static int shift(CommandContext<CommandSourceStack> context) {
