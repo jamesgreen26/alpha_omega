@@ -5,10 +5,16 @@
   "compatibilityLevel": "JAVA_21",
   "minVersion": "0.8",
   "client": [
+    "client.AbstractSoundInstanceAccessor",
     "client.ClientChunkCacheMixin",
+    "client.ClientLevelMixin",
     "client.CompassItemPropertyFunctionMixin",
     "client.CreateWorldScreenWorldTabMixin",
-    "client.DebugScreenOverlayMixin"
+    "client.DebugScreenOverlayMixin",
+    "client.LevelRendererParticleMixin",
+    "client.ParticleAccessor",
+    "client.ParticleEngineMixin",
+    "client.SoundEngineMixin"
   ],
   "mixins": [
     "server.BlockEntityAccessor",
@@ -22,6 +28,7 @@
     "server.ChunkTrackingViewPositionedMixin",
     "server.DistanceManagerMixin",
     "server.EuclideanGameEventListenerRegistryMixin",
+    "server.ExplosionMixin",
     "server.GameEventListenerMixin",
     "server.LevelChunkBoundTickingBlockEntityMixin",
     "server.LevelChunkMixin",

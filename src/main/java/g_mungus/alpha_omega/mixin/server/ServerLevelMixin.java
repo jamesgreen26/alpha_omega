@@ -91,6 +91,14 @@ abstract class ServerLevelMixin implements IslandManager.Holder {
         return original.call(player, Wrap.of((ServerLevel) (Object) this).nearest(new Vec3(pos.x(), pos.y(), pos.z()), Vec3.atCenterOf(player)), distance);
     }
 
+    /** Explosion packets go to players near any image of the center (the center argument is often canonical). */
+    @WrapOperation(method = "explode(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/damagesource/DamageSource;Lnet/minecraft/world/level/ExplosionDamageCalculator;DDDFZLnet/minecraft/world/level/Level$ExplosionInteraction;Lnet/minecraft/core/particles/ParticleOptions;Lnet/minecraft/core/particles/ParticleOptions;Lnet/minecraft/core/Holder;)Lnet/minecraft/world/level/Explosion;",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayer;distanceToSqr(DDD)D"))
+    private double alpha_omega$explosionNearestImage(ServerPlayer player, double x, double y, double z, Operation<Double> original) {
+        Wrap wrap = Wrap.of((ServerLevel) (Object) this);
+        return original.call(player, wrap.nearest(x, player.getX()), y, wrap.nearest(z, player.getZ()));
+    }
+
     @WrapOperation(method = "destroyBlockProgress", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayer;getX()D"))
     private double alpha_omega$destroyProgressNearestX(ServerPlayer player, Operation<Double> original, @Local(argsOnly = true) BlockPos pos) {
         return Wrap.of((ServerLevel) (Object) this).nearest(original.call(player), pos.getX());

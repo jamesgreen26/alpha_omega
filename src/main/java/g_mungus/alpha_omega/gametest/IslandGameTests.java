@@ -55,7 +55,7 @@ public class IslandGameTests {
     /**
      * Tests that build islands far from the test area each use their own region (a chunk offset along z), so
      * leftover chunks from one test never touch another's. Regions sit a quarter of the world from the test area,
-     * which is near spawn: far from it and from the seam, which is half a world from spawn.
+     * which is usually near spawn, so they are usually far from both it and the seam.
      */
     static int seedRegion() {
         return chunks() / 4;
@@ -264,6 +264,8 @@ public class IslandGameTests {
         player.setNoGravity(true);
         helper.assertTrue(player.getX() == x && player.getZ() == z, "player did not load at its canonical position: " + player.position());
         level.getChunkSource().move(player);
+        // The test server ticks without pausing, faster than chunks generate: load the player's chunk now.
+        level.getChunk(cx, cz);
 
         helper.succeedWhen(() -> {
             long laps = IslandManager.of(level).laps(cx, cz);
@@ -290,6 +292,7 @@ public class IslandGameTests {
         player.moveTo((cx << 4) + 8.5 + 3 * period(), y, (cz << 4) + 8.5 - period());
         level.getChunkSource().move(player);
         level.setChunkForced(cx, cz, true);
+        level.getChunk(cx, cz);
         Pig[] pig = {null};
         boolean[] left = {false};
 

@@ -13,11 +13,13 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.animal.Pig;
 import net.minecraft.world.entity.ai.village.poi.PoiManager;
 import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SculkSensorBlock;
@@ -92,6 +94,28 @@ public class FrameGameTests {
             pois.release(taken.get());
             helper.assertTrue(pois.getFreeTickets(bell) == before, "ticket not released");
         });
+    }
+
+    /**
+     * An explosion set off at another image of a mob (as block entities and other mods do with canonical positions)
+     * happens in the mob's frame: it is hurt and knocked back, and the packet reaches players near any image.
+     */
+    @GameTest(template = TEMPLATE)
+    public static void explosionsHitEntitiesAcrossFrames(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        // Open air around the pig, so the blast sees it (it reaches entities only through air).
+        for (int x = 1; x <= 5; x++) for (int y = 1; y <= 3; y++) for (int z = 1; z <= 5; z++) helper.setBlock(new BlockPos(x, y, z), Blocks.AIR);
+        Pig pig = helper.spawn(EntityType.PIG, new BlockPos(3, 1, 3));
+        pig.setNoAi(true);
+        float health = pig.getHealth();
+        Vec3 center = pig.position().add(1.5 + lapX(), 0.5, lapZ());
+        Explosion explosion = level.explode(null, center.x, center.y, center.z, 1.0F, Level.ExplosionInteraction.NONE);
+        Vec3 expected = pig.position().add(1.5, 0.5, 0);
+        helper.assertTrue(explosion.center().distanceTo(expected) < 1e-6, "explosion not lifted into the mob's frame: " + explosion.center());
+        helper.assertTrue(pig.getHealth() < health, "pig not hurt by an explosion at another image");
+        helper.assertTrue(pig.getDeltaMovement().x < 0, "pig not knocked away from the explosion: " + pig.getDeltaMovement());
+        pig.discard();
+        helper.succeed();
     }
 
     /** The vibration happens at an image of a spot next to the sensor. */
