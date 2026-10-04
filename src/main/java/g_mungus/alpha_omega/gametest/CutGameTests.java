@@ -77,7 +77,7 @@ public class CutGameTests {
         int cz = wrap().canonChunk((test.getZ() >> 4) + IslandGameTests.recenterRegion());
         int laps = IslandManager.of(level).recenterLaps() + 20;
         int y = level.getMaxBuildHeight() - 10;
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = TestPlayers.mock(helper);
         player.setNoGravity(true);
         player.moveTo((cx << 4) + 8.5 + (double) laps * period(), y, (cz << 4) + 8.5);
         level.getChunkSource().move(player);

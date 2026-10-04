@@ -80,6 +80,37 @@ class WrapTest {
     }
 
     @Test
+    void offTorusCoordinatesAreLeftAlone() {
+        // Sable's plot grid: chunks [1,280,000, 1,296,384).
+        int plotChunk = 1_280_000;
+        int plotBlock = plotChunk << 4;
+        BlockPos plot = new BlockPos(plotBlock + 5, 70, plotBlock + 9);
+        assertEquals(new BlockPos(Math.floorMod(plotBlock + 5, W), 70, Math.floorMod(plotBlock + 9, W)), WRAP.canon(plot), "nothing is excluded by default");
+        Wrap.excludeFromTorus(plotChunk, plotChunk + 128 * 128);
+        try {
+            assertSame(plot, WRAP.canon(plot));
+            assertEquals(ChunkPos.asLong(plotChunk, plotChunk + 3), WRAP.canonChunkKey(ChunkPos.asLong(plotChunk, plotChunk + 3)));
+            assertEquals(SectionPos.asLong(plotChunk, 4, plotChunk), WRAP.canonSectionKey(SectionPos.asLong(plotChunk, 4, plotChunk)));
+            assertEquals(BlockPos.asLong(plotBlock, 4, plotBlock), WRAP.canonBlockKey(BlockPos.asLong(plotBlock, 4, plotBlock)));
+            assertEquals(plotBlock + 0.5, WRAP.canon(plotBlock + 0.5));
+            assertEquals(0, WRAP.lap(plotBlock));
+            // Neither side of a bridge moves when either is off the torus.
+            assertEquals(plotBlock, WRAP.nearestBlock(plotBlock, 100));
+            assertEquals(100, WRAP.nearestBlock(100, plotBlock));
+            assertEquals(plotChunk, WRAP.nearestChunk(plotChunk, 3));
+            assertEquals(plotBlock + 0.5, WRAP.nearest(plotBlock + 0.5, 3.0));
+            assertEquals(plotBlock - 3.0, WRAP.minDelta(plotBlock, 3.0));
+            assertEquals(plotChunk - 3, WRAP.minChunkDelta(plotChunk, 3));
+            assertEquals(0, WRAP.lapOffset(10, plotBlock));
+            // Just outside the range still wraps.
+            assertEquals(Math.floorMod(plotBlock - 1, W), WRAP.canonBlock(plotBlock - 1));
+            assertEquals(Math.floorMod(-plotBlock, W), WRAP.canonBlock(-plotBlock));
+        } finally {
+            Wrap.excludeFromTorus(Integer.MAX_VALUE, Integer.MAX_VALUE);
+        }
+    }
+
+    @Test
     void settingsGiveEachDimensionItsPeriod() {
         WorldWrapSettings settings = new WorldWrapSettings(12288, true, false);
         assertEquals(12288, settings.periodFor(Level.OVERWORLD));

@@ -8,8 +8,10 @@ import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
 /**
- * Skips core mixins that cannot apply alongside another mod. Each one has a functional replacement in
- * {@code mixin.compat.<modid>}, applied by {@link CompatMixinPlugin}.
+ * Skips core mixins that cannot apply alongside another mod, which provides the same behavior once its compat
+ * mixins in {@code mixin.compat.<modid>} are applied by {@link CompatMixinPlugin}. Under Sable, its overwrite of
+ * {@code PlayerList.broadcast} measures with its distance helper, which {@code sable.ActiveSableCompanionMixin}
+ * makes wrap-aware.
  */
 public final class ReplacedMixinPlugin implements IMixinConfigPlugin {
 

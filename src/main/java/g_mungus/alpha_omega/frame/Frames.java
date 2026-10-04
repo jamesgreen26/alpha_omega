@@ -29,7 +29,7 @@ public final class Frames {
      */
     public static long lapOffset(ServerLevel level, int chunkX, int chunkZ) {
         Wrap wrap = Wrap.of(level);
-        if (!wrap.enabled()) return 0;
+        if (!wrap.enabled() || Wrap.offTorusChunk(chunkX, chunkZ)) return 0;
         long laps = IslandManager.of(level).laps(chunkX, chunkZ);
         if (laps == IslandGraph.ABSENT) return nearestPlayerOffset(level, wrap, chunkX, chunkZ);
         int dx = (wrap.canonChunk(chunkX) + IslandGraph.lapX(laps) * wrap.chunkPeriod - chunkX) << 4;

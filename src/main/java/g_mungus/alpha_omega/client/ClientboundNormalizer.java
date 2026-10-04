@@ -170,11 +170,13 @@ public final class ClientboundNormalizer {
 
             // ---- effects ----
             case ClientboundSoundPacket p -> {
-                // Positions are fixed point (x8).
+                // Positions are fixed point (x8). Off-torus sounds are left where they are.
                 Vec3 ref = reference(mc, cx, cz);
                 SoundPacketAccessor a = (SoundPacketAccessor) p;
-                a.alpha_omega$setX(WrapMath.nearestImage((int) (p.getX() * 8), (int) (ref.x * 8), wrap.period * 8));
-                a.alpha_omega$setZ(WrapMath.nearestImage((int) (p.getZ() * 8), (int) (ref.z * 8), wrap.period * 8));
+                if (!Wrap.offTorus(p.getX()) && !Wrap.offTorus(p.getZ())) {
+                    a.alpha_omega$setX(WrapMath.nearestImage((int) (p.getX() * 8), (int) (ref.x * 8), wrap.period * 8));
+                    a.alpha_omega$setZ(WrapMath.nearestImage((int) (p.getZ() * 8), (int) (ref.z * 8), wrap.period * 8));
+                }
             }
             case ClientboundLevelParticlesPacket p -> {
                 Vec3 ref = reference(mc, cx, cz);

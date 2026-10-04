@@ -52,16 +52,17 @@ public final class IslandManager {
         return this.graph;
     }
 
-    /** The lap pair of a chunk (any image), or {@link IslandGraph#ABSENT} if it is not loaded. */
+    /** The lap pair of a chunk (any image), or {@link IslandGraph#ABSENT} if it is not loaded or off the torus. */
     public long laps(int chunkX, int chunkZ) {
-        if (this.graph == null) return IslandGraph.ABSENT;
+        if (this.graph == null || Wrap.offTorusChunk(chunkX, chunkZ)) return IslandGraph.ABSENT;
         return this.graph.laps(this.wrap.canonChunk(chunkX), this.wrap.canonChunk(chunkZ));
     }
 
     // ---- chunk lifecycle (server thread) ----
 
+    /** Off-torus chunks (other mods' far-away storage) never join an island. */
     public void onChunkLoaded(ChunkPos pos) {
-        if (this.graph == null) return;
+        if (this.graph == null || Wrap.offTorusChunk(pos.x, pos.z)) return;
         int x = this.wrap.canonChunk(pos.x);
         int z = this.wrap.canonChunk(pos.z);
         this.graph.join(x, z, this::seedLaps, this::playerWeight);
@@ -69,7 +70,7 @@ public final class IslandManager {
     }
 
     public void onChunkUnloaded(ChunkPos pos) {
-        if (this.graph == null) return;
+        if (this.graph == null || Wrap.offTorusChunk(pos.x, pos.z)) return;
         this.graph.leave(this.wrap.canonChunk(pos.x), this.wrap.canonChunk(pos.z));
     }
 

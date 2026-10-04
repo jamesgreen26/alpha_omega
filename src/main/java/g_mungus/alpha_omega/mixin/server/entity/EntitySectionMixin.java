@@ -27,10 +27,15 @@ abstract class EntitySectionMixin {
         if (original.call(entity, query)) return true;
         // Only boxes more than half a world apart can overlap through another image.
         Wrap wrap = WrapHolder.of(this);
-        if (!wrap.enabled()) return false;
+        if (!wrap.enabled() || alpha_omega$offTorus(entity) || alpha_omega$offTorus(query)) return false;
         double dx = alpha_omega$lapShift(wrap, entity.minX - query.minX);
         double dz = alpha_omega$lapShift(wrap, entity.minZ - query.minZ);
         return (dx != 0 || dz != 0) && original.call(entity.move(dx, 0, dz), query);
+    }
+
+    @Unique
+    private static boolean alpha_omega$offTorus(AABB box) {
+        return Wrap.offTorus(box.minX) || Wrap.offTorus(box.minZ);
     }
 
     @Unique

@@ -2,6 +2,7 @@ package g_mungus.alpha_omega;
 
 import com.mojang.logging.LogUtils;
 import g_mungus.alpha_omega.command.WrapCommand;
+import g_mungus.alpha_omega.compat.sable.SableCompat;
 import g_mungus.alpha_omega.config.AlphaOmegaConfig;
 import g_mungus.alpha_omega.gametest.CutGameTests;
 import g_mungus.alpha_omega.gametest.DimensionGameTests;
@@ -9,6 +10,7 @@ import g_mungus.alpha_omega.gametest.FrameGameTests;
 import g_mungus.alpha_omega.gametest.IslandGameTests;
 import g_mungus.alpha_omega.gametest.ModLoadGameTests;
 import g_mungus.alpha_omega.gametest.PolishGameTests;
+import g_mungus.alpha_omega.gametest.SableGameTests;
 import g_mungus.alpha_omega.gametest.SeamGameTests;
 import g_mungus.alpha_omega.gametest.WorldgenGameTests;
 import g_mungus.alpha_omega.island.BuiltinFrameTranslators;
@@ -20,6 +22,7 @@ import java.lang.reflect.Field;
 import java.util.Map;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.common.NeoForge;
@@ -45,13 +48,14 @@ public class AlphaOmegaMod {
         modEventBus.addListener(AlphaOmegaMod::registerPayloads);
         modEventBus.addListener(AlphaOmegaMod::registerConfigurationTasks);
         BuiltinFrameTranslators.register();
+        if (ModList.get().isLoaded("sable")) SableCompat.init();
 
         // A world's wrapping is decided before any of its levels is constructed, and forgotten when it stops.
         NeoForge.EVENT_BUS.addListener((ServerAboutToStartEvent event) -> WorldWrapStore.load(event.getServer()));
         NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> Wraps.reset());
         NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent event) -> WrapCommand.register(event.getDispatcher()));
         if (Boolean.getBoolean("alpha_omega.auditMixins")) {
-            NeoForge.EVENT_BUS.addListener(AlphaOmegaMod::auditMixins);
+            NeoForge.EVENT_BUS.addListener((ServerStartedEvent event) -> auditMixins());
         }
     }
 
@@ -67,10 +71,10 @@ public class AlphaOmegaMod {
     /**
      * Debug aid for production installs, where dev-only assumptions surface: force-load every target of our mixins so
      * a failing injection shows up at startup rather than whenever its class first loads in play. Other mods' targets
-     * are left alone, since some of them cannot load on a dedicated server.
+     * are left alone, since some of them cannot load on a dedicated server. Returns the number of failures.
      */
     @SuppressWarnings("unchecked")
-    private static void auditMixins(ServerStartedEvent event) {
+    public static int auditMixins() {
         LOGGER.info("Auditing mixins");
         Map<String, Config> configs;
         try {
@@ -80,7 +84,7 @@ public class AlphaOmegaMod {
             configs = (Map<String, Config>) all.get(null);
         } catch (ReflectiveOperationException | RuntimeException e) {
             LOGGER.error("Mixin audit could not list mixin configs", e);
-            return;
+            return 1;
         }
         int loaded = 0, failures = 0;
         for (Config config : configs.values()) {
@@ -96,6 +100,7 @@ public class AlphaOmegaMod {
             }
         }
         LOGGER.info("Mixin audit complete: {} targets, {} failures", loaded, failures);
+        return failures;
     }
 
     private static void registerGameTests(RegisterGameTestsEvent event) {
@@ -107,5 +112,6 @@ public class AlphaOmegaMod {
         event.register(CutGameTests.class);
         event.register(DimensionGameTests.class);
         event.register(PolishGameTests.class);
+        event.register(SableGameTests.class);
     }
 }

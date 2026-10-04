@@ -43,7 +43,8 @@ abstract class EntitySectionStorageMixin<T extends EntityAccess> {
     @Inject(method = "forEachAccessibleNonEmptySection", at = @At("HEAD"), cancellable = true)
     private void alpha_omega$forEachWrapped(AABB box, AbortableIterationConsumer<EntitySection<T>> consumer, CallbackInfo ci) {
         Wrap wrap = WrapHolder.of(this);
-        if (!wrap.enabled()) return;
+        // Off-torus sections (other mods' far-away storage) are keyed as they are; vanilla iteration finds them.
+        if (!wrap.enabled() || Wrap.offTorus(box.minX) || Wrap.offTorus(box.minZ)) return;
         ci.cancel();
 
         // Same margins as vanilla.

@@ -121,7 +121,7 @@ public class FrameGameTests {
         ServerLevel level = helper.getLevel();
         BlockPos block = helper.absolutePos(new BlockPos(3, 1, 3));
         BlockPos playerImage = block.offset(lapX(), 0, lapZ());
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = TestPlayers.mock(helper);
         player.moveTo(playerImage.getX() + 0.5, playerImage.getY(), playerImage.getZ() + 0.5);
 
         helper.runAfterDelay(1, () -> {
@@ -150,7 +150,7 @@ public class FrameGameTests {
         helper.setBlock(chest, Blocks.CHEST);
         helper.setBlock(furnace, Blocks.FURNACE);
         BlockPos stand = helper.absolutePos(new BlockPos(3, 1, 4)).offset(lapX(), 0, lapZ());
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = TestPlayers.mock(helper);
         player.moveTo(stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5);
 
         Container chestContainer = helper.getBlockEntity(chest);
@@ -175,7 +175,7 @@ public class FrameGameTests {
         blockEntity.setEntityId(EntityType.PIG, level.getRandom());
 
         BlockPos near = helper.absolutePos(spawner).offset(2 + lapX(), 0, lapZ());
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = TestPlayers.mock(helper);
         player.moveTo(near.getX() + 0.5, near.getY(), near.getZ() + 0.5);
 
         helper.runAfterDelay(10, () -> {

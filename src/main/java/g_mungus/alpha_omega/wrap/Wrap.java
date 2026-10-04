@@ -48,28 +48,69 @@ public final class Wrap {
         return this.period > 0;
     }
 
+    // ---- off-torus coordinates ----
+
+    /*
+     * Another mod's far-away storage (Sable's sub-level plots) can be excluded from the torus: on each axis,
+     * coordinates in the excluded chunk range are never folded, lifted or bridged. Empty unless such a mod is loaded.
+     */
+    private static int offTorusMinChunk = Integer.MAX_VALUE;
+    private static int offTorusMaxChunk = Integer.MAX_VALUE;
+
+    /** Excludes chunk coordinates {@code [minChunk, maxChunk)} on each horizontal axis from the torus; call during mod construction. */
+    public static void excludeFromTorus(int minChunk, int maxChunk) {
+        if (minChunk > maxChunk) throw new IllegalArgumentException("Empty range: " + minChunk + ", " + maxChunk);
+        offTorusMinChunk = minChunk;
+        offTorusMaxChunk = maxChunk;
+    }
+
+    public static boolean offTorusChunk(int chunkX) {
+        return chunkX >= offTorusMinChunk && chunkX < offTorusMaxChunk;
+    }
+
+    public static boolean offTorus(int blockX) {
+        return offTorusChunk(blockX >> 4);
+    }
+
+    public static boolean offTorus(double x) {
+        return offTorusChunk(((int) Math.floor(x)) >> 4);
+    }
+
+    /** Whether a horizontal block position is off the torus on either axis. */
+    public static boolean offTorus(int blockX, int blockZ) {
+        return offTorus(blockX) || offTorus(blockZ);
+    }
+
+    public static boolean offTorusChunk(int chunkX, int chunkZ) {
+        return offTorusChunk(chunkX) || offTorusChunk(chunkZ);
+    }
+
     // ---- canonicalization (storage addresses) ----
 
     public int canonBlock(int x) {
-        return this.enabled() ? WrapMath.canon(x, this.period) : x;
+        return this.enabled() && !offTorus(x) ? WrapMath.canon(x, this.period) : x;
     }
 
     public int canonChunk(int x) {
-        return this.enabled() ? WrapMath.canon(x, this.chunkPeriod) : x;
+        return this.enabled() && !offTorusChunk(x) ? WrapMath.canon(x, this.chunkPeriod) : x;
     }
 
     public double canon(double x) {
-        if (!this.enabled()) return x;
+        if (!this.enabled() || offTorus(x)) return x;
         double c = x % this.period;
         return c < 0 ? c + this.period : c;
     }
 
     public boolean isCanonBlock(int x, int z) {
-        return !this.enabled() || (x >= 0 && x < this.period && z >= 0 && z < this.period);
+        return !this.enabled() || (isCanon(x, this.period) || offTorus(x)) && (isCanon(z, this.period) || offTorus(z));
     }
 
     public boolean isCanonChunk(int x, int z) {
-        return !this.enabled() || (x >= 0 && x < this.chunkPeriod && z >= 0 && z < this.chunkPeriod);
+        return !this.enabled() || (isCanon(x, this.chunkPeriod) || offTorusChunk(x)) && (isCanon(z, this.chunkPeriod) || offTorusChunk(z));
+    }
+
+    private static boolean isCanon(int x, int period) {
+        return x >= 0 && x < period;
     }
 
     public BlockPos canon(BlockPos pos) {
@@ -106,31 +147,31 @@ public final class Wrap {
         return this.isCanonBlock(x, z) ? key : BlockPos.asLong(this.canonBlock(x), BlockPos.getY(key), this.canonBlock(z));
     }
 
-    /** Which lap a block coordinate is in (0 if unwrapped). */
+    /** Which lap a block coordinate is in (0 if unwrapped or off the torus). */
     public int lap(int x) {
-        return this.enabled() ? Math.floorDiv(x, this.period) : 0;
+        return this.enabled() && !offTorus(x) ? Math.floorDiv(x, this.period) : 0;
     }
 
-    // ---- nearest image (bridging frames) ----
+    // ---- nearest image (bridging frames); the identity when either side is off the torus ----
 
     public int nearestBlock(int x, int ref) {
-        return this.enabled() ? WrapMath.nearestImage(x, ref, this.period) : x;
+        return this.enabled() && !offTorus(x) && !offTorus(ref) ? WrapMath.nearestImage(x, ref, this.period) : x;
     }
 
     public int nearestChunk(int x, int ref) {
-        return this.enabled() ? WrapMath.nearestImage(x, ref, this.chunkPeriod) : x;
+        return this.enabled() && !offTorusChunk(x) && !offTorusChunk(ref) ? WrapMath.nearestImage(x, ref, this.chunkPeriod) : x;
     }
 
     public double nearest(double x, double ref) {
-        return this.enabled() ? WrapMath.nearestImage(x, ref, this.period) : x;
+        return this.enabled() && !offTorus(x) && !offTorus(ref) ? WrapMath.nearestImage(x, ref, this.period) : x;
     }
 
     public double minDelta(double a, double b) {
-        return this.enabled() ? WrapMath.minDelta(a, b, this.period) : a - b;
+        return this.enabled() && !offTorus(a) && !offTorus(b) ? WrapMath.minDelta(a, b, this.period) : a - b;
     }
 
     public int minChunkDelta(int a, int b) {
-        return this.enabled() ? WrapMath.minDelta(a, b, this.chunkPeriod) : a - b;
+        return this.enabled() && !offTorusChunk(a) && !offTorusChunk(b) ? WrapMath.minDelta(a, b, this.chunkPeriod) : a - b;
     }
 
     /** The whole-lap offset (a multiple of {@code W}) that moves block coordinate {@code x} nearest to {@code ref}. */

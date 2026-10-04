@@ -156,7 +156,7 @@ public class SeamGameTests {
     /** Serverbound positions in any image are rewritten to the image nearest the server-side player. */
     @GameTest(template = TEMPLATE)
     public static void serverboundPositionsAreNormalized(GameTestHelper helper) {
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = TestPlayers.mock(helper);
         Vec3 at = player.position();
 
         ServerboundMovePlayerPacket move = new ServerboundMovePlayerPacket.Pos(at.x + 0.5 - 3 * period(), at.y, at.z + period(), true);

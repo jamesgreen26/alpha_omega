@@ -111,7 +111,7 @@ public class IslandGameTests {
         int x = wrap().canonBlock(test.getX() + period() / 2) + 2 * period();
         int z = wrap().canonBlock(test.getZ() + (seedRegion() << 4)) - period();
         int y = level.getMaxBuildHeight() - 10;
-        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        ServerPlayer player = TestPlayers.mock(helper);
         player.moveTo(x + 0.5, y, z + 0.5);
         player.setNoGravity(true);
         player.getAbilities().flying = true;
@@ -183,7 +183,7 @@ public class IslandGameTests {
             villager[0].getBrain().setMemory(MemoryModuleType.HOME, GlobalPos.of(level.dimension(), home));
 
             // Island A: a player in lap 1, whose frame seeds a row of forced chunks reaching towards B.
-            player[0] = helper.makeMockServerPlayerInLevel();
+            player[0] = TestPlayers.mock(helper);
             player[0].setNoGravity(true);
             player[0].moveTo((cx << 4) + 8.5 + period(), y, (cz << 4) + 8.5);
             level.getChunkSource().move(player[0]);

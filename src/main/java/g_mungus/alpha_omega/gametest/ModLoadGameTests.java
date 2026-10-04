@@ -6,7 +6,6 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
-import org.spongepowered.asm.mixin.MixinEnvironment;
 
 @GameTestHolder(AlphaOmegaMod.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -23,7 +22,8 @@ public class ModLoadGameTests {
     /** Loads every mixin target, so a stale injection point fails here instead of when the class first loads in play. */
     @GameTest(template = TEMPLATE)
     public static void mixinsApply(GameTestHelper helper) {
-        MixinEnvironment.getCurrentEnvironment().audit();
+        int failures = AlphaOmegaMod.auditMixins();
+        helper.assertTrue(failures == 0, failures + " mixin targets failed to load; see the log");
         helper.succeed();
     }
 }
