@@ -4,9 +4,11 @@ import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import g_mungus.alpha_omega.client.sky.ClientSky;
+import g_mungus.alpha_omega.client.sky.SkyState;
 import g_mungus.alpha_omega.sky.LocalSky;
 import javax.annotation.Nullable;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.DimensionSpecialEffects;
 import net.minecraft.client.renderer.LevelRenderer;
 import org.joml.Quaternionf;
 import org.spongepowered.asm.mixin.Mixin;
@@ -16,7 +18,7 @@ import org.spongepowered.asm.mixin.injection.At;
 /**
  * The sky turns about the local celestial pole: vanilla's {@code XP(timeOfDay·360°)} becomes {@code Rz(-φ)·Rx(H)}, so
  * the sun, moon and stars (all drawn in that frame) rise and set at an angle that depends on latitude. The sunrise
- * glow points at the sun's azimuth instead of due east or west.
+ * glow points at the sun's azimuth instead of due east or west, unless the atmosphere is on: it draws its own.
  */
 @Mixin(LevelRenderer.class)
 abstract class LevelRendererSkyMixin {
@@ -56,5 +58,11 @@ abstract class LevelRendererSkyMixin {
     private Quaternionf alpha_omega$sunriseAzimuth(Quaternionf rotation) {
         if (!ClientSky.applies(this.level)) return rotation;
         return new Quaternionf().rotateY(ClientSky.sunYaw(ClientSky.atCamera(this.level))).mul(rotation);
+    }
+
+    @WrapOperation(method = "renderSky", at = @At(value = "INVOKE",
+        target = "Lnet/minecraft/client/renderer/DimensionSpecialEffects;getSunriseColor(FF)[F"))
+    private float[] alpha_omega$noSunriseGlow(DimensionSpecialEffects effects, float timeOfDay, float partialTick, Operation<float[]> original) {
+        return SkyState.active(this.level) ? null : original.call(effects, timeOfDay, partialTick);
     }
 }
