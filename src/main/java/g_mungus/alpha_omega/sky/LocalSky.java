@@ -2,6 +2,7 @@ package g_mungus.alpha_omega.sky;
 
 import g_mungus.alpha_omega.wrap.Wrap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import org.joml.Quaternionf;
 
@@ -205,5 +206,18 @@ public final class LocalSky {
 
     public static boolean isNight(Level level, BlockPos pos) {
         return isNight(level, pos.getX() + 0.5, pos.getZ() + 0.5);
+    }
+
+    public static boolean isDay(Entity entity) {
+        return isDay(entity.level(), entity.getX(), entity.getZ());
+    }
+
+    public static boolean isNight(Entity entity) {
+        return isNight(entity.level(), entity.getX(), entity.getZ());
+    }
+
+    /** The local clock at an entity's position, for clock-shaped consumers such as villager schedules. */
+    public static long localDayTime(Entity entity) {
+        return localDayTime(entity.level(), entity.getX());
     }
 }

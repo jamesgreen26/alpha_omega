@@ -7,6 +7,7 @@ import g_mungus.alpha_omega.config.AlphaOmegaConfig;
 import g_mungus.alpha_omega.gametest.CutGameTests;
 import g_mungus.alpha_omega.gametest.DimensionGameTests;
 import g_mungus.alpha_omega.gametest.FrameGameTests;
+import g_mungus.alpha_omega.gametest.LocalTimeGameTests;
 import g_mungus.alpha_omega.gametest.IslandGameTests;
 import g_mungus.alpha_omega.gametest.ModLoadGameTests;
 import g_mungus.alpha_omega.gametest.PolishGameTests;
@@ -113,5 +114,6 @@ public class AlphaOmegaMod {
         event.register(DimensionGameTests.class);
         event.register(PolishGameTests.class);
         event.register(SableGameTests.class);
+        event.register(LocalTimeGameTests.class);
     }
 }
