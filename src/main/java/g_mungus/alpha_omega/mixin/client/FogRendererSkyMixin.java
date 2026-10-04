@@ -6,11 +6,13 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 import g_mungus.alpha_omega.client.sky.ClientSky;
 import g_mungus.alpha_omega.client.sky.SkyState;
+import g_mungus.alpha_omega.client.sky.SpaceFade;
 import g_mungus.alpha_omega.sky.LocalSky;
 import net.minecraft.client.Camera;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.DimensionSpecialEffects;
 import net.minecraft.client.renderer.FogRenderer;
+import net.minecraft.world.level.material.FogType;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
 import org.spongepowered.asm.mixin.Mixin;
@@ -26,6 +28,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * <p>With the atmosphere on, the fog takes the colour of the horizon in the direction of view, blended toward the sky
  * at short render distances as vanilla does. Rain, thunder, void darkness, mob effects, night vision and NeoForge's
  * fog colour event all still apply afterwards; underwater, lava and powder snow fog are untouched.
+ *
+ * <p>Above the build height the fog fades to black with the sky ({@link SpaceFade}), before NeoForge's event.
  */
 @Mixin(FogRenderer.class)
 abstract class FogRendererSkyMixin {
@@ -73,5 +77,18 @@ abstract class FogRendererSkyMixin {
         fogRed = (float) (horizon[0] + (sky.x - horizon[0]) * towardSky);
         fogGreen = (float) (horizon[1] + (sky.y - horizon[1]) * towardSky);
         fogBlue = (float) (horizon[2] + (sky.z - horizon[2]) * towardSky);
+    }
+
+    @WrapOperation(method = "setupColor", at = @At(value = "INVOKE",
+        target = "Lnet/neoforged/neoforge/client/ClientHooks;getFogColor(Lnet/minecraft/client/Camera;FLnet/minecraft/client/multiplayer/ClientLevel;IFFFF)Lorg/joml/Vector3f;"))
+    private static Vector3f alpha_omega$spaceFog(Camera camera, float partialTick, ClientLevel level, int renderDistance, float darkenWorld,
+                                                 float red, float green, float blue, Operation<Vector3f> original) {
+        if (camera.getFluidInCamera() == FogType.NONE) {
+            float density = (float) SpaceFade.density(level, camera.getPosition().y);
+            red *= density;
+            green *= density;
+            blue *= density;
+        }
+        return original.call(camera, partialTick, level, renderDistance, darkenWorld, red, green, blue);
     }
 }

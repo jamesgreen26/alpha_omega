@@ -120,6 +120,7 @@ public final class AtmosphereRenderer {
         skyShader.safeGetUniform("InvViewProj").set(inverse);
         skyShader.safeGetUniform("Exposure").set((float) SkyState.exposure(level));
         skyShader.safeGetUniform("Weather").set(rain, thunder, flash);
+        skyShader.safeGetUniform("Density").set((float) SpaceFade.atCamera(level));
         // Vanilla's dome fades into the fog over more of the sky at short render distances.
         skyShader.safeGetUniform("HorizonFade").set(0.12F + 0.25F * Math.max(0.0F, 1.0F - renderDistance / 16.0F));
         skyShader.setSampler("SkyView", skyViewTexture);

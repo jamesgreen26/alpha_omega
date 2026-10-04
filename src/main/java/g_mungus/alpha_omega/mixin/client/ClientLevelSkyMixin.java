@@ -7,6 +7,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 import g_mungus.alpha_omega.client.sky.ClientSky;
 import g_mungus.alpha_omega.client.sky.SkyState;
+import g_mungus.alpha_omega.client.sky.SpaceFade;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
@@ -20,6 +21,8 @@ import org.spongepowered.asm.mixin.injection.At;
  * <p>With the atmosphere on, the sky and cloud colours come from it instead: vanilla's day-night dimming is held at
  * noon, the biome's sky colour is replaced by the atmosphere's, and clouds are tinted by the light reaching them.
  * Vanilla's rain, thunder and lightning adjustments still apply on top.
+ *
+ * <p>Above the build height the sky colour fades to black and the stars to full brightness ({@link SpaceFade}).
  */
 @Mixin(ClientLevel.class)
 abstract class ClientLevelSkyMixin {
@@ -53,6 +56,11 @@ abstract class ClientLevelSkyMixin {
         return SkyState.active(level) ? SkyState.skyColor(level) : biomeColor;
     }
 
+    @ModifyReturnValue(method = "getSkyColor", at = @At("RETURN"))
+    private Vec3 alpha_omega$spaceSky(Vec3 color, @Local(argsOnly = true) Vec3 pos) {
+        return color.scale(SpaceFade.density((ClientLevel) (Object) this, pos.y));
+    }
+
     @ModifyReturnValue(method = "getCloudColor", at = @At("RETURN"))
     private Vec3 alpha_omega$atmosphereClouds(Vec3 color) {
         ClientLevel level = (ClientLevel) (Object) this;
@@ -64,6 +72,8 @@ abstract class ClientLevelSkyMixin {
     @ModifyReturnValue(method = "getStarBrightness", at = @At("RETURN"))
     private float alpha_omega$atmosphereStars(float brightness) {
         ClientLevel level = (ClientLevel) (Object) this;
-        return SkyState.active(level) ? SkyState.starBrightness(level) : brightness;
+        if (SkyState.active(level)) brightness = SkyState.starBrightness(level);
+        float density = (float) SpaceFade.atCamera(level);
+        return 1.0F + (brightness - 1.0F) * density;
     }
 }

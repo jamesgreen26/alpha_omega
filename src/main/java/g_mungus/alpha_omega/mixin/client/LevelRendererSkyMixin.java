@@ -7,6 +7,7 @@ import com.mojang.blaze3d.vertex.VertexBuffer;
 import g_mungus.alpha_omega.client.sky.AtmosphereRenderer;
 import g_mungus.alpha_omega.client.sky.ClientSky;
 import g_mungus.alpha_omega.client.sky.SkyState;
+import g_mungus.alpha_omega.client.sky.SpaceFade;
 import g_mungus.alpha_omega.client.sky.StarField;
 import g_mungus.alpha_omega.sky.LocalSky;
 import javax.annotation.Nullable;
@@ -31,6 +32,9 @@ import org.spongepowered.asm.mixin.injection.At;
  * pixel. The sun, moon, stars and the dark lower hemisphere are still vanilla's, drawn over it.
  *
  * <p>The stars themselves are Genesis's ({@link StarField}), drawn in place of vanilla's star buffer.
+ *
+ * <p>Above the build height the sky thins out ({@link SpaceFade}): the sunrise glow fades, and rain neither hides the
+ * sun, moon and stars nor falls around the camera.
  */
 @Mixin(LevelRenderer.class)
 abstract class LevelRendererSkyMixin {
@@ -75,7 +79,18 @@ abstract class LevelRendererSkyMixin {
     @WrapOperation(method = "renderSky", at = @At(value = "INVOKE",
         target = "Lnet/minecraft/client/renderer/DimensionSpecialEffects;getSunriseColor(FF)[F"))
     private float[] alpha_omega$noSunriseGlow(DimensionSpecialEffects effects, float timeOfDay, float partialTick, Operation<float[]> original) {
-        return SkyState.active(this.level) ? null : original.call(effects, timeOfDay, partialTick);
+        if (SkyState.active(this.level)) return null;
+        float[] color = original.call(effects, timeOfDay, partialTick);
+        if (color == null) return null;
+        color = color.clone();
+        color[3] *= (float) SpaceFade.atCamera(this.level);
+        return color;
+    }
+
+    @ModifyExpressionValue(method = {"renderSky", "renderSnowAndRain"},
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/ClientLevel;getRainLevel(F)F"))
+    private float alpha_omega$spaceRain(float rain) {
+        return rain * (float) SpaceFade.atCamera(this.level);
     }
 
     @WrapOperation(method = "renderSky", at = @At(value = "INVOKE",

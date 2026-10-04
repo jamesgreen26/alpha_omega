@@ -14,6 +14,8 @@ uniform float Exposure;
 uniform vec4 FogColor;
 // x: rain, y: thunder, z: lightning flash
 uniform vec3 Weather;
+// how much of the sky is left: 1 up to the build height, fading to 0 (black) in space
+uniform float Density;
 // sine of the elevation by which the sky has fully emerged from the fog
 uniform float HorizonFade;
 
@@ -40,6 +42,7 @@ void main() {
     if (Weather.x > 0.0) c = weather(c, Weather.x, 0.6, 0.75);
     if (Weather.y > 0.0) c = weather(c, Weather.y, 0.2, 0.75);
     if (Weather.z > 0.0) c = c * (1.0 - Weather.z) + vec3(0.8, 0.8, 1.0) * Weather.z;
+    c *= Density;
     float emerged = smoothstep(0.0, HorizonFade, dir.y);
     fragColor = vec4(mix(FogColor.rgb, c, emerged), 1.0);
 }
