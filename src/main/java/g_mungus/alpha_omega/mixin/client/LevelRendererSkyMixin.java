@@ -49,7 +49,7 @@ abstract class LevelRendererSkyMixin {
     private Quaternionf alpha_omega$celestialRotation(Quaternionf rotation) {
         if (!ClientSky.applies(this.level)) return rotation;
         LocalSky.Sample sun = ClientSky.atCamera(this.level);
-        return LocalSky.celestialRotation(sun.timeOfDay(), sun.latitude());
+        return LocalSky.celestialRotation(sun);
     }
 
     /** The sunrise colour only depends on the sun's height. */

@@ -1,6 +1,7 @@
 package g_mungus.alpha_omega.mixin.server.time;
 
 import g_mungus.alpha_omega.sky.LocalSky;
+import g_mungus.alpha_omega.sky.PlanetProjection;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import org.spongepowered.asm.mixin.Mixin;
@@ -8,8 +9,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 
 /**
- * Skipping the night wakes everyone at the first daylight where the sleepers are: at their mean longitude (a circular
- * mean, so the date line is no edge) and mean latitude. The result still goes through NeoForge's sleep event.
+ * Skipping the night wakes everyone at the first daylight where the sleepers are: at their mean position on the planet
+ * (a mean on the sphere, so neither the date line nor the poles are an edge). The result still goes through NeoForge's sleep event.
  */
 @Mixin(ServerLevel.class)
 abstract class ServerLevelLocalTimeMixin {
@@ -19,14 +20,11 @@ abstract class ServerLevelLocalTimeMixin {
     private long alpha_omega$localMorning(long vanillaTime) {
         ServerLevel level = (ServerLevel) (Object) this;
         if (!LocalSky.local(level)) return vanillaTime;
-        int period = g_mungus.alpha_omega.wrap.Wrap.of(level).period;
-        double[] longitudes = level.players().stream().filter(ServerPlayer::isSleeping)
-            .mapToDouble(player -> LocalSky.longitude(player.getX(), period)).toArray();
-        if (longitudes.length == 0) return vanillaTime;
-        double longitude = LocalSky.meanLongitude(longitudes);
-        if (Double.isNaN(longitude)) return vanillaTime;
-        double latitude = level.players().stream().filter(ServerPlayer::isSleeping)
-            .mapToDouble(player -> LocalSky.latitude(player.getZ(), period)).average().orElse(0.0);
-        return level.getDayTime() + LocalSky.sleepTimeAddition(level.getDayTime(), longitude, latitude);
+        PlanetProjection.Position[] sleepers = level.players().stream().filter(ServerPlayer::isSleeping)
+            .map(player -> LocalSky.position(level, player.getX(), player.getZ())).toArray(PlanetProjection.Position[]::new);
+        if (sleepers.length == 0) return vanillaTime;
+        PlanetProjection.Position mean = LocalSky.meanPosition(sleepers);
+        if (mean == null) return vanillaTime;
+        return level.getDayTime() + LocalSky.sleepTimeAddition(level.getDayTime(), mean);
     }
 }

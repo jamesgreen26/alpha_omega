@@ -107,7 +107,7 @@ public final class WrapCommand {
         ServerLevel level = context.getSource().getLevel();
         Vec3 pos = context.getSource().getPosition();
         int ticks = IntegerArgumentType.getInteger(context, "ticks");
-        long local = LocalSky.localDayTime(level, pos.x);
+        long local = LocalSky.localDayTime(level, pos.x, pos.z);
         long offset = local - level.getDayTime();
         long target = local - Math.floorMod(local, 24000L) + ticks - offset;
         long dayTime = target < 0L ? target + 24000L * Math.ceilDiv(-target, 24000L) : target;

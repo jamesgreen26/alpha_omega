@@ -62,7 +62,7 @@ public class LocalTimeGameTests {
 
     /** Set the global time so that the local clock at {@code pos} reads {@code localTicks}. */
     private static void setLocalTime(ServerLevel level, BlockPos pos, long localTicks) {
-        long offset = LocalSky.localDayTime(level, pos.getX() + 0.5) - level.getDayTime();
+        long offset = LocalSky.localDayTime(level, pos.getX() + 0.5, pos.getZ() + 0.5) - level.getDayTime();
         level.setDayTime(Math.floorMod(localTicks - offset, 24000L) + 24000L * 10);
     }
 
@@ -186,7 +186,7 @@ public class LocalTimeGameTests {
         helper.succeedWhen(() -> {
             helper.assertTrue(level.getDayTime() != before && !player.isSleeping(), "the night was not skipped");
             percentage.set(oldPercentage, level.getServer());
-            long local = LocalSky.localDayTime(level, pos.getX() + 0.5);
+            long local = LocalSky.localDayTime(level, pos.getX() + 0.5, pos.getZ() + 0.5);
             helper.assertTrue(Math.floorMod(local, 24000L) == 0L, "woke at local " + Math.floorMod(local, 24000L) + ", not local morning");
             helper.assertTrue(LocalSky.isDay(level, pos), "woke before local daylight");
             level.getServer().getPlayerList().remove(player);
