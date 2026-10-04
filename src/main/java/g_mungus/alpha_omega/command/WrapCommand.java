@@ -114,6 +114,7 @@ public final class WrapCommand {
         for (ServerLevel each : context.getSource().getServer().getAllLevels()) {
             each.setDayTime(dayTime);
         }
+        context.getSource().getServer().forceTimeSynchronization();
         context.getSource().sendSuccess(() -> Component.literal("Set the time to " + dayTime + ", local clock " + ticks + " here"), true);
         return ticks;
     }

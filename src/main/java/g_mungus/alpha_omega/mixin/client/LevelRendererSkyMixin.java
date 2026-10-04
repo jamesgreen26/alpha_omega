@@ -1,0 +1,60 @@
+package g_mungus.alpha_omega.mixin.client;
+
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import g_mungus.alpha_omega.client.sky.ClientSky;
+import g_mungus.alpha_omega.sky.LocalSky;
+import javax.annotation.Nullable;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.LevelRenderer;
+import org.joml.Quaternionf;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.injection.At;
+
+/**
+ * The sky turns about the local celestial pole: vanilla's {@code XP(timeOfDay·360°)} becomes {@code Rz(-φ)·Rx(H)}, so
+ * the sun, moon and stars (all drawn in that frame) rise and set at an angle that depends on latitude. The sunrise
+ * glow points at the sun's azimuth instead of due east or west.
+ */
+@Mixin(LevelRenderer.class)
+abstract class LevelRendererSkyMixin {
+
+    @Shadow
+    @Nullable
+    private ClientLevel level;
+
+    /** The celestial rotation, {@code XP(getTimeOfDay·360)}: the fifth rotation in renderSky. */
+    @ModifyExpressionValue(method = "renderSky",
+        at = @At(value = "INVOKE", target = "Lcom/mojang/math/Axis;rotationDegrees(F)Lorg/joml/Quaternionf;", ordinal = 4))
+    private Quaternionf alpha_omega$celestialRotation(Quaternionf rotation) {
+        if (!ClientSky.applies(this.level)) return rotation;
+        LocalSky.Sample sun = ClientSky.atCamera(this.level);
+        return LocalSky.celestialRotation(sun.timeOfDay(), sun.latitude());
+    }
+
+    /** The sunrise colour only depends on the sun's height. */
+    @WrapOperation(method = "renderSky",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/ClientLevel;getTimeOfDay(F)F", ordinal = 0))
+    private float alpha_omega$sunriseTime(ClientLevel level, float partialTick, Operation<Float> original) {
+        if (!ClientSky.applies(level)) return original.call(level, partialTick);
+        return (float) ClientSky.atCamera(level).equivalentTimeOfDay();
+    }
+
+    /** Always pick vanilla's eastern (+X) sunrise glow; the first rotation then turns it toward the sun. */
+    @ModifyExpressionValue(method = "renderSky",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/ClientLevel;getSunAngle(F)F"))
+    private float alpha_omega$sunriseSide(float angle) {
+        if (!ClientSky.applies(this.level)) return angle;
+        return (float) (-Math.PI / 2.0);
+    }
+
+    /** The sunrise glow's first rotation, {@code XP(90)}: turn the glow about +Y to the sun's azimuth first. */
+    @ModifyExpressionValue(method = "renderSky",
+        at = @At(value = "INVOKE", target = "Lcom/mojang/math/Axis;rotationDegrees(F)Lorg/joml/Quaternionf;", ordinal = 0))
+    private Quaternionf alpha_omega$sunriseAzimuth(Quaternionf rotation) {
+        if (!ClientSky.applies(this.level)) return rotation;
+        return new Quaternionf().rotateY(ClientSky.sunYaw(ClientSky.atCamera(this.level))).mul(rotation);
+    }
+}
