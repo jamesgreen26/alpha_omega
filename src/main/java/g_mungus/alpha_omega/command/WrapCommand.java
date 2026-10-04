@@ -45,7 +45,8 @@ public final class WrapCommand {
             return 0;
         }
         context.getSource().sendSuccess(() -> Component.literal(level.dimension().location() + " wraps every " + wrap.period
-            + " blocks (" + wrap.chunkPeriod + " chunks); world settings " + Wraps.settings()), false);
+            + " blocks (" + wrap.chunkPeriod + " chunks), canonical x and z in [" + wrap.minBlock + ", " + (wrap.minBlock + wrap.period)
+            + "); world settings " + Wraps.settings()), false);
         return wrap.period;
     }
 

@@ -57,7 +57,9 @@ public class PolishGameTests {
         Vec3 west = new Vec3(1.0, 64, 10);
         helper.assertTrue(Math.abs(WorldWrap.distanceSqr(level, east, west) - 4.0) < 1e-9, "distance across the seam should be 2");
         helper.assertTrue(WorldWrap.nearestImage(level, west, east).x == period + 1.0, "nearest image across the seam");
-        helper.assertTrue(WorldWrap.canonical(level, new BlockPos(-1, 64, period)).equals(new BlockPos(period - 1, 64, 0)), "canonical position");
+        int seam = Wrap.of(level).minBlock;
+        helper.assertTrue(WorldWrap.canonical(level, new BlockPos(seam - 1, 64, seam + period)).equals(new BlockPos(seam + period - 1, 64, seam)), "canonical position");
+        helper.assertTrue(WorldWrap.canonical(level, new BlockPos(-1, 64, 1)).equals(new BlockPos(-1, 64, 1)), "spawn should be canonical, far from the seam");
         helper.assertTrue(!WorldWrap.isWrapped(level.getServer().getLevel(Level.END)), "the End should not wrap");
         helper.succeed();
     }

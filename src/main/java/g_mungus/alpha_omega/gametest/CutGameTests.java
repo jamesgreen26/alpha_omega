@@ -45,13 +45,14 @@ public class CutGameTests {
         ServerLevel level = helper.getLevel();
         int z = wrap().canonChunk((helper.absolutePos(BlockPos.ZERO).getZ() >> 4) + IslandGameTests.bandRegion());
         int y = level.getMaxBuildHeight() - 10;
-        for (int x = 0; x < chunks(); x++) level.setChunkForced(x, z, true);
+        int first = wrap().minChunk;
+        for (int x = first; x < first + chunks(); x++) level.setChunkForced(x, z, true);
         Pig[] pig = new Pig[1];
 
         helper.succeedWhen(() -> {
             IslandManager islands = IslandManager.of(level);
             helper.assertTrue(islands.graph().chunkCount() >= chunks(), "band not loaded yet");
-            for (int x = 0; x < chunks(); x += 37) helper.assertTrue(islands.laps(x, z) != IslandGraph.ABSENT, "band not loaded yet");
+            for (int x = first; x < first + chunks(); x += 37) helper.assertTrue(islands.laps(x, z) != IslandGraph.ABSENT, "band not loaded yet");
             if (pig[0] == null) {
                 pig[0] = EntityType.PIG.create(level);
                 pig[0].moveTo((chunks() / 3 << 4) + 0.5, y, (z << 4) + 8.5);
@@ -65,7 +66,7 @@ public class CutGameTests {
             helper.assertTrue(violations.isEmpty(), "invariant violations: " + violations.subList(0, Math.min(5, violations.size())));
 
             pig[0].discard();
-            for (int x = 0; x < chunks(); x++) level.setChunkForced(x, z, false);
+            for (int x = first; x < first + chunks(); x++) level.setChunkForced(x, z, false);
         });
     }
 
@@ -73,7 +74,7 @@ public class CutGameTests {
     public static void distantIslandsRecenter(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos test = helper.absolutePos(BlockPos.ZERO);
-        int cx = wrap().canonChunk((test.getX() >> 4) + chunks() / 2);
+        int cx = IslandGameTests.farChunkX(test);
         int cz = wrap().canonChunk((test.getZ() >> 4) + IslandGameTests.recenterRegion());
         int laps = IslandManager.of(level).recenterLaps() + 20;
         int y = level.getMaxBuildHeight() - 10;
@@ -95,7 +96,7 @@ public class CutGameTests {
             }
             chunkLaps = islands.laps(cx, cz);
             helper.assertTrue(IslandGraph.lapX(chunkLaps) == 0, "island not recentered: lap " + IslandGraph.lapX(chunkLaps));
-            helper.assertTrue(Math.floorDiv(player.getBlockX(), period()) == 0, "player not recentered with its island: " + player.position());
+            helper.assertTrue(wrap().lap(player.getBlockX()) == 0, "player not recentered with its island: " + player.position());
             level.setChunkForced(cx, cz, false);
             level.getServer().getPlayerList().remove(player);
         });

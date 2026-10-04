@@ -22,7 +22,10 @@ public final class FrameParticipants {
         default void checkFrames(ServerLevel level) {
         }
 
-        /** Adds, per canonical chunk column along the axis, how much a cut through it would disturb. */
+        /**
+         * Adds, per canonical chunk column along the axis, how much a cut through it would disturb. Column {@code c}
+         * is at index {@code c - Wrap.minChunk}.
+         */
         default void weighColumns(ServerLevel level, boolean xAxis, long[] weights) {
         }
     }

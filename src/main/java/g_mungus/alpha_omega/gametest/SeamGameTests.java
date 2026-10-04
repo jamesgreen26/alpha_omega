@@ -119,12 +119,13 @@ public class SeamGameTests {
     public static void ticketsPropagateAcrossSeam(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         int cz = farChunkZ(helper);
-        level.setChunkForced(0, cz, true);
+        int first = wrap().minChunk;
+        level.setChunkForced(first, cz, true);
 
         helper.succeedWhen(() -> {
-            helper.assertTrue(level.getChunkSource().hasChunk(chunks() - 1, cz), "neighbor across seam not loaded");
-            helper.assertTrue(level.getChunkSource().hasChunk(-1, cz), "neighbor across seam not reachable by lifted coordinate");
-            level.setChunkForced(0, cz, false);
+            helper.assertTrue(level.getChunkSource().hasChunk(first + chunks() - 1, cz), "neighbor across seam not loaded");
+            helper.assertTrue(level.getChunkSource().hasChunk(first - 1, cz), "neighbor across seam not reachable by lifted coordinate");
+            level.setChunkForced(first, cz, false);
         });
     }
 
@@ -133,23 +134,26 @@ public class SeamGameTests {
     public static void lightCrossesSeam(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         int cz = farChunkZ(helper);
-        level.setChunkForced(chunks() - 1, cz, true);
-        level.setChunkForced(0, cz, true);
-        BlockPos source = new BlockPos(period() - 1, level.getMaxBuildHeight() - 8, SectionPos.sectionToBlockCoord(cz, 8));
+        int first = wrap().minChunk;
+        int last = first + chunks() - 1;
+        int seam = wrap().minBlock;
+        level.setChunkForced(last, cz, true);
+        level.setChunkForced(first, cz, true);
+        BlockPos source = new BlockPos(seam + period() - 1, level.getMaxBuildHeight() - 8, SectionPos.sectionToBlockCoord(cz, 8));
         boolean[] placed = {false};
 
         helper.succeedWhen(() -> {
             if (!placed[0]) {
-                helper.assertTrue(level.getChunkSource().hasChunk(chunks() - 1, cz) && level.getChunkSource().hasChunk(0, cz), "seam chunks not loaded yet");
+                helper.assertTrue(level.getChunkSource().hasChunk(last, cz) && level.getChunkSource().hasChunk(first, cz), "seam chunks not loaded yet");
                 level.setBlockAndUpdate(source, Blocks.GLOWSTONE.defaultBlockState());
                 placed[0] = true;
             }
-            int canonical = level.getBrightness(LightLayer.BLOCK, new BlockPos(0, source.getY(), source.getZ()));
-            int lifted = level.getBrightness(LightLayer.BLOCK, new BlockPos(period(), source.getY(), source.getZ()));
+            int canonical = level.getBrightness(LightLayer.BLOCK, new BlockPos(seam, source.getY(), source.getZ()));
+            int lifted = level.getBrightness(LightLayer.BLOCK, new BlockPos(seam + period(), source.getY(), source.getZ()));
             helper.assertTrue(canonical == 14 && lifted == 14, "expected light 14 across seam, got " + canonical + " / " + lifted);
             level.setBlockAndUpdate(source, Blocks.AIR.defaultBlockState());
-            level.setChunkForced(chunks() - 1, cz, false);
-            level.setChunkForced(0, cz, false);
+            level.setChunkForced(last, cz, false);
+            level.setChunkForced(first, cz, false);
         });
     }
 
@@ -173,8 +177,8 @@ public class SeamGameTests {
         helper.succeed();
     }
 
-    /** A chunk row on the seam that nothing else (spawn chunks, the test itself) keeps loaded. */
+    /** A chunk row, away from the seam along z, that nothing else (spawn chunks, the test itself) keeps loaded. */
     private static int farChunkZ(GameTestHelper helper) {
-        return wrap().canonChunk(SectionPos.blockToSectionCoord(helper.absolutePos(BlockPos.ZERO).getZ()) + chunks() / 2);
+        return wrap().canonChunk(SectionPos.blockToSectionCoord(helper.absolutePos(BlockPos.ZERO).getZ()) + chunks() / 4);
     }
 }

@@ -33,7 +33,7 @@ public final class Wraps {
     public static Wrap of(ResourceKey<Level> dimension) {
         return CACHE.computeIfAbsent(dimension, dim -> {
             int period = settings.periodFor(dim);
-            return period == 0 ? Wrap.NONE : new Wrap(period);
+            return period == 0 ? Wrap.NONE : new Wrap(period, settings.centered());
         });
     }
 

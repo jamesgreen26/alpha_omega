@@ -1,5 +1,6 @@
 package g_mungus.alpha_omega.mixin.server.entity;
 
+import g_mungus.alpha_omega.island.EntityFrames;
 import g_mungus.alpha_omega.wrap.Wrap;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.DoubleTag;
@@ -53,10 +54,13 @@ abstract class EntityMixin {
         ListTag pos = copy.getList("Pos", Tag.TAG_DOUBLE);
         // Pos may have been rewritten since (e.g. a structure template placing the entity): restore the tagged lap
         // relative to wherever it now is, keeping its canonical position.
+        // A joining player and their vehicle load at lap 0 (see PlayerListLoginMixin).
         double x = pos.getDouble(0);
         double z = pos.getDouble(2);
-        pos.set(0, DoubleTag.valueOf(wrap.canon(x) + (double) laps[0] * wrap.period));
-        pos.set(2, DoubleTag.valueOf(wrap.canon(z) + (double) laps[1] * wrap.period));
+        int lapX = EntityFrames.loggingIn() ? 0 : laps[0];
+        int lapZ = EntityFrames.loggingIn() ? 0 : laps[1];
+        pos.set(0, DoubleTag.valueOf(wrap.canon(x) + (double) lapX * wrap.period));
+        pos.set(2, DoubleTag.valueOf(wrap.canon(z) + (double) lapZ * wrap.period));
         return copy;
     }
 }

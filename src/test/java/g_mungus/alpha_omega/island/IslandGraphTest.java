@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import g_mungus.alpha_omega.wrap.WrapMath;
 import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
 import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
@@ -38,6 +37,21 @@ class IslandGraphTest {
     }
 
     @Test
+    void aCenteredWindowPutsTheSeamAtHalfThePeriod() {
+        IslandGraph graph = new IslandGraph(16, -8);
+        // Chunks -1 and 0 are ordinary neighbors in lap 0; 7 and -8 meet across the seam.
+        graph.join(-1, 0, (x, z) -> IslandGraph.packLaps(0, 0), NO_WEIGHTS);
+        graph.join(0, 0, (x, z) -> IslandGraph.packLaps(5, 5), NO_WEIGHTS);
+        assertEquals(0, IslandGraph.lapX(graph.laps(0, 0)));
+        graph.join(7, 3, (x, z) -> IslandGraph.packLaps(0, 0), NO_WEIGHTS);
+        graph.join(-8, 3, (x, z) -> IslandGraph.packLaps(5, 5), NO_WEIGHTS);
+        assertEquals(1, IslandGraph.lapX(graph.laps(-8, 3)), "chunk -8 continues chunk 7 eastwards, at lifted 8");
+        assertEquals(-8, graph.canon(8));
+        assertEquals(7, graph.canon(-9));
+        assertInvariants(graph);
+    }
+
+    @Test
     void disagreeingIslandsStayApartAndReportTheShift() {
         IslandGraph graph = new IslandGraph(16);
         graph.join(2, 2, (x, z) -> IslandGraph.packLaps(0, 0), NO_WEIGHTS);
@@ -58,7 +72,9 @@ class IslandGraphTest {
         Random random = new Random(1234);
         for (int run = 0; run < 200; run++) {
             int n = 8 + random.nextInt(24);
-            IslandGraph graph = new IslandGraph(n);
+            // Both canonical windows: [0, n) and centered on 0.
+            int origin = run % 2 == 0 ? 0 : -(n >> 1);
+            IslandGraph graph = new IslandGraph(n, origin);
             List<long[]> present = new ArrayList<>();
             int steps = 50 + random.nextInt(400);
             for (int step = 0; step < steps; step++) {
@@ -67,11 +83,11 @@ class IslandGraphTest {
                     int x, z;
                     if (!present.isEmpty() && random.nextInt(4) != 0) {
                         long[] base = present.get(random.nextInt(present.size()));
-                        x = WrapMath.canon((int) base[0] + random.nextInt(3) - 1, n);
-                        z = WrapMath.canon((int) base[1] + random.nextInt(3) - 1, n);
+                        x = graph.canon((int) base[0] + random.nextInt(3) - 1);
+                        z = graph.canon((int) base[1] + random.nextInt(3) - 1);
                     } else {
-                        x = random.nextInt(n);
-                        z = random.nextInt(n);
+                        x = origin + random.nextInt(n);
+                        z = origin + random.nextInt(n);
                     }
                     if (graph.islandOf(x, z) == 0) {
                         int lapX = random.nextInt(3) - 1;
@@ -158,8 +174,8 @@ class IslandGraphTest {
                 for (int dx = -1; dx <= 1; dx++) {
                     for (int dz = -1; dz <= 1; dz++) {
                         if (graph.severed(x, z, dx, dz)) continue;
-                        int nx = WrapMath.canon(x + dx, n);
-                        int nz = WrapMath.canon(z + dz, n);
+                        int nx = graph.canon(x + dx);
+                        int nz = graph.canon(z + dz);
                         if (graph.islandOf(nx, nz) != island.id) continue;
                         long neighborLaps = graph.laps(nx, nz);
                         assertEquals(lx + dx, nx + IslandGraph.lapX(neighborLaps) * n, "I2: x not contiguous");
@@ -189,7 +205,7 @@ class IslandGraphTest {
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dz = -1; dz <= 1; dz++) {
                     if (graph.severed(IslandGraph.keyX(key), IslandGraph.keyZ(key), dx, dz)) continue;
-                    long neighbor = IslandGraph.key(WrapMath.canon(IslandGraph.keyX(key) + dx, n), WrapMath.canon(IslandGraph.keyZ(key) + dz, n));
+                    long neighbor = IslandGraph.key(graph.canon(IslandGraph.keyX(key) + dx), graph.canon(IslandGraph.keyZ(key) + dz));
                     if (remaining.remove(neighbor)) queue.enqueue(neighbor);
                 }
             }

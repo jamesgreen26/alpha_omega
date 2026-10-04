@@ -34,14 +34,14 @@ abstract class CreateWorldScreenWorldTabMixin {
     private void alpha_omega$addWrapButton(CallbackInfo ci) {
         WorldWrapSettings requested = WorldWrapStore.requested();
         int initial = requested != null ? requested.period() : WorldWrapSettings.DEFAULT_PERIOD;
-        WorldWrapStore.requestForNextWorld(new WorldWrapSettings(initial, true, false));
+        WorldWrapStore.requestForNextWorld(new WorldWrapSettings(initial, true, false, true));
         CycleButton<Integer> button = CycleButton.<Integer>builder(size -> size == 0
                 ? Component.translatable("alpha_omega.wrap.off")
                 : Component.translatable("alpha_omega.wrap.size", size))
             .withValues(ALPHA_OMEGA_SIZES)
             .withInitialValue(ALPHA_OMEGA_SIZES.contains(initial) ? initial : WorldWrapSettings.DEFAULT_PERIOD)
             .create(0, 0, 310, 20, Component.translatable("alpha_omega.wrap.label"),
-                (b, size) -> WorldWrapStore.requestForNextWorld(new WorldWrapSettings(size, true, false)));
+                (b, size) -> WorldWrapStore.requestForNextWorld(new WorldWrapSettings(size, true, false, true)));
         this.alpha_omega$rows.addChild(button, 2);
     }
 }

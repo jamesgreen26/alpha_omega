@@ -16,10 +16,14 @@ import net.minecraft.world.level.Level;
  * A world's wrapping, chosen when it is created and stored in its folder. The Overworld wraps at {@code period};
  * the Nether at {@code period / 8} so portals link one to one (§11); the End only if enabled; other dimensions
  * never (they may depend on absolute coordinates).
+ * <p>
+ * {@code centered}: canonical positions are {@code [-period / 2, period / 2)} rather than {@code [0, period)}, so
+ * the seam is far from spawn (see {@link Wrap}). Every new world is centered; worlds recorded before this setting
+ * existed are not, since their storage uses the old window.
  */
-public record WorldWrapSettings(int period, boolean nether, boolean end) {
+public record WorldWrapSettings(int period, boolean nether, boolean end, boolean centered) {
 
-    public static final WorldWrapSettings DISABLED = new WorldWrapSettings(0, false, false);
+    public static final WorldWrapSettings DISABLED = new WorldWrapSettings(0, false, false, false);
     /** Default: a multiple of 3072 (clouds) and 4096 (whole climate octaves); the Nether is then 1536 wide. */
     public static final int DEFAULT_PERIOD = 12288;
     public static final String FILE_NAME = "alpha_omega.json";
@@ -28,6 +32,7 @@ public record WorldWrapSettings(int period, boolean nether, boolean end) {
         ByteBufCodecs.VAR_INT, WorldWrapSettings::period,
         ByteBufCodecs.BOOL, WorldWrapSettings::nether,
         ByteBufCodecs.BOOL, WorldWrapSettings::end,
+        ByteBufCodecs.BOOL, WorldWrapSettings::centered,
         WorldWrapSettings::new);
 
     public WorldWrapSettings {
@@ -51,7 +56,8 @@ public record WorldWrapSettings(int period, boolean nether, boolean end) {
 
     public static WorldWrapSettings read(Path file) throws IOException {
         JsonObject json = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject();
-        return new WorldWrapSettings(json.get("period").getAsInt(), json.get("nether").getAsBoolean(), json.get("end").getAsBoolean());
+        boolean centered = json.has("centered") && json.get("centered").getAsBoolean();
+        return new WorldWrapSettings(json.get("period").getAsInt(), json.get("nether").getAsBoolean(), json.get("end").getAsBoolean(), centered);
     }
 
     public void write(Path file) throws IOException {
@@ -59,6 +65,7 @@ public record WorldWrapSettings(int period, boolean nether, boolean end) {
         json.addProperty("period", this.period);
         json.addProperty("nether", this.nether);
         json.addProperty("end", this.end);
+        json.addProperty("centered", this.centered);
         Files.writeString(file, json.toString(), StandardCharsets.UTF_8);
     }
 }

@@ -11,7 +11,23 @@ import net.minecraft.world.phys.Vec3;
 /** Moving entities between frames (design doc §6.2–6.5). */
 public final class EntityFrames {
 
+    /** Nesting depth of player logins in progress (server thread). */
+    private static int logins;
+
     private EntityFrames() {
+    }
+
+    public static void beginLogin() {
+        logins++;
+    }
+
+    public static void endLogin() {
+        logins--;
+    }
+
+    /** Whether entities being loaded now belong to a joining player (themselves and their vehicle). */
+    public static boolean loggingIn() {
+        return logins > 0;
     }
 
     /**

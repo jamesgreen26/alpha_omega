@@ -22,9 +22,14 @@ final class TestPlayers {
     }
 
     static ServerPlayer mock(GameTestHelper helper) {
+        return mock(helper, UUID.randomUUID());
+    }
+
+    /** A mock player with a given id, which loads any player data saved under it, as a returning player does. */
+    static ServerPlayer mock(GameTestHelper helper, UUID id) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
-        CommonListenerCookie cookie = CommonListenerCookie.createInitial(new GameProfile(UUID.randomUUID(), "test-mock-player"), false);
+        CommonListenerCookie cookie = CommonListenerCookie.createInitial(new GameProfile(id, "test-mock-player"), false);
         ServerPlayer player = new ServerPlayer(server, level, cookie.gameProfile(), cookie.clientInformation()) {
             @Override
             public boolean isSpectator() {

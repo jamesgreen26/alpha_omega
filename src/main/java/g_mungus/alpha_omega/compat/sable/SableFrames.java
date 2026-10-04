@@ -81,7 +81,7 @@ public final class SableFrames implements FrameParticipants.FrameParticipant {
             int min = SectionPos.posToSectionCoord(xAxis ? bounds.minX() : bounds.minZ());
             int max = SectionPos.posToSectionCoord(xAxis ? bounds.maxX() : bounds.maxZ());
             for (int chunk = min; chunk <= max && chunk - min < weights.length; chunk++) {
-                weights[wrap.canonChunk(chunk)] += SUB_LEVEL_WEIGHT;
+                weights[wrap.canonChunk(chunk) - wrap.minChunk] += SUB_LEVEL_WEIGHT;
             }
         }
     }

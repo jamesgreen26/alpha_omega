@@ -3,8 +3,11 @@ package g_mungus.alpha_omega.island;
 import g_mungus.alpha_omega.mixin.server.entity.PersistentEntitySectionManagerAccessor;
 import g_mungus.alpha_omega.mixin.server.ServerLevelAccessor;
 import g_mungus.alpha_omega.wrap.Wrap;
+import it.unimi.dsi.fastutil.ints.Int2IntMap;
+import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.objects.Reference2LongMap;
@@ -41,7 +44,7 @@ public final class IslandManager {
     public IslandManager(ServerLevel level) {
         this.level = level;
         this.wrap = Wrap.of(level);
-        this.graph = this.wrap.enabled() ? new IslandGraph(this.wrap.chunkPeriod) : null;
+        this.graph = this.wrap.enabled() ? new IslandGraph(this.wrap.chunkPeriod, this.wrap.minChunk) : null;
     }
 
     public static IslandManager of(ServerLevel level) {
@@ -212,17 +215,19 @@ public final class IslandManager {
     /** The boundary with no player within view distance and the fewest entities around it. */
     private int quietestBoundary(boolean xAxis) {
         int n = this.wrap.chunkPeriod;
+        int min = this.wrap.minChunk;
+        // Indexed by canonical chunk minus the window's first chunk.
         long[] entities = new long[n];
         for (Entity entity : this.level.getAllEntities()) {
             int chunk = xAxis ? entity.chunkPosition().x : entity.chunkPosition().z;
-            if (!Wrap.offTorusChunk(chunk)) entities[this.wrap.canonChunk(chunk)]++;
+            if (!Wrap.offTorusChunk(chunk)) entities[this.wrap.canonChunk(chunk) - min]++;
         }
         FrameParticipants.weighColumns(this.level, xAxis, entities);
-        int best = 0;
+        int best = min;
         long bestScore = Long.MAX_VALUE;
-        for (int boundary = 0; boundary < n; boundary++) {
+        for (int boundary = min; boundary < min + n; boundary++) {
             long score = this.playerNear(xAxis, boundary) ? 1L << 40 : 0;
-            for (int d = -2; d <= 1; d++) score += entities[this.wrap.canonChunk(boundary + d)];
+            for (int d = -2; d <= 1; d++) score += entities[this.wrap.canonChunk(boundary + d) - min];
             if (score < bestScore) {
                 bestScore = score;
                 best = boundary;
@@ -268,11 +273,27 @@ public final class IslandManager {
 
     // ---- recentering (§5.9) ----
 
-    /** Islands that have drifted many laps from the origin shift back, keeping coordinates far from the limits. */
+    /**
+     * Islands that have drifted many laps from the origin shift back, keeping coordinates far from the limits.
+     * Islands far from every player go further: they shift so that most of their chunks are in lap 0, where
+     * canonical and lifted positions coincide, so other mods' coordinate math works there (mod-compatibility §3.3).
+     * No client can see them, so the shift is free; islands with players keep their frame, which is the client's.
+     */
     public void recenter() {
         if (this.graph == null) return;
         int limit = this.recenterLaps();
         for (IslandGraph.Island island : List.copyOf(this.graph.islands())) {
+            if (this.graph.island(island.id) == null) continue;
+            if (!this.nearPlayer(island)) {
+                int lapDX = -this.dominantLap(island, true);
+                int lapDZ = -this.dominantLap(island, false);
+                if (lapDX != 0 || lapDZ != 0) {
+                    this.shift(island.id, lapDX, lapDZ);
+                    // It may now agree with an island it touches; agreeing islands must merge.
+                    this.graph.markDisagreementPending();
+                }
+                continue;
+            }
             long key = island.chunks().iterator().nextLong();
             long laps = this.graph.laps(IslandGraph.keyX(key), IslandGraph.keyZ(key));
             int lx = IslandGraph.lapX(laps);
@@ -281,6 +302,50 @@ public final class IslandManager {
                 this.shift(island.id, Math.abs(lx) > limit ? -lx : 0, Math.abs(lz) > limit ? -lz : 0);
             }
         }
+    }
+
+    /**
+     * Whether any chunk of the island is within twice the seeding range (§5.8) of a player: such islands may soon
+     * join the player's, in the player's frame, so moving them now would only mean moving them back.
+     */
+    private boolean nearPlayer(IslandGraph.Island island) {
+        int range = 2 * (this.level.getServer().getPlayerList().getViewDistance() + 3);
+        List<ServerPlayer> players = this.level.players();
+        if (players.isEmpty()) return false;
+        LongIterator it = island.chunks().iterator();
+        while (it.hasNext()) {
+            long key = it.nextLong();
+            for (ServerPlayer player : players) {
+                int dx = Math.abs(this.wrap.minChunkDelta(IslandGraph.keyX(key), player.chunkPosition().x));
+                int dz = Math.abs(this.wrap.minChunkDelta(IslandGraph.keyZ(key), player.chunkPosition().z));
+                if (Math.max(dx, dz) <= range) return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * The lap most of the island's chunks share on one axis, if moving it to 0 is worthwhile: 0 unless it holds at
+     * least twice as many chunks as lap 0 does. The margin keeps an island straddling the seam from flipping back
+     * and forth as chunks come and go on either side.
+     */
+    private int dominantLap(IslandGraph.Island island, boolean xAxis) {
+        Int2IntOpenHashMap counts = new Int2IntOpenHashMap();
+        LongIterator it = island.chunks().iterator();
+        while (it.hasNext()) {
+            long key = it.nextLong();
+            long laps = this.graph.laps(IslandGraph.keyX(key), IslandGraph.keyZ(key));
+            counts.addTo(xAxis ? IslandGraph.lapX(laps) : IslandGraph.lapZ(laps), 1);
+        }
+        int best = 0;
+        int bestCount = 0;
+        for (Int2IntMap.Entry entry : counts.int2IntEntrySet()) {
+            if (entry.getIntValue() > bestCount) {
+                best = entry.getIntKey();
+                bestCount = entry.getIntValue();
+            }
+        }
+        return bestCount >= 2 * counts.get(0) ? best : 0;
     }
 
     // ---- join policy ----
@@ -305,7 +370,7 @@ public final class IslandManager {
         if (nearest == null) return IslandGraph.packLaps(0, 0);
         int liftedX = this.wrap.nearestChunk(x, SectionPos.blockToSectionCoord(nearest.getBlockX()));
         int liftedZ = this.wrap.nearestChunk(z, SectionPos.blockToSectionCoord(nearest.getBlockZ()));
-        return IslandGraph.packLaps(Math.floorDiv(liftedX, this.wrap.chunkPeriod), Math.floorDiv(liftedZ, this.wrap.chunkPeriod));
+        return IslandGraph.packLaps(this.wrap.chunkLap(liftedX), this.wrap.chunkLap(liftedZ));
     }
 
     /** Islands with players win joins and merges, so players are never the ones re-framed. */

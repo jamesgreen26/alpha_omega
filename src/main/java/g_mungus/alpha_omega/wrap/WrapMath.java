@@ -16,6 +16,16 @@ public final class WrapMath {
         return Math.floorDiv(x, period);
     }
 
+    /** {@code x} folded into the window {@code [origin, origin + period)}. */
+    public static int canon(int x, int period, int origin) {
+        return origin + Math.floorMod(x - origin, period);
+    }
+
+    /** Which window {@code [origin + k * period, origin + (k + 1) * period)} holds {@code x}. */
+    public static int lap(int x, int period, int origin) {
+        return Math.floorDiv(x - origin, period);
+    }
+
     /** Signed minimal displacement from b to a, in (-period/2, period/2]. */
     public static int minDelta(int a, int b, int period) {
         int d = Math.floorMod(a - b, period);

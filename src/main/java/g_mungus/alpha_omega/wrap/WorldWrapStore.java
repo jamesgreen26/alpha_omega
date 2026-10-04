@@ -60,7 +60,8 @@ public final class WorldWrapStore {
         pending = null;
         Wraps.configure(settings);
         if (settings.enabled()) {
-            LOGGER.info("World wraps every {} blocks (Nether: {}, End: {})", settings.period(), settings.periodFor(Level.NETHER), settings.periodFor(Level.END));
+            LOGGER.info("World wraps every {} blocks (Nether: {}, End: {}), canonical coordinates from {}", settings.period(),
+                settings.periodFor(Level.NETHER), settings.periodFor(Level.END), Wraps.overworld().minBlock);
             checkViewDistance(settings);
         } else {
             LOGGER.info("World does not wrap");

@@ -10,9 +10,13 @@ import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Wrapping for one dimension: its period and helpers over Minecraft position types. {@link #NONE} (an unwrapped
- * dimension, or a world created without wrapping) makes every operation the identity, so code can apply it
- * unconditionally.
+ * Wrapping for one dimension: its period, its canonical window, and helpers over Minecraft position types.
+ * {@link #NONE} (an unwrapped dimension, or a world created without wrapping) makes every operation the identity,
+ * so code can apply it unconditionally.
+ * <p>
+ * Canonical positions lie in {@code [minBlock, minBlock + period)} on each horizontal axis. Worlds created before
+ * the window was centered use {@code [0, period)}; newer ones use {@code [-period / 2, period / 2)}, which keeps
+ * the seam far from spawn so the area around it is lap 0, where lifted and canonical positions coincide.
  */
 public final class Wrap {
 
@@ -22,11 +26,23 @@ public final class Wrap {
     public final int period;
     /** {@code N}: period in chunks (and sections). */
     public final int chunkPeriod;
+    /** First canonical chunk on each horizontal axis: the chunk just east (south) of the seam. */
+    public final int minChunk;
+    /** First canonical block on each horizontal axis. */
+    public final int minBlock;
 
+    /** A window starting at 0. */
     public Wrap(int period) {
+        this(period, false);
+    }
+
+    /** {@code centered}: the window is {@code [-N / 2, N / 2)} chunks rather than {@code [0, N)}. */
+    public Wrap(int period, boolean centered) {
         if (period < 0 || period % 16 != 0) throw new IllegalArgumentException("World period must be a non-negative multiple of 16: " + period);
         this.period = period;
         this.chunkPeriod = period >> 4;
+        this.minChunk = centered ? -(this.chunkPeriod >> 1) : 0;
+        this.minBlock = this.minChunk << 4;
     }
 
     public static Wrap of(Level level) {
@@ -88,29 +104,33 @@ public final class Wrap {
     // ---- canonicalization (storage addresses) ----
 
     public int canonBlock(int x) {
-        return this.enabled() && !offTorus(x) ? WrapMath.canon(x, this.period) : x;
+        return this.enabled() && !offTorus(x) ? WrapMath.canon(x, this.period, this.minBlock) : x;
     }
 
     public int canonChunk(int x) {
-        return this.enabled() && !offTorusChunk(x) ? WrapMath.canon(x, this.chunkPeriod) : x;
+        return this.enabled() && !offTorusChunk(x) ? WrapMath.canon(x, this.chunkPeriod, this.minChunk) : x;
     }
 
     public double canon(double x) {
         if (!this.enabled() || offTorus(x)) return x;
-        double c = x % this.period;
-        return c < 0 ? c + this.period : c;
+        double c = (x - this.minBlock) % this.period;
+        return (c < 0 ? c + this.period : c) + this.minBlock;
     }
 
     public boolean isCanonBlock(int x, int z) {
-        return !this.enabled() || (isCanon(x, this.period) || offTorus(x)) && (isCanon(z, this.period) || offTorus(z));
+        return !this.enabled() || (this.isCanonBlock(x) || offTorus(x)) && (this.isCanonBlock(z) || offTorus(z));
     }
 
     public boolean isCanonChunk(int x, int z) {
-        return !this.enabled() || (isCanon(x, this.chunkPeriod) || offTorusChunk(x)) && (isCanon(z, this.chunkPeriod) || offTorusChunk(z));
+        return !this.enabled() || (this.isCanonChunk(x) || offTorusChunk(x)) && (this.isCanonChunk(z) || offTorusChunk(z));
     }
 
-    private static boolean isCanon(int x, int period) {
-        return x >= 0 && x < period;
+    private boolean isCanonBlock(int x) {
+        return x >= this.minBlock && x < this.minBlock + this.period;
+    }
+
+    private boolean isCanonChunk(int x) {
+        return x >= this.minChunk && x < this.minChunk + this.chunkPeriod;
     }
 
     public BlockPos canon(BlockPos pos) {
@@ -149,7 +169,12 @@ public final class Wrap {
 
     /** Which lap a block coordinate is in (0 if unwrapped or off the torus). */
     public int lap(int x) {
-        return this.enabled() && !offTorus(x) ? Math.floorDiv(x, this.period) : 0;
+        return this.enabled() && !offTorus(x) ? WrapMath.lap(x, this.period, this.minBlock) : 0;
+    }
+
+    /** Which lap a chunk coordinate is in (0 if unwrapped or off the torus). */
+    public int chunkLap(int x) {
+        return this.enabled() && !offTorusChunk(x) ? WrapMath.lap(x, this.chunkPeriod, this.minChunk) : 0;
     }
 
     // ---- nearest image (bridging frames); the identity when either side is off the torus ----
@@ -200,6 +225,6 @@ public final class Wrap {
 
     @Override
     public String toString() {
-        return this.enabled() ? "Wrap[" + this.period + "]" : "Wrap[none]";
+        return this.enabled() ? "Wrap[" + this.period + " from " + this.minBlock + "]" : "Wrap[none]";
     }
 }

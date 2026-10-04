@@ -5,6 +5,7 @@ import g_mungus.alpha_omega.compat.sable.SableTestOps;
 import g_mungus.alpha_omega.island.IslandGraph;
 import g_mungus.alpha_omega.island.IslandManager;
 import g_mungus.alpha_omega.wrap.Wrap;
+import g_mungus.alpha_omega.wrap.WrapMath;
 import g_mungus.alpha_omega.wrap.Wraps;
 import java.util.List;
 import net.minecraft.core.BlockPos;
@@ -49,8 +50,8 @@ public class SableGameTests {
         helper.assertTrue(Wrap.offTorus(plot.getX(), plot.getZ()), "plot is not off the torus: " + plot);
         helper.assertTrue(level.getBlockState(anchor).isAir(), "assembled block left behind at " + anchor);
         helper.assertTrue(level.getBlockState(plot).is(Blocks.GOLD_BLOCK), "plot block not readable at " + plot);
-        int foldedX = Math.floorMod(SectionPos.blockToSectionCoord(plot.getX()), wrap.chunkPeriod);
-        int foldedZ = Math.floorMod(SectionPos.blockToSectionCoord(plot.getZ()), wrap.chunkPeriod);
+        int foldedX = WrapMath.canon(SectionPos.blockToSectionCoord(plot.getX()), wrap.chunkPeriod, wrap.minChunk);
+        int foldedZ = WrapMath.canon(SectionPos.blockToSectionCoord(plot.getZ()), wrap.chunkPeriod, wrap.minChunk);
         helper.assertTrue(IslandManager.of(level).graph().laps(foldedX, foldedZ) == IslandGraph.ABSENT,
             "plot chunk joined an island at its folded position " + foldedX + ", " + foldedZ);
         helper.succeed();
@@ -98,8 +99,8 @@ public class SableGameTests {
         ServerLevel level = helper.getLevel();
         Wrap wrap = Wraps.overworld();
         BlockPos test = helper.absolutePos(BlockPos.ZERO);
-        int cx = wrap.canonChunk((test.getX() >> 4) + wrap.chunkPeriod / 2);
-        int cz = wrap.canonChunk((test.getZ() >> 4) + wrap.chunkPeriod / 2 + 256);
+        int cx = IslandGameTests.farChunkX(test);
+        int cz = wrap.canonChunk((test.getZ() >> 4) - wrap.chunkPeriod / 4);
         int laps = 3;
         int x = (cx << 4) + 8 + laps * wrap.period;
         int z = (cz << 4) + 8;
@@ -145,8 +146,8 @@ public class SableGameTests {
         ServerLevel level = helper.getLevel();
         Wrap wrap = Wraps.overworld();
         BlockPos test = helper.absolutePos(BlockPos.ZERO);
-        int cx = wrap.canonChunk((test.getX() >> 4) + wrap.chunkPeriod / 2);
-        int cz = wrap.canonChunk((test.getZ() >> 4) + wrap.chunkPeriod / 2 + 320);
+        int cx = IslandGameTests.farChunkX(test);
+        int cz = wrap.canonChunk((test.getZ() >> 4) - wrap.chunkPeriod / 4 - 32);
         int laps = 3;
         int x = (cx << 4) + 8 + laps * wrap.period;
         int z = (cz << 4) + 8;

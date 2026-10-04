@@ -28,6 +28,6 @@ public final class AlphaOmegaConfig {
 
     public static WorldWrapSettings defaults() {
         int period = WORLD_PERIOD.get() / 128 * 128;
-        return new WorldWrapSettings(period, WRAP_NETHER.get(), WRAP_END.get());
+        return new WorldWrapSettings(period, WRAP_NETHER.get(), WRAP_END.get(), true);
     }
 }

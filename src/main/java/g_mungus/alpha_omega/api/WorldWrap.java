@@ -35,6 +35,18 @@ public final class WorldWrap {
         return Wrap.of(level).period;
     }
 
+    /**
+     * The first canonical block coordinate on each horizontal axis: {@code -period / 2} in worlds created since the
+     * window was centered on spawn, 0 in older ones. The seam lies at this coordinate.
+     */
+    public static int minCoordinate(Level level) {
+        return Wrap.of(level).minBlock;
+    }
+
+    /**
+     * The storage address of {@code pos}: its image in the canonical window, which runs from {@link #minCoordinate}
+     * for {@link #period} blocks on each horizontal axis.
+     */
     public static BlockPos canonical(Level level, BlockPos pos) {
         return Wrap.of(level).canon(pos);
     }

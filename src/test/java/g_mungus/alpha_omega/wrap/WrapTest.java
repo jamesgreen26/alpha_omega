@@ -4,11 +4,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class WrapTest {
 
@@ -70,6 +74,47 @@ class WrapTest {
     }
 
     @Test
+    void centeredWindowStraddlesTheOrigin() {
+        Wrap centered = new Wrap(W, true);
+        assertEquals(-W / 2, centered.minBlock);
+        assertEquals(-N / 2, centered.minChunk);
+        // Spawn is lap 0 on both sides of the origin; the seam is at +-W/2.
+        BlockPos spawn = new BlockPos(-5, 64, 7);
+        assertSame(spawn, centered.canon(spawn));
+        assertEquals(0, centered.lap(-5));
+        assertEquals(0, centered.lap(W / 2 - 1));
+        assertEquals(1, centered.lap(W / 2));
+        assertEquals(-1, centered.lap(-W / 2 - 1));
+        assertEquals(-W / 2, centered.canonBlock(W / 2));
+        assertEquals(W / 2 - 1, centered.canonBlock(-W / 2 - 1));
+        assertEquals(-N / 2, centered.canonChunk(N / 2));
+        assertEquals(1, centered.chunkLap(N / 2));
+        assertEquals(-W / 2 + 0.25, centered.canon(W / 2 + 0.25));
+        assertEquals(W / 2 - 0.75, centered.canon(-W / 2 - 0.75));
+        long key = centered.canonChunkKey(ChunkPos.asLong(N / 2 + 3, -N / 2 - 1));
+        assertEquals(-N / 2 + 3, ChunkPos.getX(key));
+        assertEquals(N / 2 - 1, ChunkPos.getZ(key));
+        // Canonical position plus lap times the period gets back the original, as in the old window.
+        for (int x = -3 * W; x <= 3 * W; x += 997) {
+            assertEquals(x, centered.canonBlock(x) + centered.lap(x) * W);
+        }
+        // Nearest images do not depend on the window.
+        assertEquals(WRAP.nearestBlock(2, W - 3), centered.nearestBlock(2, W - 3));
+    }
+
+    @Test
+    void settingsRecordTheWindow(@TempDir Path dir) throws IOException {
+        Path file = dir.resolve(WorldWrapSettings.FILE_NAME);
+        WorldWrapSettings settings = new WorldWrapSettings(12288, true, false, true);
+        settings.write(file);
+        assertEquals(settings, WorldWrapSettings.read(file));
+        assertEquals(-768, new Wrap(settings.periodFor(Level.NETHER), settings.centered()).minBlock);
+        // Worlds recorded before the window could be centered keep [0, W).
+        Files.writeString(file, "{\"period\":12288,\"nether\":true,\"end\":false}");
+        assertEquals(new WorldWrapSettings(12288, true, false, false), WorldWrapSettings.read(file));
+    }
+
+    @Test
     void unwrappedIsTheIdentity() {
         BlockPos pos = new BlockPos(-5_000_000, 64, 7_000_000);
         assertSame(pos, Wrap.NONE.canon(pos));
@@ -112,11 +157,11 @@ class WrapTest {
 
     @Test
     void settingsGiveEachDimensionItsPeriod() {
-        WorldWrapSettings settings = new WorldWrapSettings(12288, true, false);
+        WorldWrapSettings settings = new WorldWrapSettings(12288, true, false, true);
         assertEquals(12288, settings.periodFor(Level.OVERWORLD));
         assertEquals(1536, settings.periodFor(Level.NETHER));
         assertEquals(0, settings.periodFor(Level.END));
         assertEquals(0, WorldWrapSettings.DISABLED.periodFor(Level.OVERWORLD));
-        assertThrows(IllegalArgumentException.class, () -> new WorldWrapSettings(1000, true, false));
+        assertThrows(IllegalArgumentException.class, () -> new WorldWrapSettings(1000, true, false, true));
     }
 }

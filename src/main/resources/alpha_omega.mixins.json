@@ -32,6 +32,7 @@
     "server.NaturalSpawnerMixin",
     "server.NetherPortalBlockMixin",
     "server.PlayerChunkSenderMixin",
+    "server.PlayerListLoginMixin",
     "server.PlayerListMixin",
     "server.PoiManagerMixin",
     "server.PoiRecordAccessor",

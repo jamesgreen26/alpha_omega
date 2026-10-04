@@ -107,7 +107,7 @@ public class FrameGameTests {
     @GameTest(template = TEMPLATE)
     public static void mapCentersAreCanonical(GameTestHelper helper) {
         MapItemSavedData map = MapItemSavedData.createFresh(-5000.0, 3.0 * period() + 20.0, (byte) 0, false, false, Level.OVERWORLD);
-        helper.assertTrue(map.centerX >= 0 && map.centerX < period() && map.centerZ >= 0 && map.centerZ < period(),
+        helper.assertTrue(wrap().canonBlock(map.centerX) == map.centerX && wrap().canonBlock(map.centerZ) == map.centerZ,
             "map center not canonical: " + map.centerX + ", " + map.centerZ);
         helper.succeed();
     }

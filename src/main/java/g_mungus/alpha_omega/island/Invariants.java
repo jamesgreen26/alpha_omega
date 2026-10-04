@@ -1,7 +1,6 @@
 package g_mungus.alpha_omega.island;
 
 import g_mungus.alpha_omega.wrap.Wrap;
-import g_mungus.alpha_omega.wrap.WrapMath;
 import it.unimi.dsi.fastutil.longs.LongIterator;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,8 +34,8 @@ public final class Invariants {
                 long laps = graph.laps(x, z);
                 for (int dx = -1; dx <= 1; dx++) {
                     for (int dz = -1; dz <= 1; dz++) {
-                        int nx = WrapMath.canon(x + dx, n);
-                        int nz = WrapMath.canon(z + dz, n);
+                        int nx = graph.canon(x + dx);
+                        int nz = graph.canon(z + dz);
                         if ((dx == 0 && dz == 0) || graph.severed(x, z, dx, dz) || graph.islandOf(nx, nz) != island.id) continue;
                         long neighbor = graph.laps(nx, nz);
                         if (x + IslandGraph.lapX(laps) * n + dx != nx + IslandGraph.lapX(neighbor) * n
@@ -54,8 +53,8 @@ public final class Invariants {
             int chunkZ = entity.chunkPosition().z;
             long laps = graph.laps(wrap.canonChunk(chunkX), wrap.canonChunk(chunkZ));
             if (laps == IslandGraph.ABSENT) continue;
-            if (Math.floorDiv(chunkX, n) != IslandGraph.lapX(laps) || Math.floorDiv(chunkZ, n) != IslandGraph.lapZ(laps)) {
-                violations.add("I4: " + entity + " is in lap " + Math.floorDiv(chunkX, n) + "," + Math.floorDiv(chunkZ, n)
+            if (wrap.chunkLap(chunkX) != IslandGraph.lapX(laps) || wrap.chunkLap(chunkZ) != IslandGraph.lapZ(laps)) {
+                violations.add("I4: " + entity + " is in lap " + wrap.chunkLap(chunkX) + "," + wrap.chunkLap(chunkZ)
                     + " but its chunk's island is in lap " + IslandGraph.lapX(laps) + "," + IslandGraph.lapZ(laps));
             }
         }

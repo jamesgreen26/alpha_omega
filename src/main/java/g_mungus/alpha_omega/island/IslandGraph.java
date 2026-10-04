@@ -22,7 +22,7 @@ import java.util.function.LongPredicate;
 /**
  * Islands and lift tables (design doc §5), independent of Minecraft so it can be property tested.
  * <p>
- * Chunks are canonical coordinates in {@code [0, n)}. Every present chunk belongs to exactly one island (I1) and
+ * Chunks are canonical coordinates in {@code [origin, origin + n)}. Every present chunk belongs to exactly one island (I1) and
  * has a lap pair; its lifted position is {@code canonical + lap * n}. Adjacent chunks of one island are lifted
  * contiguously (I2). Islands that touch with disagreeing frames are kept apart (see {@link #disagreements()});
  * islands about to wrap all the way around are reported as {@link #loops()}.
@@ -81,6 +81,8 @@ public final class IslandGraph {
     }
 
     private final int n;
+    /** First canonical chunk coordinate on each axis. */
+    private final int origin;
     /** canonical chunk key -> (islandId:32 | lapX:16 | lapZ:16) */
     private final Long2LongOpenHashMap info = new Long2LongOpenHashMap();
     private final Int2ObjectOpenHashMap<Island> islands = new Int2ObjectOpenHashMap<>();
@@ -93,7 +95,12 @@ public final class IslandGraph {
     private boolean disagreementPending;
 
     public IslandGraph(int n) {
+        this(n, 0);
+    }
+
+    public IslandGraph(int n, int origin) {
         this.n = n;
+        this.origin = origin;
         this.info.defaultReturnValue(ABSENT);
     }
 
@@ -145,6 +152,16 @@ public final class IslandGraph {
         return this.n;
     }
 
+    /** First canonical chunk coordinate on each axis. */
+    public int origin() {
+        return this.origin;
+    }
+
+    /** Folds a chunk coordinate into the canonical window. */
+    public int canon(int x) {
+        return WrapMath.canon(x, this.n, this.origin);
+    }
+
     /** The chunk's lap pair (see {@link #lapX(long)}), or {@link #ABSENT}. */
     public long laps(int x, int z) {
         long info = this.info.get(key(x, z));
@@ -185,8 +202,8 @@ public final class IslandGraph {
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dz = -1; dz <= 1; dz++) {
                     if (this.severed(x, z, dx, dz)) continue;
-                    int nx = WrapMath.canon(x + dx, this.n);
-                    int nz = WrapMath.canon(z + dz, this.n);
+                    int nx = this.canon(x + dx);
+                    int nz = this.canon(z + dz);
                     long neighbor = this.info.get(key(nx, nz));
                     if (neighbor == ABSENT || infoId(neighbor) == infoId(info)) continue;
                     long pair = key(Math.min(infoId(neighbor), infoId(info)), Math.max(infoId(neighbor), infoId(info)));
@@ -226,17 +243,17 @@ public final class IslandGraph {
     }
 
     public void addCut(boolean xAxis, int boundary) {
-        (xAxis ? this.cutsX : this.cutsZ).add(WrapMath.canon(boundary, this.n));
+        (xAxis ? this.cutsX : this.cutsZ).add(this.canon(boundary));
     }
 
     public void removeCut(boolean xAxis, int boundary) {
-        (xAxis ? this.cutsX : this.cutsZ).remove(WrapMath.canon(boundary, this.n));
+        (xAxis ? this.cutsX : this.cutsZ).remove(this.canon(boundary));
     }
 
     /** Whether the step from chunk {@code (x, z)} by {@code (dx, dz)} crosses a cut. */
     public boolean severed(int x, int z, int dx, int dz) {
-        if (dx != 0 && this.cutsX.contains(WrapMath.canon(dx > 0 ? x + 1 : x, this.n))) return true;
-        return dz != 0 && this.cutsZ.contains(WrapMath.canon(dz > 0 ? z + 1 : z, this.n));
+        if (dx != 0 && this.cutsX.contains(this.canon(dx > 0 ? x + 1 : x))) return true;
+        return dz != 0 && this.cutsZ.contains(this.canon(dz > 0 ? z + 1 : z));
     }
 
     /**
@@ -269,8 +286,8 @@ public final class IslandGraph {
                 for (int dx = -1; dx <= 1; dx++) {
                     for (int dz = -1; dz <= 1; dz++) {
                         if ((dx == 0 && dz == 0) || this.severed(x, z, dx, dz)) continue;
-                        int nx = WrapMath.canon(x + dx, this.n);
-                        int nz = WrapMath.canon(z + dz, this.n);
+                        int nx = this.canon(x + dx);
+                        int nz = this.canon(z + dz);
                         long neighbor = key(nx, nz);
                         if (!component.contains(neighbor)) continue;
                         long implied = packLaps(Math.floorDiv(x + lapX(own) * this.n + dx - nx, this.n), Math.floorDiv(z + lapZ(own) * this.n + dz - nz, this.n));
@@ -313,8 +330,8 @@ public final class IslandGraph {
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dz = -1; dz <= 1; dz++) {
                     if ((dx == 0 && dz == 0) || this.severed(x, z, dx, dz)) continue;
-                    int nx = WrapMath.canon(x + dx, this.n);
-                    int nz = WrapMath.canon(z + dz, this.n);
+                    int nx = this.canon(x + dx);
+                    int nz = this.canon(z + dz);
                     long neighbor = this.info.get(key(nx, nz));
                     if (neighbor == ABSENT || infoId(neighbor) != id) continue;
                     if (x + infoLapX(info) * this.n + dx != nx + infoLapX(neighbor) * this.n) return true;
@@ -330,10 +347,10 @@ public final class IslandGraph {
         for (long key : this.info.keySet()) {
             int x = keyX(key);
             int z = keyZ(key);
-            if (xAxis && x == WrapMath.canon(boundary - 1, this.n)) {
-                for (int dz = -1; dz <= 1; dz++) if (this.info.containsKey(key(WrapMath.canon(x + 1, this.n), WrapMath.canon(z + dz, this.n)))) return true;
-            } else if (!xAxis && z == WrapMath.canon(boundary - 1, this.n)) {
-                for (int dx = -1; dx <= 1; dx++) if (this.info.containsKey(key(WrapMath.canon(x + dx, this.n), WrapMath.canon(z + 1, this.n)))) return true;
+            if (xAxis && x == this.canon(boundary - 1)) {
+                for (int dz = -1; dz <= 1; dz++) if (this.info.containsKey(key(this.canon(x + 1), this.canon(z + dz)))) return true;
+            } else if (!xAxis && z == this.canon(boundary - 1)) {
+                for (int dx = -1; dx <= 1; dx++) if (this.info.containsKey(key(this.canon(x + dx), this.canon(z + 1)))) return true;
             }
         }
         return false;
@@ -350,8 +367,8 @@ public final class IslandGraph {
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
                 if ((dx == 0 && dz == 0) || this.severed(x, z, dx, dz)) continue;
-                int nx = WrapMath.canon(x + dx, this.n);
-                int nz = WrapMath.canon(z + dz, this.n);
+                int nx = this.canon(x + dx);
+                int nz = this.canon(z + dz);
                 long neighbor = this.info.get(key(nx, nz));
                 if (neighbor == ABSENT) continue;
                 // The neighbor is lifted to (nx, nz) + lap * n, and the new chunk sits at (-dx, -dz) from it.
@@ -518,8 +535,8 @@ public final class IslandGraph {
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
                 if (this.severed(x, z, dx, dz)) continue;
-                int nx = WrapMath.canon(x + dx, this.n);
-                int nz = WrapMath.canon(z + dz, this.n);
+                int nx = this.canon(x + dx);
+                int nz = this.canon(z + dz);
                 long neighbor = this.info.get(key(nx, nz));
                 if (neighbor == ABSENT || infoId(neighbor) != island) continue;
                 if (x + infoLapX(info) * this.n + dx != nx + infoLapX(neighbor) * this.n) return false;
@@ -580,7 +597,7 @@ public final class IslandGraph {
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dz = -1; dz <= 1; dz++) {
                     if ((dx == 0 && dz == 0) || this.severed(x, z, dx, dz)) continue;
-                    long neighbor = key(WrapMath.canon(x + dx, this.n), WrapMath.canon(z + dz, this.n));
+                    long neighbor = key(this.canon(x + dx), this.canon(z + dz));
                     if (allowed.test(neighbor) && component.add(neighbor)) queue.enqueue(neighbor);
                 }
             }
