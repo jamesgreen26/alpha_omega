@@ -4,11 +4,13 @@ import g_mungus.alpha_omega.AlphaOmegaMod;
 import g_mungus.alpha_omega.frame.Frames;
 import g_mungus.alpha_omega.wrap.Wrap;
 import g_mungus.alpha_omega.wrap.Wraps;
+import io.netty.channel.embedded.EmbeddedChannel;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.protocol.game.ClientboundBlockEventPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
@@ -208,5 +210,29 @@ public class FrameGameTests {
             helper.assertTrue(delay < 20, "spawner did not notice the player (delay still " + delay + ")");
             helper.succeed();
         });
+    }
+
+    /**
+     * Positional broadcasts (block events, sounds, level events) reach a player near another image of the source.
+     * Under Sable this goes through its {@code broadcast} overwrite and the companion bridge.
+     */
+    @GameTest(template = TEMPLATE, batch = PLAYER_BATCH)
+    public static void broadcastsReachPlayersAcrossFrames(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos source = helper.absolutePos(new BlockPos(3, 1, 3));
+        BlockPos stand = source.offset(2 + lapX(), 0, lapZ());
+        ServerPlayer player = TestPlayers.mock(helper);
+        player.moveTo(stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5);
+        EmbeddedChannel channel = (EmbeddedChannel) player.connection.getConnection().channel();
+        while (channel.readOutbound() != null) {
+        }
+
+        ClientboundBlockEventPacket packet = new ClientboundBlockEventPacket(source, Blocks.NOTE_BLOCK, 0, 0);
+        level.getServer().getPlayerList().broadcast(null, source.getX(), source.getY(), source.getZ(), 16.0, level.dimension(), packet);
+        boolean received = false;
+        for (Object sent; (sent = channel.readOutbound()) != null; ) received |= sent == packet;
+        level.getServer().getPlayerList().remove(player);
+        helper.assertTrue(received, "broadcast at another image of the player's position did not reach them");
+        helper.succeed();
     }
 }

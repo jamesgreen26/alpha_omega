@@ -15,17 +15,18 @@ import org.spongepowered.asm.mixin.injection.At;
 /**
  * R5 for Sable: its sub-level-aware distances measure between the images nearest each other, once both points are
  * projected out of their plots. Sable routes broadcasts, entity distances, explosions, particles and vibrations
- * through these, so this one bridge covers its overwrites of those vanilla methods.
+ * through these, so this one bridge covers its overwrites of those vanilla methods. Each has several overloads
+ * ({@code broadcast} uses the {@code Position, double, double, double} one), so the selectors match them all.
  */
 @Mixin(value = ActiveSableCompanion.class, remap = false)
 abstract class ActiveSableCompanionMixin {
 
-    @WrapOperation(method = "distanceSquaredWithSubLevels", at = @At(value = "INVOKE", target = "Lorg/joml/Vector3dc;distanceSquared(Lorg/joml/Vector3dc;)D"))
+    @WrapOperation(method = "distanceSquaredWithSubLevels*", at = @At(value = "INVOKE", target = "Lorg/joml/Vector3dc;distanceSquared(Lorg/joml/Vector3dc;)D"))
     private double alpha_omega$wrappedDistanceSquared(Vector3dc a, Vector3dc b, Operation<Double> original, @Local(argsOnly = true) Level level) {
         return original.call(a, alpha_omega$nearest(level, b, a));
     }
 
-    @WrapOperation(method = "rectilinearDistanceWithSubLevels", at = @At(value = "INVOKE", target = "Ldev/ryanhcode/sable/ActiveSableCompanion;rectilinearDistance(Lorg/joml/Vector3dc;Lorg/joml/Vector3dc;)D"))
+    @WrapOperation(method = "rectilinearDistanceWithSubLevels*", at = @At(value = "INVOKE", target = "Ldev/ryanhcode/sable/ActiveSableCompanion;rectilinearDistance(Lorg/joml/Vector3dc;Lorg/joml/Vector3dc;)D"))
     private double alpha_omega$wrappedRectilinear(Vector3dc a, Vector3dc b, Operation<Double> original, @Local(argsOnly = true) Level level) {
         return original.call(a, alpha_omega$nearest(level, b, a));
     }
