@@ -202,6 +202,15 @@ public final class OrbifoldGeometry {
         return copies;
     }
 
+    /**
+     * The motion taking cell {@code a} to cell {@code b} when both are copies of the same source (or one is the source):
+     * {@code frame(a)} then {@code frame(b)⁻¹}. The identity when {@code a = b}; between two band copies it goes through
+     * their source. Exact on chunks too, since every frame is chunk-aligned.
+     */
+    public Motion between(int ax, int az, int bx, int bz) {
+        return this.frame(ax, az).then(this.frame(bx, bz).inverse());
+    }
+
     // ---- Chunks ----
 
     /** How many chunks a chunk is past the tile, Chebyshev: 0 in the tile. */

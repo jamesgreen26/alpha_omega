@@ -266,6 +266,32 @@ class OrbifoldGeometryTest {
         }
     }
 
+    /** {@code between(a, b)} takes each copy of a cell to each other copy (and to its source), and back by its inverse. */
+    @Test
+    void betweenTakesCopyToCopy() {
+        for (OrbifoldGeometry g : all()) {
+            int[] checked = {0};
+            forEachEdgeTileCell(g, (x, z) -> {
+                List<int[]> cells = new ArrayList<>();
+                cells.add(new int[] {x, z});
+                for (OrbifoldGeometry.Cell copy : g.copies(x, z)) cells.add(new int[] {copy.x(), copy.z()});
+                for (int[] a : cells) {
+                    for (int[] b : cells) {
+                        Motion m = g.between(a[0], a[1], b[0], b[1]);
+                        assertEquals(b[0], m.cellX(a[0]), "between x");
+                        assertEquals(b[1], m.cellZ(a[1]), "between z");
+                        assertEquals(m.inverse(), g.between(b[0], b[1], a[0], a[1]));
+                        if (a == b) assertTrue(m.isIdentity());
+                        assertEquals(m, g.between(a[0] & ~15, a[1] & ~15, b[0] & ~15, b[1] & ~15), "the same for the whole chunk");
+                        checked[0]++;
+                    }
+                }
+                return 0;
+            });
+            assertTrue(checked[0] > 0);
+        }
+    }
+
     /** Near N the band past the north fold holds the turned cells just south of N: the visible "appears twice". */
     @Test
     void theBandNearNHoldsCellsBesideIt() {
