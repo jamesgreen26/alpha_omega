@@ -154,6 +154,14 @@ public class OrbifoldChunkGenerator extends NoiseBasedChunkGenerator {
         return super.fillFromNoise(blender, random, structures, chunk);
     }
 
+    /**
+     * Vanilla's noise fill for any chunk, whatever its region: for measuring what a band chunk would hold if it were
+     * generated, against the source it is filled from ({@code TerrainGameTests}).
+     */
+    public CompletableFuture<ChunkAccess> fillAnyFromNoise(Blender blender, RandomState random, StructureManager structures, ChunkAccess chunk) {
+        return super.fillFromNoise(blender, random, structures, chunk);
+    }
+
     @Override
     public void buildSurface(WorldGenRegion region, StructureManager structures, RandomState random, ChunkAccess chunk) {
         if (this.generates(chunk.getPos())) super.buildSurface(region, structures, random, chunk);
