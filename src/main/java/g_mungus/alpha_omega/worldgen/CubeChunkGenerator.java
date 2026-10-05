@@ -10,9 +10,13 @@ import g_mungus.alpha_omega.config.AlphaOmegaConfig;
 import g_mungus.alpha_omega.cube.CubeFace;
 import g_mungus.alpha_omega.cube.CubeGeometry;
 import g_mungus.alpha_omega.cube.CubeSettings;
+import g_mungus.alpha_omega.mixin.worldgen.NoiseBasedChunkGeneratorAccessor;
+import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
+import net.minecraft.Util;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
@@ -20,6 +24,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.WorldGenRegion;
 import net.minecraft.tags.FluidTags;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.LevelHeightAccessor;
 import net.minecraft.world.level.StructureManager;
@@ -36,6 +41,7 @@ import net.minecraft.world.level.levelgen.GenerationStep;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
+import net.minecraft.world.level.levelgen.NoiseSettings;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.blending.Blender;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -110,10 +116,57 @@ public class CubeChunkGenerator extends NoiseBasedChunkGenerator {
         return this.geometry(chunk).inFootprint(pos.x, pos.z);
     }
 
+    /**
+     * Vanilla's noise settings for a chunk, with the bottom raised to its noise floor: the section holding its lowest
+     * barrier cell. Every cell below that is another face's, so it becomes filler whatever the noise says; in the
+     * overhang that is most of the column. The floor is a multiple of the cell height, so the noise above it is
+     * vanilla's to the block.
+     */
+    public NoiseGeneratorSettings noiseSettings(ChunkAccess chunk) {
+        NoiseGeneratorSettings settings = this.generatorSettings().value();
+        if (!this.inFootprint(chunk)) return settings;
+        NoiseSettings noise = settings.noiseSettings().clampToHeightAccessor(chunk);
+        int top = noise.minY() + noise.height();
+        int floor = Math.min(Math.floorDiv(this.lowestBarrier(chunk), 16) * 16, top - 16);
+        if (floor <= noise.minY()) return settings;
+        return new NoiseGeneratorSettings(new NoiseSettings(floor, top - floor, noise.noiseSizeHorizontal(), noise.noiseSizeVertical()),
+            settings.defaultBlock(), settings.defaultFluid(), settings.noiseRouter(), settings.surfaceRule(), settings.spawnTarget(),
+            settings.seaLevel(), settings.disableMobGeneration(), settings.aquifersEnabled(), settings.oreVeinsEnabled(),
+            settings.useLegacyRandomSource());
+    }
+
+    /** The y of the lowest barrier cell among a chunk's columns. */
+    private int lowestBarrier(ChunkAccess chunk) {
+        CubeGeometry geometry = this.geometry(chunk);
+        ChunkPos pos = chunk.getPos();
+        CubeFace face = geometry.faceAtChunk(pos.x, pos.z);
+        int lowest = Integer.MAX_VALUE;
+        for (int dx = 0; dx < 16; dx++) {
+            for (int dz = 0; dz < 16; dz++) lowest = Math.min(lowest, geometry.barrierY(face, pos.getMinBlockX() + dx, pos.getMinBlockZ() + dz));
+        }
+        return lowest;
+    }
+
+    /** Vanilla's fill, from the chunk's noise floor up ({@link #noiseSettings}); then the barrier pass. */
     @Override
     public CompletableFuture<ChunkAccess> fillFromNoise(Blender blender, RandomState random, StructureManager structures, ChunkAccess chunk) {
         if (!this.inFootprint(chunk)) return CompletableFuture.completedFuture(chunk);
-        return super.fillFromNoise(blender, random, structures, chunk).thenApply(filled -> {
+        NoiseSettings noise = this.noiseSettings(chunk).noiseSettings().clampToHeightAccessor(chunk.getHeightAccessorForGeneration());
+        int minCellY = Math.floorDiv(noise.minY(), noise.getCellHeight());
+        int cellCountY = Math.floorDiv(noise.height(), noise.getCellHeight());
+        return CompletableFuture.supplyAsync(Util.wrapThreadWithTaskName("wgen_fill_noise", () -> {
+            List<LevelChunkSection> sections = new ArrayList<>();
+            for (int i = chunk.getSectionIndex(cellCountY * noise.getCellHeight() - 1 + noise.minY()); i >= chunk.getSectionIndex(noise.minY()); i--) {
+                LevelChunkSection section = chunk.getSection(i);
+                section.acquire();
+                sections.add(section);
+            }
+            try {
+                return ((NoiseBasedChunkGeneratorAccessor) this).alpha_omega$doFill(blender, structures, random, chunk, minCellY, cellCountY);
+            } finally {
+                sections.forEach(LevelChunkSection::release);
+            }
+        }), Util.backgroundExecutor()).thenApply(filled -> {
             try {
                 return this.carveFaces(filled, random);
             } catch (RuntimeException e) {
@@ -167,6 +220,11 @@ public class CubeChunkGenerator extends NoiseBasedChunkGenerator {
     /** Barrier cells above this height are always edge air: no terrain reaches them. */
     private static final int SKY = 300;
 
+    /** Terrain densities for the barrier pass of one chunk ({@link Densities}). */
+    public Densities densities(RandomState random) {
+        return new Densities(random, this.generatorSettings().value().noiseSettings());
+    }
+
     /** Puts each column's barrier cell in place and fills the rest of the column below it. */
     private ChunkAccess carveFaces(ChunkAccess chunk, RandomState random) {
         CubeGeometry geometry = this.geometry(chunk);
@@ -177,11 +235,12 @@ public class CubeChunkGenerator extends NoiseBasedChunkGenerator {
         Heightmap oceanFloor = chunk.getOrCreateHeightmapUnprimed(Heightmap.Types.OCEAN_FLOOR_WG);
         Heightmap surface = chunk.getOrCreateHeightmapUnprimed(Heightmap.Types.WORLD_SURFACE_WG);
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        Densities densities = this.densities(random);
         for (int dx = 0; dx < 16; dx++) {
             for (int dz = 0; dz < 16; dz++) {
                 int x = pos.getMinBlockX() + dx, z = pos.getMinBlockZ() + dz;
                 int barrierY = geometry.barrierY(face, x, z);
-                this.blendTowardNeighbour(geometry, random, chunk, face, x, barrierY, z, chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, dx, dz));
+                this.blendTowardNeighbour(geometry, densities, chunk, face, x, barrierY, z, chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, dx, dz));
                 int fillTop = Math.min(barrierY, geometry.maxY);
                 for (int y = geometry.minY; y < fillTop; y++) {
                     LevelChunkSection section = chunk.getSection(chunk.getSectionIndex(y));
@@ -193,7 +252,7 @@ public class CubeChunkGenerator extends NoiseBasedChunkGenerator {
                 }
                 if (barrierY >= geometry.minY && barrierY < geometry.maxY) {
                     cursor.set(x, barrierY, z);
-                    BlockState barrier = this.barrier(geometry, random, face, x, barrierY, z, chunk.getBlockState(cursor));
+                    BlockState barrier = this.barrier(geometry, densities, face, x, barrierY, z, chunk.getBlockState(cursor));
                     chunk.getSection(chunk.getSectionIndex(barrierY)).setBlockState(dx, barrierY & 15, dz, barrier, false);
                     oceanFloor.update(dx, barrierY, dz, barrier);
                     surface.update(dx, barrierY, dz, barrier);
@@ -217,7 +276,7 @@ public class CubeChunkGenerator extends NoiseBasedChunkGenerator {
      * face's own over the next {@link #FADE}. The barrier itself is decided by the same mean. Deep in the rock (where
      * the barrier is always bedrock) and high in the sky it is skipped.
      */
-    private void blendTowardNeighbour(CubeGeometry geometry, RandomState random, ChunkAccess chunk, CubeFace face, int x, int barrierY, int z, int ownTop) {
+    private void blendTowardNeighbour(CubeGeometry geometry, Densities densities, ChunkAccess chunk, CubeFace face, int x, int barrierY, int z, int ownTop) {
         if (barrierY < geometry.planeY - DEEP || barrierY >= geometry.maxY) return;
         CubeFace partner = geometry.barrierPartner(face, x, barrierY, z);
         if (partner == null) return;
@@ -235,7 +294,7 @@ public class CubeChunkGenerator extends NoiseBasedChunkGenerator {
             }
             int[] corner = geometry.cubeMinCorner(face, x, y, z);
             int[] there = geometry.transformCorner(face, partner, corner[0], corner[1], corner[2]);
-            double density = (1.0 - weight) * density(random, corner[0], corner[1], corner[2]) + weight * density(random, there[0], there[1], there[2]);
+            double density = (1.0 - weight) * densities.at(corner[0], corner[1], corner[2]) + weight * densities.at(there[0], there[1], there[2]);
             cursor.set(x, y, z);
             BlockState state = chunk.getBlockState(cursor);
             // Fluids too follow one rule on both faces: water below sea level, air above (vanilla's aquifers do not).
@@ -252,7 +311,7 @@ public class CubeChunkGenerator extends NoiseBasedChunkGenerator {
      * order, so they always agree. Deep in the rock it is always solid, high in the sky always open. Edge air is
      * waterlogged where this face has water there.
      */
-    private BlockState barrier(CubeGeometry geometry, RandomState random, CubeFace face, int x, int y, int z, BlockState terrain) {
+    private BlockState barrier(CubeGeometry geometry, Densities densities, CubeFace face, int x, int y, int z, BlockState terrain) {
         List<CubeFace> faces = geometry.barrierFaces(face, x, y, z);
         BlockState solid = CubeBlocks.EDGE_BEDROCK.get().defaultBlockState()
             .setValue(EdgeBedrockBlock.PRIMARY, faces.isEmpty() || faces.get(0) == face);
@@ -264,13 +323,50 @@ public class CubeChunkGenerator extends NoiseBasedChunkGenerator {
         double sum = 0.0;
         for (CubeFace copy : faces) {
             int[] there = geometry.transformCorner(face, copy, corner[0], corner[1], corner[2]);
-            sum += density(random, there[0], there[1], there[2]);
+            sum += densities.at(there[0], there[1], there[2]);
         }
         return sum / faces.size() > 0.0 ? solid : open;
     }
 
-    private static double density(RandomState random, int x, int y, int z) {
-        return random.router().finalDensity().compute(new DensityFunction.SinglePointContext(x, y, z));
+    /**
+     * Terrain density at block corners, for the barrier pass. The density function without vanilla's caches costs
+     * tens of microseconds a point, too much for every cell of the band, so like vanilla's own fill it is sampled at
+     * the corners of the noise cells (on the fill's grid) and interpolated between them, each corner once per chunk.
+     * A value depends only on the storage point, so every face asking for the same point gets the same answer.
+     */
+    public static final class Densities {
+
+        private final DensityFunction density;
+        private final int cellWidth;
+        private final int cellHeight;
+        private final Long2DoubleOpenHashMap corners = new Long2DoubleOpenHashMap();
+
+        public Densities(RandomState random, NoiseSettings noise) {
+            this.density = random.router().finalDensity();
+            this.cellWidth = noise.getCellWidth();
+            this.cellHeight = noise.getCellHeight();
+            this.corners.defaultReturnValue(Double.NaN);
+        }
+
+        public double at(int x, int y, int z) {
+            int x0 = Math.floorDiv(x, this.cellWidth) * this.cellWidth;
+            int y0 = Math.floorDiv(y, this.cellHeight) * this.cellHeight;
+            int z0 = Math.floorDiv(z, this.cellWidth) * this.cellWidth;
+            int x1 = x0 + this.cellWidth, y1 = y0 + this.cellHeight, z1 = z0 + this.cellWidth;
+            return Mth.lerp3((double) (x - x0) / this.cellWidth, (double) (y - y0) / this.cellHeight, (double) (z - z0) / this.cellWidth,
+                this.corner(x0, y0, z0), this.corner(x1, y0, z0), this.corner(x0, y1, z0), this.corner(x1, y1, z0),
+                this.corner(x0, y0, z1), this.corner(x1, y0, z1), this.corner(x0, y1, z1), this.corner(x1, y1, z1));
+        }
+
+        private double corner(int x, int y, int z) {
+            long key = BlockPos.asLong(x, y, z);
+            double value = this.corners.get(key);
+            if (Double.isNaN(value)) {
+                value = this.density.compute(new DensityFunction.SinglePointContext(x, y, z));
+                this.corners.put(key, value);
+            }
+            return value;
+        }
     }
 
     @Override

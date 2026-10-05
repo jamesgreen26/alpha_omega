@@ -100,14 +100,16 @@ public class TerrainGameTests {
 
     /**
      * Next to the barrier both faces build one terrain: every cell of the shared band is solid exactly where the mean
-     * of the two faces' densities at its smallest cube corner is positive, whichever face stores it. Blocks placed by
-     * features (trees, ice) are allowed to differ.
+     * of the two faces' densities at its smallest cube corner is positive, whichever face stores it (the densities the
+     * barrier pass uses, interpolated between noise cell corners). Blocks placed by features (trees, ice) are allowed
+     * to differ.
      */
     @GameTest(template = TEMPLATE, timeoutTicks = 1200)
     public static void sharedBandIsOneTerrain(GameTestHelper helper) {
         CubeGeometry geometry = geometry(helper);
         ServerLevel level = helper.getLevel();
-        var router = level.getChunkSource().randomState().router();
+        var densities = ((g_mungus.alpha_omega.worldgen.CubeChunkGenerator) level.getChunkSource().getGenerator())
+            .densities(level.getChunkSource().randomState());
         int checked = 0, solid = 0;
         for (CubeFace[] edge : edges()) {
             for (CubeFace[] pair : new CubeFace[][] {edge, {edge[1], edge[0]}}) {
@@ -125,8 +127,7 @@ public class TerrainGameTests {
                                 || state.is(net.minecraft.tags.BlockTags.ICE) || state.is(Blocks.SNOW_BLOCK) || state.is(Blocks.POWDER_SNOW)) continue;
                             int[] corner = geometry.cubeMinCorner(a, pos.getX(), pos.getY(), pos.getZ());
                             int[] there = geometry.transformCorner(a, b, corner[0], corner[1], corner[2]);
-                            double mean = 0.5 * router.finalDensity().compute(new net.minecraft.world.level.levelgen.DensityFunction.SinglePointContext(corner[0], corner[1], corner[2]))
-                                + 0.5 * router.finalDensity().compute(new net.minecraft.world.level.levelgen.DensityFunction.SinglePointContext(there[0], there[1], there[2]));
+                            double mean = 0.5 * densities.at(corner[0], corner[1], corner[2]) + 0.5 * densities.at(there[0], there[1], there[2]);
                             boolean isSolid = !state.isAir() && state.getFluidState().isEmpty() && state.blocksMotion();
                             boolean plant = !state.isAir() && state.getFluidState().isEmpty() && !state.blocksMotion();
                             if (plant) continue;
