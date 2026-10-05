@@ -46,4 +46,11 @@ abstract class GameTestServerMixin {
         if (geometry == null) return random;
         return new BlockPos(geometry.centerX(CubeFace.UP) - 64, 100, geometry.centerZ() - 64);
     }
+
+    /** Only the tests {@link g_mungus.alpha_omega.gametest.GameTestFilter} lets through. */
+    @org.spongepowered.asm.mixin.injection.ModifyVariable(method = "create", at = @At("HEAD"), argsOnly = true)
+    private static java.util.Collection<net.minecraft.gametest.framework.TestFunction> alpha_omega$filter(
+        java.util.Collection<net.minecraft.gametest.framework.TestFunction> functions) {
+        return functions.stream().filter(g_mungus.alpha_omega.gametest.GameTestFilter::keep).toList();
+    }
 }

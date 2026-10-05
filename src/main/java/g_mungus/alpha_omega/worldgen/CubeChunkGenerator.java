@@ -5,10 +5,12 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import g_mungus.alpha_omega.AlphaOmegaMod;
 import g_mungus.alpha_omega.block.CubeBlocks;
 import g_mungus.alpha_omega.block.EdgeAirBlock;
+import g_mungus.alpha_omega.block.EdgeBedrockBlock;
 import g_mungus.alpha_omega.config.AlphaOmegaConfig;
 import g_mungus.alpha_omega.cube.CubeFace;
 import g_mungus.alpha_omega.cube.CubeGeometry;
 import g_mungus.alpha_omega.cube.CubeSettings;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.core.BlockPos;
@@ -111,7 +113,15 @@ public class CubeChunkGenerator extends NoiseBasedChunkGenerator {
     @Override
     public CompletableFuture<ChunkAccess> fillFromNoise(Blender blender, RandomState random, StructureManager structures, ChunkAccess chunk) {
         if (!this.inFootprint(chunk)) return CompletableFuture.completedFuture(chunk);
-        return super.fillFromNoise(blender, random, structures, chunk).thenApply(filled -> this.carveFaces(filled, random));
+        return super.fillFromNoise(blender, random, structures, chunk).thenApply(filled -> {
+            try {
+                return this.carveFaces(filled, random);
+            } catch (RuntimeException e) {
+                // Failures inside a generation future are otherwise silent: the chunk just never finishes.
+                AlphaOmegaMod.LOGGER.error("Placing the barrier in chunk {} failed", filled.getPos(), e);
+                throw e;
+            }
+        });
     }
 
     @Override
@@ -122,7 +132,29 @@ public class CubeChunkGenerator extends NoiseBasedChunkGenerator {
     @Override
     public void applyCarvers(WorldGenRegion region, long seed, RandomState random, BiomeManager biomes, StructureManager structures,
                              ChunkAccess chunk, GenerationStep.Carving step) {
-        if (this.inFootprint(chunk)) super.applyCarvers(region, seed, random, biomes, structures, chunk, step);
+        if (!this.inFootprint(chunk)) return;
+        // Caves are cut by each face on its own: keep them out of the shared band, so the terrain there stays one shape.
+        CARVING.set(this.geometry(chunk));
+        try {
+            super.applyCarvers(region, seed, random, biomes, structures, chunk, step);
+        } finally {
+            CARVING.remove();
+        }
+    }
+
+    /** While carvers run on this thread, the geometry of the level they carve. */
+    private static final ThreadLocal<CubeGeometry> CARVING = new ThreadLocal<>();
+
+    /** Whether a carver may write a cell: not inside the shared band next to the barrier. */
+    public static boolean carverMayWrite(BlockPos pos) {
+        CubeGeometry geometry = CARVING.get();
+        if (geometry == null) return true;
+        CubeFace face = geometry.faceAt(pos.getX(), pos.getZ());
+        if (face == null) return true;
+        int barrierY = geometry.barrierY(face, pos.getX(), pos.getZ());
+        if (barrierY < geometry.planeY - DEEP || geometry.barrierPartner(face, pos.getX(), barrierY, pos.getZ()) == null) return true;
+        int k = pos.getY() - barrierY;
+        return k > SHARED + FADE;
     }
 
     @Override
@@ -149,6 +181,7 @@ public class CubeChunkGenerator extends NoiseBasedChunkGenerator {
             for (int dz = 0; dz < 16; dz++) {
                 int x = pos.getMinBlockX() + dx, z = pos.getMinBlockZ() + dz;
                 int barrierY = geometry.barrierY(face, x, z);
+                this.blendTowardNeighbour(geometry, random, chunk, face, x, barrierY, z, chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, dx, dz));
                 int fillTop = Math.min(barrierY, geometry.maxY);
                 for (int y = geometry.minY; y < fillTop; y++) {
                     LevelChunkSection section = chunk.getSection(chunk.getSectionIndex(y));
@@ -170,21 +203,70 @@ public class CubeChunkGenerator extends NoiseBasedChunkGenerator {
         return chunk;
     }
 
+    /** Cells of a column within this many of its barrier cell share one terrain with the neighbouring face. */
+    private static final int SHARED = 8;
+    /** Over this many cells beyond that, the terrain fades back to the face's own. */
+    private static final int FADE = 8;
+    /** The band is skipped this far above the column's own terrain: open sky on both sides. */
+    private static final int BAND_SLACK = 32;
+
     /**
-     * What a barrier cell becomes. Both faces store it, so both must decide alike: it is solid (bedrock) where the
-     * mean of the two faces' terrain densities there is, and open (edge air) elsewhere. Each face evaluates the same
-     * two densities, so they always agree. Edge air is waterlogged where this face has water there.
+     * Near the barrier, both faces build the same terrain (design §4.3): within {@link #SHARED} cells of it the
+     * density is the mean of the two faces' densities at the same physical point (the cell's corner with the smallest
+     * cube coordinates), which is one function of position whichever face evaluates it, and it fades back to the
+     * face's own over the next {@link #FADE}. The barrier itself is decided by the same mean. Deep in the rock (where
+     * the barrier is always bedrock) and high in the sky it is skipped.
+     */
+    private void blendTowardNeighbour(CubeGeometry geometry, RandomState random, ChunkAccess chunk, CubeFace face, int x, int barrierY, int z, int ownTop) {
+        if (barrierY < geometry.planeY - DEEP || barrierY >= geometry.maxY) return;
+        CubeFace partner = geometry.barrierPartner(face, x, barrierY, z);
+        if (partner == null) return;
+        BlockState stone = this.generatorSettings().value().defaultBlock();
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        for (int k = 1; k <= SHARED + FADE; k++) {
+            int y = barrierY + k;
+            if (y >= geometry.maxY || y > SKY || y > ownTop + BAND_SLACK) break;
+            double weight;
+            if (k <= SHARED) {
+                weight = 0.5;
+            } else {
+                double t = 1.0 - (k - SHARED) / (FADE + 1.0);
+                weight = 0.5 * t * t * (3.0 - 2.0 * t);
+            }
+            int[] corner = geometry.cubeMinCorner(face, x, y, z);
+            int[] there = geometry.transformCorner(face, partner, corner[0], corner[1], corner[2]);
+            double density = (1.0 - weight) * density(random, corner[0], corner[1], corner[2]) + weight * density(random, there[0], there[1], there[2]);
+            cursor.set(x, y, z);
+            BlockState state = chunk.getBlockState(cursor);
+            // Fluids too follow one rule on both faces: water below sea level, air above (vanilla's aquifers do not).
+            BlockState wanted = density > 0.0 ? (state.isAir() || !state.getFluidState().isEmpty() ? stone : state)
+                : y < this.getSeaLevel() ? Blocks.WATER.defaultBlockState() : Blocks.AIR.defaultBlockState();
+            if (wanted != state) chunk.setBlockState(cursor, wanted, false);
+        }
+    }
+
+    /**
+     * What a barrier cell becomes. Every face storing it (two, or three where faces meet at a corner) must decide
+     * alike: it is solid (edge bedrock) where the mean of their terrain densities at the cell's corner with the
+     * smallest cube coordinates is, and open (edge air) elsewhere. Each copy sums the same densities in the same
+     * order, so they always agree. Deep in the rock it is always solid, high in the sky always open. Edge air is
+     * waterlogged where this face has water there.
      */
     private BlockState barrier(CubeGeometry geometry, RandomState random, CubeFace face, int x, int y, int z, BlockState terrain) {
-        if (y < geometry.planeY - DEEP) return Blocks.BEDROCK.defaultBlockState();
+        List<CubeFace> faces = geometry.barrierFaces(face, x, y, z);
+        BlockState solid = CubeBlocks.EDGE_BEDROCK.get().defaultBlockState()
+            .setValue(EdgeBedrockBlock.PRIMARY, faces.isEmpty() || faces.get(0) == face);
+        if (y < geometry.planeY - DEEP) return solid;
         BlockState open = CubeBlocks.EDGE_AIR.get().defaultBlockState()
             .setValue(EdgeAirBlock.WATERLOGGED, terrain.getFluidState().is(FluidTags.WATER));
-        if (y > SKY) return open;
-        CubeFace partner = geometry.barrierPartner(face, x, y, z);
-        if (partner == null) return Blocks.BEDROCK.defaultBlockState();
-        int[] there = geometry.transformBlock(face, partner, x, y, z);
-        double density = 0.5 * density(random, x, y, z) + 0.5 * density(random, there[0], there[1], there[2]);
-        return density > 0.0 ? Blocks.BEDROCK.defaultBlockState() : open;
+        if (y > SKY || faces.isEmpty()) return open;
+        int[] corner = geometry.cubeMinCorner(face, x, y, z);
+        double sum = 0.0;
+        for (CubeFace copy : faces) {
+            int[] there = geometry.transformCorner(face, copy, corner[0], corner[1], corner[2]);
+            sum += density(random, there[0], there[1], there[2]);
+        }
+        return sum / faces.size() > 0.0 ? solid : open;
     }
 
     private static double density(RandomState random, int x, int y, int z) {

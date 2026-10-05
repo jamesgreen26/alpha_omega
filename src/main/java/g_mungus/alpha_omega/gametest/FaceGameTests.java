@@ -95,7 +95,7 @@ public class FaceGameTests {
                     for (int y = geometry.minY; y < geometry.maxY; y++) {
                         BlockState state = chunk.getBlockState(pos.set(x, y, z));
                         if (y == barrierY) {
-                            boolean isBedrock = state.is(Blocks.BEDROCK);
+                            boolean isBedrock = state.is(CubeBlocks.EDGE_BEDROCK.get());
                             helper.assertTrue(isBedrock || state.is(CubeBlocks.EDGE_AIR.get()), "barrier at " + pos.toShortString() + " is " + state);
                             if (isBedrock) bedrock++;
                             else edgeAir++;

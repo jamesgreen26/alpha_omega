@@ -1,5 +1,7 @@
 package g_mungus.alpha_omega.cube;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -135,6 +137,25 @@ public final class CubeGeometry {
     }
 
     /**
+     * Every face storing a barrier cell of {@code face}'s storage (two along an edge's diagonal, three along the lines
+     * from the centre through the cube's corners), in slot order; empty if the cell is not on {@code face}'s barrier.
+     */
+    public List<CubeFace> barrierFaces(CubeFace face, int x, int y, int z) {
+        long[] c = this.cubeCell2(face, x, y, z);
+        long own = Math.abs(c[face.axis]);
+        if (c[face.axis] * face.sign <= 0) return List.of();
+        List<CubeFace> faces = new ArrayList<>(3);
+        for (int axis = 0; axis < 3; axis++) {
+            long value = Math.abs(c[axis]);
+            if (value > own) return List.of();
+            if (value == own) faces.add(CubeFace.byNormal(axis, c[axis] > 0 ? 1 : -1));
+        }
+        if (faces.size() < 2) return List.of();
+        faces.sort(java.util.Comparator.comparingInt(CubeFace::slot));
+        return faces;
+    }
+
+    /**
      * The other face a barrier cell of {@code face}'s storage is shared with, or null where three faces meet there
      * (along the lines from the cube's centre through its corners) or the cell is not on {@code face}'s barrier.
      */
@@ -235,6 +256,26 @@ public final class CubeGeometry {
     /** {@code T}: the same cube point in another face's storage. */
     public double[] transform(CubeFace from, CubeFace to, double x, double y, double z) {
         return this.fromCube(to, this.toCube(from, x, y, z));
+    }
+
+    /**
+     * The corner of a block cell with the smallest cube coordinates, as a point of {@code face}'s storage. Every face
+     * storing (or neighbouring) the cell names the same physical point, so terrain sampled there agrees across faces.
+     */
+    public int[] cubeMinCorner(CubeFace face, int x, int y, int z) {
+        int[] offset = new int[3];
+        for (int j = 0; j < 3; j++) {
+            for (int i = 0; i < 3; i++) {
+                if (face.m(i, j) < 0) offset[j] = 1;
+            }
+        }
+        return new int[] {x + offset[0], y + offset[1], z + offset[2]};
+    }
+
+    /** {@link #transform} for a point on the block grid (a cell corner): exact. */
+    public int[] transformCorner(CubeFace from, CubeFace to, int x, int y, int z) {
+        double[] p = this.transform(from, to, x, y, z);
+        return new int[] {(int) Math.round(p[0]), (int) Math.round(p[1]), (int) Math.round(p[2])};
     }
 
     /** {@link #transform} for a block cell: exact. */

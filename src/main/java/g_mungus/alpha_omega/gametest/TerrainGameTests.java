@@ -2,6 +2,7 @@ package g_mungus.alpha_omega.gametest;
 
 import g_mungus.alpha_omega.AlphaOmegaMod;
 import g_mungus.alpha_omega.block.CubeBlocks;
+import g_mungus.alpha_omega.block.EdgeBedrockBlock;
 import g_mungus.alpha_omega.cube.Cube;
 import g_mungus.alpha_omega.cube.CubeFace;
 import g_mungus.alpha_omega.cube.CubeGeometry;
@@ -52,7 +53,7 @@ public class TerrainGameTests {
     }
 
     private static String kind(BlockState state) {
-        if (state.is(Blocks.BEDROCK)) return "bedrock";
+        if (state.is(CubeBlocks.EDGE_BEDROCK.get())) return "bedrock";
         if (state.is(CubeBlocks.EDGE_AIR.get())) return "edge air";
         return state.toString();
     }
@@ -84,7 +85,11 @@ public class TerrainGameTests {
                     helper.assertTrue(kind(mine).equals(kind(theirs)), a + "/" + b + " barrier at " + pos.toShortString() + " is " + kind(mine)
                         + " but " + kind(theirs) + " at " + other.toShortString());
                     checked++;
-                    if (mine.is(Blocks.BEDROCK)) solid++;
+                    if (mine.is(CubeBlocks.EDGE_BEDROCK.get())) {
+                        solid++;
+                        boolean primaryHere = mine.getValue(EdgeBedrockBlock.PRIMARY), primaryThere = theirs.getValue(EdgeBedrockBlock.PRIMARY);
+                        helper.assertTrue(primaryHere != primaryThere, a + "/" + b + " barrier at " + pos.toShortString() + " should have exactly one primary copy");
+                    }
                 }
             }
         }
@@ -93,48 +98,70 @@ public class TerrainGameTests {
         helper.succeed();
     }
 
-    /** Height of the ground (the top owned solid block, trees aside) in a column, above the face plane. */
-    private static int ground(ServerLevel level, CubeGeometry geometry, CubeFace face, BlockPos column) {
-        var chunk = level.getChunk(column);
-        BlockPos.MutableBlockPos pos = column.mutable();
-        for (int y = geometry.maxY - 1; y > geometry.minY; y--) {
-            pos.setY(y);
-            if (!geometry.isOwned(face, pos.getX(), y, pos.getZ())) break;
-            BlockState state = chunk.getBlockState(pos);
-            if (state.is(net.minecraft.tags.BlockTags.LEAVES) || state.is(net.minecraft.tags.BlockTags.LOGS)) continue;
-            if (!state.isAir() && state.getFluidState().isEmpty() && state.blocksMotion()) return y - geometry.planeY;
-        }
-        return Integer.MIN_VALUE;
-    }
-
+    /**
+     * Next to the barrier both faces build one terrain: every cell of the shared band is solid exactly where the mean
+     * of the two faces' densities at its smallest cube corner is positive, whichever face stores it. Blocks placed by
+     * features (trees, ice) are allowed to differ.
+     */
     @GameTest(template = TEMPLATE, timeoutTicks = 1200)
-    public static void groundMeetsAtTheRidge(GameTestHelper helper) {
+    public static void sharedBandIsOneTerrain(GameTestHelper helper) {
         CubeGeometry geometry = geometry(helper);
         ServerLevel level = helper.getLevel();
-        int samples = 0;
-        long totalDifference = 0;
-        int worst = 0;
-        StringBuilder report = new StringBuilder();
+        var router = level.getChunkSource().randomState().router();
+        int checked = 0, solid = 0;
         for (CubeFace[] edge : edges()) {
-            CubeFace a = edge[0], b = edge[1];
-            for (int lateral : LATERALS) {
-                BlockPos mine = column(geometry, a, b, geometry.radius - 1, lateral);
-                double[] edgePoint = geometry.transform(a, b, mine.getX() + 0.5, geometry.planeY, mine.getZ() + 0.5);
-                BlockPos theirs = BlockPos.containing(edgePoint[0], 0, edgePoint[2]);
-                int ha = ground(level, geometry, a, mine);
-                int hb = ground(level, geometry, b, theirs);
-                if (ha == Integer.MIN_VALUE || hb == Integer.MIN_VALUE) continue;
-                int difference = Math.abs(ha - hb);
-                samples++;
-                totalDifference += difference;
-                worst = Math.max(worst, difference);
-                report.append(' ').append(a).append('/').append(b).append(':').append(ha).append('/').append(hb);
+            for (CubeFace[] pair : new CubeFace[][] {edge, {edge[1], edge[0]}}) {
+                CubeFace a = pair[0], b = pair[1];
+                for (int lateral : LATERALS) {
+                    for (int fromCentre = geometry.radius - 24; fromCentre < geometry.radius + 48; fromCentre += 3) {
+                        BlockPos column = column(geometry, a, b, fromCentre, lateral);
+                        int barrierY = geometry.barrierY(a, column.getX(), column.getZ());
+                        if (barrierY < geometry.planeY - 24 || geometry.barrierPartner(a, column.getX(), barrierY, column.getZ()) != b) continue;
+                        var chunk = level.getChunk(column);
+                        for (int k = 1; k <= 8; k++) {
+                            BlockPos pos = column.atY(barrierY + k);
+                            BlockState state = chunk.getBlockState(pos);
+                            if (state.is(net.minecraft.tags.BlockTags.LEAVES) || state.is(net.minecraft.tags.BlockTags.LOGS)
+                                || state.is(net.minecraft.tags.BlockTags.ICE) || state.is(Blocks.SNOW_BLOCK) || state.is(Blocks.POWDER_SNOW)) continue;
+                            int[] corner = geometry.cubeMinCorner(a, pos.getX(), pos.getY(), pos.getZ());
+                            int[] there = geometry.transformCorner(a, b, corner[0], corner[1], corner[2]);
+                            double mean = 0.5 * router.finalDensity().compute(new net.minecraft.world.level.levelgen.DensityFunction.SinglePointContext(corner[0], corner[1], corner[2]))
+                                + 0.5 * router.finalDensity().compute(new net.minecraft.world.level.levelgen.DensityFunction.SinglePointContext(there[0], there[1], there[2]));
+                            boolean isSolid = !state.isAir() && state.getFluidState().isEmpty() && state.blocksMotion();
+                            boolean plant = !state.isAir() && state.getFluidState().isEmpty() && !state.blocksMotion();
+                            if (plant) continue;
+                            helper.assertTrue(isSolid == mean > 0.0, a + "/" + b + " shared band cell " + pos.toShortString() + " is " + state + " but the shared density is " + mean);
+                            checked++;
+                            if (isSolid) solid++;
+                        }
+                    }
+                }
             }
         }
-        double mean = (double) totalDifference / samples;
-        AlphaOmegaMod.LOGGER.info("Ground at the ridge: {} samples, mean difference {}, worst {};{}", samples, mean, worst, report);
-        helper.assertTrue(samples >= 30, "too few ground samples: " + samples);
-        helper.assertTrue(mean <= 4.0, "ground does not meet at the ridge: mean height difference " + mean + " (worst " + worst + ")");
+        AlphaOmegaMod.LOGGER.info("Shared band: {} cells checked, {} solid", checked, solid);
+        helper.assertTrue(solid > 100 && checked - solid > 100, "expected both ground and open cells in the band: " + solid + " of " + checked);
+        helper.succeed();
+    }
+
+    /** Along the lines from the centre through the cube's corners, above the ground, the barrier is open air. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 600)
+    public static void cornersAreOpenAboveTheGround(GameTestHelper helper) {
+        CubeGeometry geometry = geometry(helper);
+        ServerLevel level = helper.getLevel();
+        CubeFace up = CubeFace.UP;
+        for (int sx : new int[] {-1, 1}) {
+            for (int sz : new int[] {-1, 1}) {
+                for (int k = 60; k < 200; k += 5) {
+                    // UP's cell at height k on the line through the corner (sx, +1, sz): a = R + k on the positive side.
+                    int x = geometry.centerX(up) + (sx > 0 ? geometry.radius + k : -geometry.radius - k - 1);
+                    int z = geometry.centerZ() + (sz > 0 ? geometry.radius + k : -geometry.radius - k - 1);
+                    int y = geometry.planeY + k;
+                    helper.assertTrue(geometry.barrierFaces(up, x, y, z).size() == 3, "not a corner cell at " + x + " " + y + " " + z);
+                    BlockState state = level.getChunk(new BlockPos(x, y, z)).getBlockState(new BlockPos(x, y, z));
+                    helper.assertTrue(state.is(CubeBlocks.EDGE_AIR.get()), "corner line at " + k + " above the plane is " + state);
+                }
+            }
+        }
         helper.succeed();
     }
 }

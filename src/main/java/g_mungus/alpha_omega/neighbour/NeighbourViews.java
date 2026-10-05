@@ -26,6 +26,7 @@ import net.minecraft.world.phys.Vec3;
  * every neighbouring face within view distance: where it would stand if that face's ground carried on flat past the
  * edge. There the server places the same tickets a player gets (loading to view distance, ticking to simulation
  * distance) and the player's chunk tracking view covers the same square, so vanilla's square distances do the rest.
+ * Neighbours are only asked for once the player's own view on its face has loaded.
  */
 public final class NeighbourViews {
 
@@ -41,28 +42,52 @@ public final class NeighbourViews {
     private NeighbourViews() {
     }
 
-    /** A player's virtual positions: one per neighbouring face whose footprint is within its view distance. */
+    /** A player's virtual positions: one per neighbouring face whose shared edge is within its view distance. */
     public static List<CubeTrackingView.Virtual> virtuals(CubeGeometry geometry, Vec3 pos, int viewDistance) {
         CubeFace home = geometry.faceAt(pos.x, pos.z);
         if (home == null) return List.of();
         List<CubeTrackingView.Virtual> virtuals = new ArrayList<>(4);
-        int reach = Math.ceilDiv(geometry.footprint, 16) + 1;
+        double[] cube = geometry.toCube(home, pos.x, pos.y, pos.z);
         for (CubeFace face : CubeFace.values()) {
             if (!home.isNeighbour(face)) continue;
+            // How far short of the shared edge the player is (negative past it, in the overhang).
+            double shortOfEdge = geometry.radius - cube[face.axis] * face.sign;
+            if (shortOfEdge > (viewDistance + 2) * 16.0) continue;
             double[] v = geometry.unfold(home, face, pos.x, pos.y, pos.z);
-            ChunkPos center = new ChunkPos((int) Math.floor(v[0]) >> 4, (int) Math.floor(v[2]) >> 4);
-            int dx = Math.max(0, Math.abs(center.x - (geometry.centerX(face) >> 4)) - reach);
-            int dz = Math.max(0, Math.abs(center.z - (geometry.centerZ() >> 4)) - reach);
-            if (Math.max(dx, dz) <= viewDistance + 1) virtuals.add(new CubeTrackingView.Virtual(face, center));
+            virtuals.add(new CubeTrackingView.Virtual(face, new ChunkPos((int) Math.floor(v[0]) >> 4, (int) Math.floor(v[2]) >> 4)));
         }
         return virtuals;
     }
 
-    /** The tracking view for a player: vanilla's square plus its virtual squares. */
+    /** The tracking view for a player: vanilla's square plus the virtual squares it has tickets for. */
     public static CubeTrackingView view(ServerLevel level, ServerPlayer player, ChunkPos center, int viewDistance) {
         CubeGeometry geometry = Cube.of(level);
-        return new CubeTrackingView(new net.minecraft.server.level.ChunkTrackingView.Positioned(center, viewDistance),
-            List.copyOf(virtuals(geometry, player.position(), viewDistance)), geometry);
+        State state = STATES.get(player.getUUID());
+        List<CubeTrackingView.Virtual> virtuals = state != null && state.level == level ? state.virtuals : List.of();
+        return new CubeTrackingView(new net.minecraft.server.level.ChunkTrackingView.Positioned(center, viewDistance), virtuals, geometry);
+    }
+
+    /**
+     * Whether a player's own face has loaded around it: every chunk in its view square that is meant to be fully
+     * loaded (its ticket level says so) has finished. Only then do the neighbouring faces load.
+     */
+    public static boolean homeLoaded(ServerLevel level, ServerPlayer player, int viewDistance) {
+        ChunkMap chunkMap = level.getChunkSource().chunkMap;
+        ChunkPos center = player.chunkPosition();
+        for (int x = center.x - viewDistance; x <= center.x + viewDistance; x++) {
+            for (int z = center.z - viewDistance; z <= center.z + viewDistance; z++) {
+                net.minecraft.server.level.ChunkHolder holder = chunkMap.getVisibleChunkIfPresent(ChunkPos.asLong(x, z));
+                if (holder == null || holder.getTicketLevel() > ChunkLevel.byStatus(FullChunkStatus.FULL)) continue;
+                if (!holder.getFullChunkFuture().getNow(net.minecraft.server.level.ChunkHolder.UNLOADED_LEVEL_CHUNK).isSuccess()) return false;
+            }
+        }
+        return true;
+    }
+
+    /** The virtual positions a player currently has tickets and a view for. */
+    public static List<CubeTrackingView.Virtual> current(ServerPlayer player) {
+        State state = STATES.get(player.getUUID());
+        return state == null ? List.of() : state.virtuals;
     }
 
     /** Once per level tick: move each player's neighbour tickets after it, and its tracking view with them. */
@@ -78,12 +103,20 @@ public final class NeighbourViews {
             List<CubeTrackingView.Virtual> virtuals = player.isSpectator() && !level.getGameRules().getBoolean(net.minecraft.world.level.GameRules.RULE_SPECTATORSGENERATECHUNKS)
                 ? List.of() : virtuals(geometry, player.position(), viewDistance);
             State old = STATES.get(player.getUUID());
+            // The player's own face loads first: until its view is loaded, no new neighbour chunks are asked for.
+            if (!virtuals.isEmpty() && !homeLoaded(level, player, viewDistance)) {
+                virtuals = old != null && old.level == level && old.virtuals.equals(virtuals) ? virtuals : List.of();
+            }
             if (old != null && old.level == level && old.virtuals.equals(virtuals) && old.loadingLevel == loadingLevel && old.tickingLevel == tickingLevel) continue;
             if (old != null) remove(old);
             State state = new State(level, player.getId(), virtuals, loadingLevel, tickingLevel);
             add(state);
             STATES.put(player.getUUID(), state);
             ((ChunkMapAccessor) chunkMap).alpha_omega$updateChunkTracking(player);
+            // Vanilla re-checks who sees an entity only when one of them moves: the view just changed.
+            for (Object tracker : ((ChunkMapAccessor) chunkMap).alpha_omega$entityMap().values()) {
+                ((g_mungus.alpha_omega.mixin.server.TrackedEntityAccessor) tracker).alpha_omega$updatePlayer(player);
+            }
         }
         for (Iterator<Map.Entry<UUID, State>> it = STATES.entrySet().iterator(); it.hasNext(); ) {
             Map.Entry<UUID, State> entry = it.next();

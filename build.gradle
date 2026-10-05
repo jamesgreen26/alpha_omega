@@ -33,6 +33,8 @@ neoForge {
         gameTestServer {
             type = "gameTestServer"
             systemProperty 'neoforge.enabledGameTestNamespaces', 'alpha_omega'
+            // -Pgametests=NeighbourGameTests,TransferGameTests.mobsWaitForRoom runs part of the suite (gametest.GameTestFilter).
+            if (project.hasProperty('gametests')) systemProperty 'alpha_omega.gametests', project.property('gametests')
         }
     }
 

@@ -47,4 +47,15 @@ final class TestPlayers {
         server.getPlayerList().placeNewPlayer(connection, player, cookie);
         return player;
     }
+
+    /**
+     * Every tick, what a connected client's player does: acknowledges chunk batches (so chunks keep being sent) and
+     * moves through the chunk map (which is when vanilla re-checks which entities it is sent).
+     */
+    static void receiveChunks(GameTestHelper helper, ServerPlayer player) {
+        helper.onEachTick(() -> {
+            player.connection.chunkSender.onChunkBatchReceivedByClient(64.0F);
+            player.serverLevel().getChunkSource().move(player);
+        });
+    }
 }

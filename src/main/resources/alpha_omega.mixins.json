@@ -24,6 +24,7 @@
   "mixins": [
     "server.ChunkMapAccessor",
     "server.ChunkMapMixin",
+    "server.ChunkMapUnloadMixin",
     "server.ChunkTrackingViewMixin",
     "server.DistanceManagerAccessor",
     "server.GameTestServerMixin",
@@ -61,6 +62,7 @@
     "worldgen.ChunkGeneratorMixin",
     "worldgen.ChunkMapRandomStateMixin",
     "worldgen.NoiseAccessor",
+    "worldgen.ProtoChunkMixin",
     "worldgen.RandomStateAccessor",
     "worldgen.ShiftAAccessor",
     "worldgen.ShiftBAccessor",

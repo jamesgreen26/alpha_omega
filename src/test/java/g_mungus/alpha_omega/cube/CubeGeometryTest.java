@@ -174,6 +174,23 @@ class CubeGeometryTest {
         assertNull(DEFAULT.surfacePoint(DEFAULT.centerX(CubeFace.UP), DEFAULT.centerZ() + 8 * DEFAULT.spacingChunks + 1));
     }
 
+    /** Every face names the same physical point as a cell's smallest cube corner. */
+    @Test
+    void cubeMinCornersAgreeAcrossFaces() {
+        Random random = new Random(13);
+        for (int i = 0; i < 2000; i++) {
+            CubeFace from = CubeFace.bySlot(random.nextInt(6)), to = CubeFace.bySlot(random.nextInt(6));
+            int x = DEFAULT.centerX(from) + random.nextInt(400) - 200, y = random.nextInt(300) - 50, z = DEFAULT.centerZ() + random.nextInt(400) - 200;
+            int[] mine = DEFAULT.cubeMinCorner(from, x, y, z);
+            int[] cell = DEFAULT.transformBlock(from, to, x, y, z);
+            int[] theirs = DEFAULT.cubeMinCorner(to, cell[0], cell[1], cell[2]);
+            assertArrayEquals(theirs, DEFAULT.transformCorner(from, to, mine[0], mine[1], mine[2]));
+            double[] c = DEFAULT.toCube(from, mine[0], mine[1], mine[2]);
+            double[] centre = DEFAULT.toCube(from, x + 0.5, y + 0.5, z + 0.5);
+            for (int axis = 0; axis < 3; axis++) assertEquals(centre[axis] - 0.5, c[axis], 1e-9, "the corner is the smallest in cube space");
+        }
+    }
+
     @Test
     void boxOwnedKeepsClearOfTheBarrier() {
         CubeFace up = CubeFace.UP;

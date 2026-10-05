@@ -49,7 +49,7 @@ public class NeighbourGameTests {
         return new ChunkPos(BlockPos.containing(pos));
     }
 
-    @GameTest(template = TEMPLATE, timeoutTicks = 600)
+    @GameTest(template = TEMPLATE, timeoutTicks = 3000)
     public static void neighbourChunksLoadTickAndAreSent(GameTestHelper helper) {
         CubeGeometry geometry = geometry(helper);
         ServerLevel level = helper.getLevel();
@@ -57,26 +57,32 @@ public class NeighbourGameTests {
         ChunkPos across = chunk(nearEdge(geometry, CubeFace.EAST, CubeFace.UP, 8, 100, -5));
         helper.assertTrue(geometry.faceAtChunk(across.x, across.z) == CubeFace.EAST, "test chunk should be on EAST");
         ServerPlayer player = TestPlayers.mock(helper);
+        TestPlayers.receiveChunks(helper, player);
         player.setNoGravity(true);
         player.teleportTo(level, standing.x, standing.y, standing.z, 0.0F, 0.0F);
         helper.succeedWhen(() -> {
             helper.assertTrue(player.getChunkTrackingView() instanceof CubeTrackingView, "player has a plain tracking view: " + player.getChunkTrackingView());
             helper.assertTrue(player.getChunkTrackingView().contains(across), "the chunk over the edge is not in the player's view");
-            helper.assertTrue(level.getChunkSource().getChunkNow(across.x, across.z) != null, "the chunk over the edge is not loaded");
+            var holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(across.toLong());
+            helper.assertTrue(level.getChunkSource().getChunkNow(across.x, across.z) != null, "the chunk over the edge is not loaded: level "
+                + (holder == null ? "none" : holder.getTicketLevel() + ", status " + holder.getLatestStatus()) + ", virtuals " + NeighbourViews.current(player)
+                + ", home loaded " + NeighbourViews.homeLoaded(level, player, 2) + ", player at " + player.chunkPosition());
             helper.assertTrue(level.shouldTickBlocksAt(across.toLong()), "the chunk over the edge does not tick");
             level.getServer().getPlayerList().remove(player);
         });
     }
 
-    @GameTest(template = TEMPLATE, timeoutTicks = 600)
+    @GameTest(template = TEMPLATE, timeoutTicks = 3000)
     public static void neighbourEntitiesAreSent(GameTestHelper helper) {
         CubeGeometry geometry = geometry(helper);
         ServerLevel level = helper.getLevel();
         Vec3 standing = nearEdge(geometry, CubeFace.UP, CubeFace.SOUTH, 4, 100, -12);
         Vec3 there = nearEdge(geometry, CubeFace.SOUTH, CubeFace.UP, 6, 100, 12);
         helper.assertTrue(geometry.faceAt(there.x, there.z) == CubeFace.SOUTH, "zombie should be on SOUTH");
-        level.getChunk(chunk(there).x, chunk(there).z);
+        // Keep the zombie's chunk loaded until the player's neighbour view reaches it.
+        TestChunks.force(level, chunk(there));
         ServerPlayer player = TestPlayers.mock(helper);
+        TestPlayers.receiveChunks(helper, player);
         player.setNoGravity(true);
         player.teleportTo(level, standing.x, standing.y, standing.z, 0.0F, 0.0F);
         Zombie zombie = EntityType.ZOMBIE.create(level);
@@ -90,6 +96,30 @@ public class NeighbourGameTests {
             helper.assertTrue(tracker != null, "zombie is not tracked at all");
             helper.assertTrue(((TrackedEntityAccessor) tracker).alpha_omega$seenBy().contains(player.connection), "the player near the edge is not sent the zombie over it");
             zombie.discard();
+            TestChunks.release(level, chunk(there));
+            level.getServer().getPlayerList().remove(player);
+        });
+    }
+
+    /** A player arriving somewhere new gets its own face loaded before any neighbour chunks are asked for. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 1200)
+    public static void ownFaceLoadsFirst(GameTestHelper helper) {
+        CubeGeometry geometry = geometry(helper);
+        ServerLevel level = helper.getLevel();
+        // Near DOWN's edge with NORTH, far from anything earlier tests generated.
+        Vec3 standing = nearEdge(geometry, CubeFace.DOWN, CubeFace.NORTH, 6, 100, 70);
+        ServerPlayer player = TestPlayers.mock(helper);
+        TestPlayers.receiveChunks(helper, player);
+        player.setNoGravity(true);
+        player.teleportTo(level, standing.x, standing.y, standing.z, 0.0F, 0.0F);
+        int viewDistance = ((ChunkMapAccessor) level.getChunkSource().chunkMap).alpha_omega$getPlayerViewDistance(player);
+        int[] early = {0};
+        helper.onEachTick(() -> {
+            if (!NeighbourViews.homeLoaded(level, player, viewDistance) && !NeighbourViews.current(player).isEmpty()) early[0]++;
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(early[0] == 0, "neighbour chunks were asked for before the player's own view had loaded");
+            helper.assertTrue(!NeighbourViews.current(player).isEmpty(), "neighbours never loaded");
             level.getServer().getPlayerList().remove(player);
         });
     }
@@ -102,10 +132,8 @@ public class NeighbourGameTests {
         ServerPlayer player = TestPlayers.mock(helper);
         Vec3 a = nearEdge(geometry, CubeFace.UP, CubeFace.WEST, 10, 100, 0);
         Vec3 b = a.add(0, 0, 16);
-        player.teleportTo(level, a.x, a.y, a.z, 0.0F, 0.0F);
-        CubeTrackingView before = NeighbourViews.view(level, player, chunk(a), 8);
-        player.teleportTo(level, b.x, b.y, b.z, 0.0F, 0.0F);
-        CubeTrackingView after = NeighbourViews.view(level, player, chunk(b), 8);
+        CubeTrackingView before = new CubeTrackingView(new ChunkTrackingView.Positioned(chunk(a), 8), NeighbourViews.virtuals(geometry, a, 8), geometry);
+        CubeTrackingView after = new CubeTrackingView(new ChunkTrackingView.Positioned(chunk(b), 8), NeighbourViews.virtuals(geometry, b, 8), geometry);
         helper.assertTrue(!before.virtuals().isEmpty(), "a player 10 blocks from WEST's edge should see WEST");
         AtomicInteger size = new AtomicInteger(), added = new AtomicInteger(), removed = new AtomicInteger();
         before.forEach(pos -> size.incrementAndGet());

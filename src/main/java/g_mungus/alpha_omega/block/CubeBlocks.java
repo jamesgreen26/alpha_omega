@@ -22,6 +22,9 @@ public final class CubeBlocks {
         .isSuffocating((state, level, pos) -> false)
         .isViewBlocking((state, level, pos) -> false)));
 
+    public static final DeferredBlock<EdgeBedrockBlock> EDGE_BEDROCK = BLOCKS.register("edge_bedrock", () -> new EdgeBedrockBlock(
+        BlockBehaviour.Properties.ofFullCopy(Blocks.BEDROCK).noLootTable().isValidSpawn(Blocks::never)));
+
     private CubeBlocks() {
     }
 

@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 @Mixin(ChunkMap.class)
 public interface ChunkMapAccessor {
 
-    /** For tests: the entity trackers, by entity id. */
+    /** The entity trackers, by entity id. */
     @Accessor("entityMap")
     it.unimi.dsi.fastutil.ints.Int2ObjectMap<?> alpha_omega$entityMap();
 
