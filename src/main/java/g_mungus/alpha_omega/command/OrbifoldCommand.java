@@ -24,7 +24,8 @@ public final class OrbifoldCommand {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("orbifold")
-            .then(Commands.literal("info").executes(OrbifoldCommand::info)));
+            .then(Commands.literal("info").executes(OrbifoldCommand::info))
+            .then(Commands.literal("time").executes(g_mungus.alpha_omega.sky.LocalTimeCommand::time)));
     }
 
     private static int info(CommandContext<CommandSourceStack> context) {
