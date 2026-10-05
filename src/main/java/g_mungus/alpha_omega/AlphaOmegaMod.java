@@ -1,15 +1,30 @@
 package g_mungus.alpha_omega;
 
 import com.mojang.logging.LogUtils;
+import com.mojang.serialization.MapCodec;
+import g_mungus.alpha_omega.command.CubeCommand;
+import g_mungus.alpha_omega.config.AlphaOmegaConfig;
+import g_mungus.alpha_omega.cube.Cube;
+import g_mungus.alpha_omega.gametest.CubeGameTests;
 import g_mungus.alpha_omega.gametest.ModLoadGameTests;
+import g_mungus.alpha_omega.network.CubeConfigurationTask;
+import g_mungus.alpha_omega.network.CubePayload;
+import g_mungus.alpha_omega.worldgen.CubeChunkGenerator;
 import java.lang.reflect.Field;
 import java.util.Map;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.config.ModConfig;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.network.event.RegisterConfigurationTasksEvent;
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+import net.neoforged.neoforge.registries.DeferredRegister;
 import org.slf4j.Logger;
 import org.spongepowered.asm.mixin.transformer.Config;
 
@@ -19,8 +34,20 @@ public class AlphaOmegaMod {
     public static final String MOD_ID = "alpha_omega";
     public static final Logger LOGGER = LogUtils.getLogger();
 
+    private static final DeferredRegister<MapCodec<? extends ChunkGenerator>> CHUNK_GENERATORS =
+        DeferredRegister.create(Registries.CHUNK_GENERATOR, MOD_ID);
+
+    static {
+        CHUNK_GENERATORS.register("cube", () -> CubeChunkGenerator.CODEC);
+    }
+
     public AlphaOmegaMod(IEventBus modEventBus, ModContainer container) {
+        container.registerConfig(ModConfig.Type.COMMON, AlphaOmegaConfig.SPEC);
+        CHUNK_GENERATORS.register(modEventBus);
         modEventBus.addListener(AlphaOmegaMod::registerGameTests);
+        modEventBus.addListener(AlphaOmegaMod::registerPayloads);
+        modEventBus.addListener((RegisterConfigurationTasksEvent event) -> event.register(new CubeConfigurationTask(event.getListener())));
+        NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent event) -> CubeCommand.register(event.getDispatcher()));
         if (Boolean.getBoolean("alpha_omega.auditMixins")) {
             NeoForge.EVENT_BUS.addListener((ServerStartedEvent event) -> auditMixins());
         }
@@ -61,7 +88,13 @@ public class AlphaOmegaMod {
         return failures;
     }
 
+    private static void registerPayloads(RegisterPayloadHandlersEvent event) {
+        event.registrar("1").configurationToClient(CubePayload.TYPE, CubePayload.STREAM_CODEC,
+            (payload, context) -> Cube.setClient(payload.geometry().orElse(null)));
+    }
+
     private static void registerGameTests(RegisterGameTestsEvent event) {
         event.register(ModLoadGameTests.class);
+        event.register(CubeGameTests.class);
     }
 }

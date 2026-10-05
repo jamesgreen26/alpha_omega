@@ -1,0 +1,9 @@
+{
+  "generator.alpha_omega.cube": "Cube World",
+  "alpha_omega.cube.customize": "Cube World",
+  "alpha_omega.cube.face_width": "Face width: %s chunks (%s blocks)",
+  "alpha_omega.cube.sun_axis": "Sun axis",
+  "alpha_omega.cube.sun_axis.diagonal": "Diagonal",
+  "alpha_omega.cube.sun_axis.polar": "Polar",
+  "alpha_omega.cube.hint": "Diagonal: every face has days. Polar: two faces stay in twilight."
+}
