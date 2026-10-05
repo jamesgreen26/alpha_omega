@@ -56,11 +56,15 @@ public final class ClientFaceTransfer {
 
     /**
      * What carries the local player crossed an edge (a sub-level it stands on): the player goes with it, as on foot,
-     * but without telling the server, which has moved its player with the carrier already.
+     * but without telling the server, which has moved its player with the carrier already. The carrier keeps its
+     * world orientation, so what the player stood on is now a wall beside it, and the player, upright again, would be
+     * half inside it: it steps out by half its width, away from that surface.
      */
     public static void carriedAcross(LocalPlayer player, CubeFace from, CubeFace to) {
         CubeGeometry geometry = Cube.of(player.level());
         if (geometry == null || geometry.faceAt(player.getX(), player.getZ()) != from) return;
+        // Away from the surface is up on the old face: step up there, which is sideways once across.
+        player.setPos(player.getX(), player.getY() + player.getBbWidth() / 2.0 + 0.05, player.getZ());
         move(geometry, player, player, from, to);
     }
 
