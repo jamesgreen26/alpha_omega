@@ -9,6 +9,7 @@ import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -18,8 +19,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Models turn over an edge instead of snapping upright. In the third-person views the player's own model turns with
- * the camera while it eases over an edge ({@link FaceCamera}): about its head, by the same rotation, so it stays
- * upright in the view as the world turns around it. Other players and mobs turn about their middle
+ * the camera while it eases over an edge ({@link FaceCamera}): about its head, by the same rotation and shift, so it
+ * stays upright and centred in the view as the world turns around it. Other players and mobs turn about their middle
  * ({@link EntityTurns}).
  */
 @Mixin(LevelRenderer.class)
@@ -35,11 +36,14 @@ abstract class LevelRendererEntityTurnMixin {
         Camera camera = Minecraft.getInstance().gameRenderer.getMainCamera();
         Quaternionf turn;
         double pivot;
+        Vec3 shift = Vec3.ZERO;
         if (camera.getEntity() == entity) {
             float weight = FaceCamera.weight(partialTick);
             if (!camera.isDetached() || weight <= 0.0F) return;
             turn = FaceCamera.rotation(weight);
             pivot = entity.getEyeHeight();
+            // The camera is carried by the eye's shift over the edge too: so is the model, or it drifts off-centre.
+            shift = FaceCamera.shift(weight);
         } else {
             turn = EntityTurns.rotation(entity, partialTick);
             if (turn == null) return;
@@ -50,7 +54,7 @@ abstract class LevelRendererEntityTurnMixin {
         double y = Mth.lerp(partialTick, entity.yOld, entity.getY()) + pivot - camY;
         double z = Mth.lerp(partialTick, entity.zOld, entity.getZ()) - camZ;
         pose.pushPose();
-        pose.translate(x, y, z);
+        pose.translate(x + shift.x, y + shift.y, z + shift.z);
         pose.mulPose(turn);
         pose.translate(-x, -y, -z);
         this.alpha_omega$turned = true;
