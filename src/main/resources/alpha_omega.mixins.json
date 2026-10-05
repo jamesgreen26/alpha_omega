@@ -6,7 +6,6 @@
   "minVersion": "0.8",
   "client": [
     "client.AbstractSoundInstanceAccessor",
-    "client.CameraMixin",
     "client.ClientChunkCacheMixin",
     "client.ClientLevelSkyMixin",
     "client.ClockItemPropertyMixin",
@@ -16,7 +15,6 @@
     "client.FogRendererSkyMixin",
     "client.LevelRendererAccessor",
     "client.LevelRendererNeighbourMixin",
-    "client.LevelRendererEntityTurnMixin",
     "client.LevelRendererSkyMixin",
     "client.LevelRendererVanillaTerrainMixin",
     "client.LocalPlayerMixin",
@@ -25,24 +23,20 @@
     "client.RenderSectionMixin",
     "client.SectionOcclusionGraphAccessor",
     "client.SoundEngineMixin",
-    "client.ViewAreaAccessor",
-    "client.WorldCreationUiStateMixin"
+    "client.ViewAreaAccessor"
   ],
   "mixins": [
     "server.ChunkMapAccessor",
     "server.ChunkMapMixin",
     "server.ChunkMapUnloadMixin",
     "server.ChunkTrackingViewMixin",
-    "server.DedicatedServerPropertiesMixin",
     "server.DistanceManagerAccessor",
     "server.EntityTransferCooldownMixin",
     "server.GameTestServerMixin",
-    "server.LevelMixin",
     "server.PlayerChunkSenderMixin",
     "server.ServerLevelMixin",
     "server.TrackedEntityAccessor",
     "server.TrackedEntityMixin",
-    "server.WorldGenRegionMixin",
     "server.time.BeeLocalTimeMixin",
     "server.time.BeehiveBlockEntityLocalTimeMixin",
     "server.time.BrainLocalTimeMixin",
@@ -68,16 +62,7 @@
     "server.time.ServerPlayerLocalTimeMixin",
     "server.time.StrollThroughVillageGoalLocalTimeMixin",
     "server.time.TurtleEggBlockLocalTimeMixin",
-    "server.time.VillagerLocalTimeMixin",
-    "worldgen.ChunkGeneratorMixin",
-    "worldgen.ChunkMapRandomStateMixin",
-    "worldgen.NoiseAccessor",
-    "worldgen.NoiseBasedChunkGeneratorAccessor",
-    "worldgen.NoiseBasedChunkGeneratorMixin",
-    "worldgen.ProtoChunkMixin",
-    "worldgen.ShiftAAccessor",
-    "worldgen.ShiftBAccessor",
-    "worldgen.ShiftedNoiseAccessor"
+    "server.time.VillagerLocalTimeMixin"
   ],
   "injectors": {
     "defaultRequire": 1

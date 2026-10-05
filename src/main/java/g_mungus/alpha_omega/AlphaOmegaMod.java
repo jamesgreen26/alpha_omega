@@ -1,47 +1,27 @@
 package g_mungus.alpha_omega;
 
 import com.mojang.logging.LogUtils;
-import com.mojang.serialization.MapCodec;
-import g_mungus.alpha_omega.block.CubeBlocks;
-import g_mungus.alpha_omega.command.CubeCommand;
 import g_mungus.alpha_omega.config.AlphaOmegaConfig;
-import g_mungus.alpha_omega.cube.Cube;
-import g_mungus.alpha_omega.gametest.CollisionGameTests;
-import g_mungus.alpha_omega.gametest.CubeGameTests;
-import g_mungus.alpha_omega.gametest.FaceGameTests;
 import g_mungus.alpha_omega.gametest.GameTestFilter;
-import g_mungus.alpha_omega.gametest.LocalTimeGameTests;
-import g_mungus.alpha_omega.gametest.NeighbourGameTests;
-import g_mungus.alpha_omega.gametest.RetentionGameTests;
-import g_mungus.alpha_omega.gametest.SableGameTests;
-import g_mungus.alpha_omega.gametest.TerrainGameTests;
-import g_mungus.alpha_omega.gametest.TransferGameTests;
 import g_mungus.alpha_omega.gametest.ModLoadGameTests;
-import g_mungus.alpha_omega.network.CubeConfigurationTask;
+import g_mungus.alpha_omega.gametest.SableGameTests;
 import g_mungus.alpha_omega.neighbour.NeighbourViews;
-import g_mungus.alpha_omega.network.CubePayload;
 import g_mungus.alpha_omega.network.FaceTransferPayload;
 import g_mungus.alpha_omega.transfer.FaceTransfers;
-import g_mungus.alpha_omega.worldgen.CubeChunkGenerator;
 import java.lang.reflect.Field;
 import java.util.Map;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
-import net.neoforged.neoforge.network.event.RegisterConfigurationTasksEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
-import net.neoforged.neoforge.registries.DeferredRegister;
 import org.slf4j.Logger;
 import org.spongepowered.asm.mixin.transformer.Config;
 
@@ -51,21 +31,10 @@ public class AlphaOmegaMod {
     public static final String MOD_ID = "alpha_omega";
     public static final Logger LOGGER = LogUtils.getLogger();
 
-    private static final DeferredRegister<MapCodec<? extends ChunkGenerator>> CHUNK_GENERATORS =
-        DeferredRegister.create(Registries.CHUNK_GENERATOR, MOD_ID);
-
-    static {
-        CHUNK_GENERATORS.register("cube", () -> CubeChunkGenerator.CODEC);
-    }
-
     public AlphaOmegaMod(IEventBus modEventBus, ModContainer container) {
         container.registerConfig(ModConfig.Type.COMMON, AlphaOmegaConfig.SPEC);
-        CHUNK_GENERATORS.register(modEventBus);
-        CubeBlocks.register(modEventBus);
         modEventBus.addListener(AlphaOmegaMod::registerGameTests);
         modEventBus.addListener(AlphaOmegaMod::registerPayloads);
-        modEventBus.addListener((RegisterConfigurationTasksEvent event) -> event.register(new CubeConfigurationTask(event.getListener())));
-        NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent event) -> CubeCommand.register(event.getDispatcher()));
         NeoForge.EVENT_BUS.addListener((LevelTickEvent.Post event) -> {
             if (event.getLevel() instanceof ServerLevel level) NeighbourViews.tick(level);
         });
@@ -112,14 +81,12 @@ public class AlphaOmegaMod {
     }
 
     private static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        event.registrar("1").configurationToClient(CubePayload.TYPE, CubePayload.STREAM_CODEC,
-            (payload, context) -> Cube.setClient(payload.geometry().orElse(null)));
         event.registrar("1").playToServer(FaceTransferPayload.TYPE, FaceTransferPayload.STREAM_CODEC,
             (payload, context) -> FaceTransfers.handleClaim((ServerPlayer) context.player(), payload));
     }
 
     private static void registerGameTests(RegisterGameTestsEvent event) {
-        GameTestFilter.register(java.util.List.of(ModLoadGameTests.class, CubeGameTests.class, FaceGameTests.class, LocalTimeGameTests.class, TransferGameTests.class, NeighbourGameTests.class, TerrainGameTests.class, RetentionGameTests.class, CollisionGameTests.class, SableGameTests.class), event::register);
+        GameTestFilter.register(java.util.List.of(ModLoadGameTests.class, SableGameTests.class), event::register);
     }
 
 }

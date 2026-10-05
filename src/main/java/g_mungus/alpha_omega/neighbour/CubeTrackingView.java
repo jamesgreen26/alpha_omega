@@ -1,25 +1,25 @@
 package g_mungus.alpha_omega.neighbour;
 
-import g_mungus.alpha_omega.cube.CubeFace;
-import g_mungus.alpha_omega.cube.CubeGeometry;
+import g_mungus.alpha_omega.orbifold.Motion;
+import g_mungus.alpha_omega.orbifold.OrbifoldGeometry;
 import java.util.List;
 import java.util.function.Consumer;
 import net.minecraft.server.level.ChunkTrackingView;
 import net.minecraft.world.level.ChunkPos;
 
 /**
- * The chunks a player in a cube world sees (design §6.1): vanilla's square around it on its own face, plus, on each
- * neighbouring face near enough, the same square around its virtual position there, kept to that face's footprint.
- * Squares a crossing took out of view linger for a while ({@code transfer-retention.md} §3.3), kept the same way.
+ * The chunks a player in an orbifold world sees: vanilla's square around it, plus, for each image it has, the same
+ * square around its virtual position there, kept to what that image shows ({@link NeighbourViews#shows}). Squares a
+ * crossing took out of view linger for a while ({@code transfer-retention.md} §3.3), kept the same way.
  */
-public record CubeTrackingView(ChunkTrackingView.Positioned home, List<Virtual> virtuals, List<Virtual> lingering, CubeGeometry geometry)
+public record CubeTrackingView(ChunkTrackingView.Positioned home, List<Virtual> virtuals, List<Virtual> lingering, OrbifoldGeometry geometry)
     implements ChunkTrackingView {
 
-    /** A player's virtual position on a neighbouring face: the chunk it would stand in there. */
-    public record Virtual(CubeFace face, ChunkPos center) {
+    /** A player's virtual position for an image {@code g}: the chunk {@code g⁻¹(pos)} is in. */
+    public record Virtual(Motion image, ChunkPos center) {
     }
 
-    public CubeTrackingView(ChunkTrackingView.Positioned home, List<Virtual> virtuals, CubeGeometry geometry) {
+    public CubeTrackingView(ChunkTrackingView.Positioned home, List<Virtual> virtuals, OrbifoldGeometry geometry) {
         this(home, virtuals, List.of(), geometry);
     }
 
@@ -29,7 +29,7 @@ public record CubeTrackingView(ChunkTrackingView.Positioned home, List<Virtual> 
 
     private boolean inSquare(Virtual square, int x, int z, boolean includeOuter) {
         return ChunkTrackingView.isWithinDistance(square.center.x, square.center.z, this.viewDistance(), x, z, includeOuter)
-            && this.geometry.faceAtChunk(x, z) == square.face && this.geometry.inFootprint(x, z);
+            && NeighbourViews.shows(this.geometry, square, x, z);
     }
 
     @Override

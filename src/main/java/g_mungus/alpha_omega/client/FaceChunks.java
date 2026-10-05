@@ -1,78 +1,65 @@
 package g_mungus.alpha_omega.client;
 
-import g_mungus.alpha_omega.cube.CubeFace;
-import g_mungus.alpha_omega.cube.CubeGeometry;
-import it.unimi.dsi.fastutil.HashCommon;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import g_mungus.alpha_omega.orbifold.OrbifoldGeometry;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import net.minecraft.world.level.chunk.LevelChunk;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * The chunks a client holds in a cube world (design §6.2): one array per face, covering that face's footprint and
- * indexed by chunk position. A lookup is a few subtractions and an array read, with no hashing, boxing or locks;
- * section builds on worker threads read it too. Chunks outside every footprint (the empty sky between faces) go in a
- * small map.
+ * The chunks a client holds over a rectangle of chunks (the storage footprint), in one array indexed by chunk
+ * position. A lookup is a few subtractions and an array read, with no hashing, boxing or locks; section builds on
+ * worker threads read it too.
  */
 public final class FaceChunks {
 
-    public final CubeGeometry geometry;
-    private final int[] minX = new int[6];
-    private final int minZ;
-    private final int width;
-    @SuppressWarnings("unchecked")
-    private final AtomicReferenceArray<LevelChunk>[] faces = new AtomicReferenceArray[6];
-    private final Map<Long, LevelChunk> outside = new ConcurrentHashMap<>();
+    public final int minX;
+    public final int minZ;
+    public final int sizeX;
+    public final int sizeZ;
+    private final AtomicReferenceArray<LevelChunk> chunks;
     private final AtomicInteger count = new AtomicInteger();
 
-    public FaceChunks(CubeGeometry geometry) {
-        this.geometry = geometry;
-        this.minZ = Math.floorDiv(geometry.centerZ() - geometry.footprint, 16);
-        this.width = Math.floorDiv(geometry.centerZ() + geometry.footprint - 1, 16) - this.minZ + 1;
-        for (CubeFace face : CubeFace.values()) {
-            this.minX[face.slot()] = Math.floorDiv(geometry.centerX(face) - geometry.footprint, 16);
-            this.faces[face.slot()] = new AtomicReferenceArray<>(this.width * this.width);
-        }
+    public FaceChunks(int minX, int minZ, int sizeX, int sizeZ) {
+        this.minX = minX;
+        this.minZ = minZ;
+        this.sizeX = sizeX;
+        this.sizeZ = sizeZ;
+        this.chunks = new AtomicReferenceArray<>(sizeX * sizeZ);
     }
 
-    /** The array slot of a chunk, as {@code face * width² + index}, or -1 outside every footprint. */
-    private int slot(int x, int z) {
-        CubeFace face = this.geometry.faceAtChunk(x, z);
-        if (face == null) return -1;
-        int dx = x - this.minX[face.slot()];
-        int dz = z - this.minZ;
-        if (dx < 0 || dx >= this.width || dz < 0 || dz >= this.width) return -1;
-        return face.slot() * this.width * this.width + dx * this.width + dz;
+    /**
+     * The store a client keeps for a level's footprint, or null to leave every chunk to vanilla. Null until phase 6
+     * (image views), which needs the whole footprint on the client.
+     */
+    @Nullable
+    public static FaceChunks forGeometry(OrbifoldGeometry geometry) {
+        return null;
     }
 
-    private AtomicReferenceArray<LevelChunk> array(int slot) {
-        return this.faces[slot / (this.width * this.width)];
+    public boolean contains(int x, int z) {
+        int dx = x - this.minX, dz = z - this.minZ;
+        return dx >= 0 && dx < this.sizeX && dz >= 0 && dz < this.sizeZ;
     }
 
-    private static Long key(int x, int z) {
-        // Spread the bits: a packed position's own hash is x ^ z, which collides across a whole face.
-        return HashCommon.mix(((long) x & 0xFFFFFFFFL) | ((long) z & 0xFFFFFFFFL) << 32);
+    private int index(int x, int z) {
+        return (x - this.minX) * this.sizeZ + (z - this.minZ);
     }
 
     @Nullable
     public LevelChunk get(int x, int z) {
-        int slot = this.slot(x, z);
-        if (slot < 0) return this.outside.get(key(x, z));
-        return this.array(slot).get(slot % (this.width * this.width));
+        return this.contains(x, z) ? this.chunks.get(this.index(x, z)) : null;
     }
 
+    /** Stores a chunk of the rectangle ({@link #contains}). */
     public void put(int x, int z, LevelChunk chunk) {
-        int slot = this.slot(x, z);
-        LevelChunk old = slot < 0 ? this.outside.put(key(x, z), chunk) : this.array(slot).getAndSet(slot % (this.width * this.width), chunk);
-        if (old == null) this.count.incrementAndGet();
+        if (this.chunks.getAndSet(this.index(x, z), chunk) == null) this.count.incrementAndGet();
     }
 
     @Nullable
     public LevelChunk remove(int x, int z) {
-        int slot = this.slot(x, z);
-        LevelChunk old = slot < 0 ? this.outside.remove(key(x, z)) : this.array(slot).getAndSet(slot % (this.width * this.width), null);
+        if (!this.contains(x, z)) return null;
+        LevelChunk old = this.chunks.getAndSet(this.index(x, z), null);
         if (old != null) this.count.decrementAndGet();
         return old;
     }

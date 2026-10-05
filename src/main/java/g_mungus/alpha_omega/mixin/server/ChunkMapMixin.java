@@ -2,7 +2,6 @@ package g_mungus.alpha_omega.mixin.server;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import g_mungus.alpha_omega.cube.Cube;
 import g_mungus.alpha_omega.neighbour.CubeTrackingView;
 import g_mungus.alpha_omega.neighbour.NeighbourViews;
 import net.minecraft.network.protocol.game.ClientboundSetChunkCacheCenterPacket;
@@ -19,9 +18,9 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * In a cube world a player's chunk tracking view also covers its virtual squares on neighbouring faces
+ * With image views a player's chunk tracking view also covers its virtual squares for nearby images
  * ({@link CubeTrackingView}). Vanilla only tells the client its new centre for a plain square view; this does it for
- * the cube view's home square.
+ * the image view's home square.
  */
 @Mixin(ChunkMap.class)
 abstract class ChunkMapMixin {
@@ -33,7 +32,7 @@ abstract class ChunkMapMixin {
     @WrapOperation(method = "updateChunkTracking", at = @At(value = "INVOKE",
         target = "Lnet/minecraft/server/level/ChunkTrackingView;of(Lnet/minecraft/world/level/ChunkPos;I)Lnet/minecraft/server/level/ChunkTrackingView;"))
     private ChunkTrackingView alpha_omega$withNeighbours(ChunkPos center, int viewDistance, Operation<ChunkTrackingView> original, ServerPlayer player) {
-        if (Cube.of(this.level) == null) return original.call(center, viewDistance);
+        if (!NeighbourViews.active(this.level)) return original.call(center, viewDistance);
         return NeighbourViews.view(this.level, player, center, viewDistance);
     }
 

@@ -8,8 +8,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 
 /**
- * Development aid ({@code -Dalpha_omega.dev.transferStats}, Gradle {@code -PtransferStats}): what crossing an edge
- * costs the client. For two seconds after each change of face it counts chunks received (and of those, chunks it
+ * Development aid ({@code -Dalpha_omega.dev.transferStats}, Gradle {@code -PtransferStats}): what crossing a seam
+ * costs the client. For two seconds after each crossing it counts chunks received (and of those, chunks it
  * already held), chunks forgotten, how many sections vanilla had to draw in the first frames and the sun's height
  * over the first ticks; then it logs them.
  */
@@ -70,6 +70,6 @@ public final class TransferStats {
 
     private static void report() {
         AlphaOmegaMod.LOGGER.info("Transfer stats: received {} chunks ({} already held), forgot {}, visible sections in the first frames {}, "
-            + "view eased over {} ticks, sun height by tick {}", received, alreadyHeld, forgotten, visibleSections, FaceCamera.duration(), sunHeights);
+            + "sun height by tick {}", received, alreadyHeld, forgotten, visibleSections, sunHeights);
     }
 }

@@ -1,7 +1,7 @@
 package g_mungus.alpha_omega.mixin.client;
 
 import g_mungus.alpha_omega.client.NeighbourEffects;
-import g_mungus.alpha_omega.cube.CubeFace;
+import g_mungus.alpha_omega.orbifold.Motion;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.particle.Particle;
 import net.minecraft.client.particle.ParticleEngine;
@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Particles started on a neighbouring face appear where that face really is ({@link NeighbourEffects}). */
+/** Particles started at an image's position appear where the camera sees it ({@link NeighbourEffects}). */
 @Mixin(ParticleEngine.class)
 abstract class ParticleEngineMixin {
 
@@ -22,10 +22,10 @@ abstract class ParticleEngineMixin {
     private void alpha_omega$moveToCameraFace(Particle particle, CallbackInfo ci) {
         if (this.level == null) return;
         ParticleAccessor access = (ParticleAccessor) particle;
-        CubeFace[] faces = NeighbourEffects.faces(this.level, access.alpha_omega$x(), access.alpha_omega$z());
-        if (faces == null) return;
-        double[] p = NeighbourEffects.position(this.level, faces, access.alpha_omega$x(), access.alpha_omega$y(), access.alpha_omega$z());
-        double[] v = NeighbourEffects.direction(faces, access.alpha_omega$xd(), access.alpha_omega$yd(), access.alpha_omega$zd());
+        Motion g = NeighbourEffects.toCamera(this.level, access.alpha_omega$x(), access.alpha_omega$z());
+        if (g == null) return;
+        double[] p = {g.pointX(access.alpha_omega$x()), access.alpha_omega$y(), g.pointZ(access.alpha_omega$z())};
+        double[] v = {g.vectorX(access.alpha_omega$xd()), access.alpha_omega$yd(), g.vectorZ(access.alpha_omega$zd())};
         particle.setPos(p[0], p[1], p[2]);
         access.alpha_omega$setXo(p[0]);
         access.alpha_omega$setYo(p[1]);

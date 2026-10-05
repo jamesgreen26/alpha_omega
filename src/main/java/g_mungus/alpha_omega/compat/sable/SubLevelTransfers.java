@@ -12,10 +12,10 @@ import dev.ryanhcode.sable.mixinterface.entity.entity_sublevel_collision.EntityM
 import dev.ryanhcode.sable.sublevel.ServerSubLevel;
 import dev.ryanhcode.sable.sublevel.system.SubLevelPhysicsSystem;
 import dev.ryanhcode.sable.sublevel.system.ticket.PhysicsChunkTicketManager;
-import g_mungus.alpha_omega.cube.Cube;
-import g_mungus.alpha_omega.cube.CubeFace;
-import g_mungus.alpha_omega.cube.CubeGeometry;
 import g_mungus.alpha_omega.neighbour.NeighbourViews;
+import g_mungus.alpha_omega.orbifold.Motion;
+import g_mungus.alpha_omega.orbifold.Orbifold;
+import g_mungus.alpha_omega.orbifold.OrbifoldGeometry;
 import g_mungus.alpha_omega.transfer.FaceTransfer;
 import g_mungus.alpha_omega.transfer.FaceTransfers;
 import java.util.Comparator;
@@ -38,12 +38,12 @@ import org.joml.Vector3d;
 import org.joml.Vector3dc;
 
 /**
- * Sub-levels crossing an edge (design §8.1). A sub-level belongs to the face its pose is on and collides with that
- * face's terrain in storage. Once its pose (the centre of mass) is past the diagonal it moves, like a projectile, to
- * the same cube point in the next face's storage: pose and last pose by {@code T}, orientation and velocities turned
- * with it, so it keeps its world-space orientation and momentum and only gravity changes direction. Entities standing
- * on it, players too, go with it (and do not cross on their own while on it). It crosses once the place it goes to is loaded; jointed sub-levels do not cross yet. Loaded only
- * when Sable is.
+ * Sub-levels crossing seams. Once a sub-level's pose (the centre of mass) has crossed, it moves by the element of
+ * {@code Γ} for its new frame, in the same storage: pose and last pose moved, orientation and velocities turned with
+ * it. Entities standing on it, players too, go with it (and do not cross on their own while on it). It crosses once
+ * the place it goes to is loaded; jointed sub-levels do not cross yet. Loaded only when Sable is.
+ *
+ * <p>Inactive until phase 5 ({@link FaceTransfer#destination} says nothing crosses).
  */
 public final class SubLevelTransfers {
 
@@ -56,10 +56,10 @@ public final class SubLevelTransfers {
     private SubLevelTransfers() {
     }
 
-    /** After a level's physics tick: moves every sub-level whose pose has crossed into another face. */
+    /** After a level's physics tick: moves every sub-level whose pose has crossed into another frame. */
     public static void afterPhysics(SubLevelPhysicsSystem system) {
         ServerLevel level = system.getLevel();
-        CubeGeometry geometry = Cube.of(level);
+        OrbifoldGeometry geometry = Orbifold.of(level);
         if (geometry == null) return;
         ServerSubLevelContainer container = SubLevelContainer.getContainer(level);
         if (container == null) return;
@@ -69,15 +69,13 @@ public final class SubLevelTransfers {
         for (ServerSubLevel subLevel : List.copyOf(container.getAllSubLevels())) {
             if (subLevel.isRemoved() || crossed.containsKey(subLevel.getUniqueId())) continue;
             Vector3d position = subLevel.logicalPose().position();
-            CubeFace from = geometry.faceAt(position.x, position.z);
-            if (from == null) continue;
-            CubeFace to = FaceTransfer.destination(geometry, from, position.x, position.y, position.z);
-            if (to == null) continue;
+            Motion g = FaceTransfer.destination(geometry, position.x, position.y, position.z);
+            if (g == null) continue;
             // Jointed sub-levels would have to cross together, anchors and all: not yet.
             if (SubLevelHelper.getConnectedChain(subLevel).size() > 1) continue;
-            // Until it can carry on there, it carries on here, over the other face's filler (which it does not collide with).
-            if (!destinationReady(level, geometry, subLevel, from, to)) continue;
-            transfer(level, geometry, system, subLevel, from, to);
+            // Until it can carry on there, it carries on here, in the band.
+            if (!destinationReady(level, subLevel, g)) continue;
+            transfer(level, system, subLevel, g);
             crossed.put(subLevel.getUniqueId(), now);
         }
     }
@@ -90,12 +88,11 @@ public final class SubLevelTransfers {
      * round, for its motion) loaded and block ticking, as Sable requires of a sub-level's chunks or it saves the
      * sub-level away. Asks for that area to load, if it is not.
      */
-    private static boolean destinationReady(ServerLevel level, CubeGeometry geometry, ServerSubLevel subLevel, CubeFace from, CubeFace to) {
+    private static boolean destinationReady(ServerLevel level, ServerSubLevel subLevel, Motion g) {
         BoundingBox3dc bounds = subLevel.boundingBox();
         int minX = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
         for (int corner = 0; corner < 8; corner++) {
-            double[] p = geometry.transform(from, to, (corner & 1) == 0 ? bounds.minX() : bounds.maxX(), (corner & 2) == 0 ? bounds.minY() : bounds.maxY(),
-                (corner & 4) == 0 ? bounds.minZ() : bounds.maxZ());
+            double[] p = {g.pointX((corner & 1) == 0 ? bounds.minX() : bounds.maxX()), 0.0, g.pointZ((corner & 4) == 0 ? bounds.minZ() : bounds.maxZ())};
             minX = Math.min(minX, SectionPos.posToSectionCoord(p[0]) - 1);
             maxX = Math.max(maxX, SectionPos.posToSectionCoord(p[0]) + 1);
             minZ = Math.min(minZ, SectionPos.posToSectionCoord(p[2]) - 1);
@@ -113,25 +110,25 @@ public final class SubLevelTransfers {
         return true;
     }
 
-    private static void transfer(ServerLevel level, CubeGeometry geometry, SubLevelPhysicsSystem system, ServerSubLevel subLevel, CubeFace from, CubeFace to) {
-        Matrix3d rotation = SableFrames.rotation(from, to);
+    private static void transfer(ServerLevel level, SubLevelPhysicsSystem system, ServerSubLevel subLevel, Motion g) {
+        Matrix3d rotation = SableFrames.rotation(g);
         PhysicsPipeline pipeline = system.getPipeline();
         Vector3d linear = pipeline.getLinearVelocity(subLevel, new Vector3d());
         Vector3d angular = pipeline.getAngularVelocity(subLevel, new Vector3d());
         List<Entity> riders = riders(level, subLevel);
 
         Pose3d pose = new Pose3d(subLevel.logicalPose());
-        SableFrames.transform(geometry, from, to, pose);
+        SableFrames.transform(g, pose);
         pipeline.resetVelocity(subLevel);
         pipeline.teleport(subLevel, pose.position(), pose.orientation());
         pipeline.addLinearAndAngularVelocity(subLevel, rotation.transform(linear), rotation.transform(angular));
         // The last pose moves too, so everything that lerps from it to the pose (entity carrying, rendering) sees one step.
-        SableFrames.transform(geometry, from, to, (Pose3d) subLevel.lastPose());
+        SableFrames.transform(g, (Pose3d) subLevel.lastPose());
         subLevel.updateBoundingBox();
         subLevel.forceUpdateGlobalBounds();
 
         for (Entity rider : riders) {
-            FaceTransfers.carry(level, geometry, rider, from, to);
+            FaceTransfers.carry(level, rider, g);
             EntitySubLevelUtil.setOldPosNoMovement(rider);
         }
     }
@@ -139,7 +136,7 @@ public final class SubLevelTransfers {
     /**
      * Entities in world space standing on (carried by) a sub-level. Players among them move here too, without a
      * teleport: their clients move them along with the sub-level once they see it cross ({@code SableClientFrames}),
-     * and meanwhile send positions relative to it, which land on the new face either way.
+     * and meanwhile send positions relative to it, which land in the new frame either way.
      */
     private static List<Entity> riders(ServerLevel level, ServerSubLevel subLevel) {
         BoundingBox3dc bounds = subLevel.boundingBox();
@@ -149,11 +146,11 @@ public final class SubLevelTransfers {
     }
 
     /**
-     * Whether a player should see a sub-level from one of its virtual positions (design §6.1): it is on a
-     * neighbouring face within Sable's tracking range of where the player's view there is centred.
+     * Whether a player should see a sub-level from one of its image positions: it is within Sable's tracking range of
+     * the nearest of them ({@link NeighbourViews#playerPositionFor}).
      */
     public static boolean nearVirtual(Player player, Vector3dc position) {
-        if (!(player.level() instanceof ServerLevel level) || Cube.of(level) == null) return false;
+        if (!(player.level() instanceof ServerLevel level) || Orbifold.of(level) == null) return false;
         Vec3 at = new Vec3(position.x(), position.y(), position.z());
         Vec3 from = NeighbourViews.playerPositionFor(level, player.position(), at);
         if (from.equals(player.position())) return false;

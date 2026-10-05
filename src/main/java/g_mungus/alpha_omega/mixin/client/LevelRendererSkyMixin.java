@@ -25,8 +25,8 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 
 /**
- * The sky turns about the face's celestial pole: vanilla's {@code XP(timeOfDay·360°)} becomes the face's celestial
- * rotation ({@code CubeSun}), so the sun, moon and stars (all drawn in that frame) rise and set at the face's angle. The sunrise
+ * The sky turns about the local celestial pole: vanilla's {@code XP(timeOfDay·360°)} becomes the local celestial
+ * rotation ({@link LocalSky#celestialRotation}), so the sun, moon and stars (all drawn in that frame) rise and set at the local angle. The sunrise
  * glow points at the sun's azimuth instead of due east or west, unless the atmosphere is on: it draws its own.
  *
  * <p>With the atmosphere on (and the camera in air), the flat-coloured sky dome is replaced by the atmosphere drawn per

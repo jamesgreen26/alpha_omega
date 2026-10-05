@@ -1,39 +1,39 @@
 package g_mungus.alpha_omega.client;
 
-import g_mungus.alpha_omega.cube.Cube;
-import g_mungus.alpha_omega.cube.CubeFace;
-import g_mungus.alpha_omega.cube.CubeGeometry;
-import net.minecraft.client.Minecraft;
+import g_mungus.alpha_omega.orbifold.Motion;
+import g_mungus.alpha_omega.orbifold.Orbifold;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Particles and sounds that start on a neighbouring face are moved to where that face really is, in the storage of
- * the face the camera is on (design §6.3). Particles then fly by the camera face's rules, which is close enough.
+ * Where things the client hears of are seen from the camera: particles and sounds at an image's position play at the
+ * transformed position, and a remote entity that jumped by an element of {@code Γ} is re-expressed in its new frame.
+ *
+ * <p>Inactive until phase 6 (image views), which works out the elements; until then everything plays where it is.
  */
 public final class NeighbourEffects {
 
     private NeighbourEffects() {
     }
 
-    /** The transform for a point, as {@code {from, to}}, or null when it is already on the camera's face. */
+    /**
+     * The element taking a point to where the camera sees it, or null when it is already there. Phase 6: the image
+     * element whose view holds the point.
+     */
     @Nullable
-    public static CubeFace[] faces(Level level, double x, double z) {
-        CubeGeometry geometry = Cube.of(level);
-        if (geometry == null) return null;
-        Vec3 camera = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
-        CubeFace home = geometry.faceAt(camera.x, camera.z);
-        CubeFace there = geometry.faceAt(x, z);
-        if (home == null || there == null || home == there) return null;
-        return new CubeFace[] {there, home};
+    public static Motion toCamera(Level level, double x, double z) {
+        if (Orbifold.of(level) == null) return null;
+        return null;
     }
 
-    public static double[] position(Level level, CubeFace[] faces, double x, double y, double z) {
-        return Cube.of(level).transform(faces[0], faces[1], x, y, z);
-    }
-
-    public static double[] direction(CubeFace[] faces, double x, double y, double z) {
-        return CubeGeometry.rotate(faces[0], faces[1], x, y, z);
+    /**
+     * The element a remote entity moved by between two positions it was sent, or null if it did not cross. Phase 5:
+     * the frame change between the two.
+     */
+    @Nullable
+    public static Motion crossing(Level level, Vec3 from, Vec3 to) {
+        if (Orbifold.of(level) == null) return null;
+        return null;
     }
 }

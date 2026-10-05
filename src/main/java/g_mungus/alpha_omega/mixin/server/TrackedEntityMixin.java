@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 
-/** Entities on a neighbouring face are tracked by distance from the player's virtual position there. */
+/** Entities are tracked by distance from the nearest of a player's real and image positions. */
 @Mixin(targets = "net.minecraft.server.level.ChunkMap$TrackedEntity")
 abstract class TrackedEntityMixin {
 

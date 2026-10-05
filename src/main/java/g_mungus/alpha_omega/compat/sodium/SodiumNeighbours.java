@@ -1,15 +1,15 @@
 package g_mungus.alpha_omega.compat.sodium;
 
-import com.mojang.blaze3d.shaders.FogShape;
-import com.mojang.blaze3d.systems.RenderSystem;
 import g_mungus.alpha_omega.client.NeighbourRenderer;
-import g_mungus.alpha_omega.cube.Cube;
-import g_mungus.alpha_omega.cube.CubeFace;
-import g_mungus.alpha_omega.cube.CubeGeometry;
 import g_mungus.alpha_omega.mixin.compat.sodium.RenderSectionManagerAccessor;
+import g_mungus.alpha_omega.orbifold.Motion;
+import g_mungus.alpha_omega.orbifold.Orbifold;
+import g_mungus.alpha_omega.orbifold.OrbifoldGeometry;
+import g_mungus.alpha_omega.orbifold.Transform;
 import it.unimi.dsi.fastutil.longs.Long2ReferenceMap;
 import java.util.ArrayDeque;
-import java.util.EnumMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -53,16 +53,17 @@ import org.joml.Matrix4f;
 import org.joml.Vector3d;
 
 /**
- * The neighbouring faces drawn through Sodium (design §6.4). Sodium is told of every chunk the client holds, so it
- * keeps a section for each, on every face; the neighbouring faces' sections are then built by Sodium like the camera's
- * own, and a crossing of an edge finds the face it comes onto already built.
+ * Images of the tile drawn through Sodium (phase 6). Sodium is told of every chunk the client holds, so it keeps a
+ * section for each; an image's sections are then built by Sodium like the camera's own.
  *
- * <p>When Sodium searches for visible sections, each neighbouring face's are collected here from the camera as seen
- * from that face: per chunk column within view, on its face and loaded, with its boxes seen from home and the depth
- * below which it is buried, worked out again only when its chunk or one near it changes (as in
- * {@link NeighbourRenderer}). Sections in view go into the face's own render lists; those out of view only queue to
- * build, so that whatever the view turns to on crossing is ready. Each terrain layer of a face then draws with its
- * rotation in the model-view matrix and Sodium's camera at the face's virtual camera.
+ * <p>When Sodium searches for visible sections, each image's are collected here from the camera as seen from that
+ * image ({@code g⁻¹(camera)}): per chunk column within view, shown by the image and loaded, with its boxes as the camera
+ * sees them and the depth below which it is buried, worked out again only when its chunk or one near it changes (as
+ * in {@link NeighbourRenderer}). Sections in view go into the image's own render lists; those out of view only queue
+ * to build. Each terrain layer of an image then draws with its turn in the model-view matrix and Sodium's camera at
+ * the image's virtual camera.
+ *
+ * <p>Inactive until phase 6: {@link NeighbourRenderer#images} gives no images.
  */
 public final class SodiumNeighbours {
 
@@ -70,27 +71,22 @@ public final class SodiumNeighbours {
     private record Column(int chunkX, int chunkZ, AABB box, AABB[] boxes, int buriedBelow) {
     }
 
-    /** A column slot worked out to hold nothing worth drawing (off the face, outside the footprint, or not loaded). */
+    /** A column slot worked out to hold nothing worth drawing (not shown by its image, or not loaded). */
     private static final Column NOTHING = new Column(0, 0, new AABB(0, 0, 0, 0, 0, 0), new AABB[0], 0);
 
-    /** A neighbouring face: its columns around the virtual camera, and what Sodium draws of it. */
+    /** An image: its columns around the virtual camera, and what Sodium draws of it. */
     private static final class Face {
         final int size;
         /** Per column slot ({@code x * size + z}, wrapping chunk positions): null until worked out. */
         final Column[] columns;
         /** Per column slot, the chunk it was worked out for. */
         final long[] columnAt;
-        @Nullable
-        CubeFace builtFor;
         /** Collected in the current search, until Sodium finalises its lists. */
         @Nullable
         SectionCollector pending;
         @Nullable
         double[] pendingCamera;
         SortedRenderLists lists = SortedRenderLists.empty();
-        /** The home face {@link #lists} were collected from; they draw only while it is still home. */
-        @Nullable
-        CubeFace listsFor;
         int visible;
         int built;
 
@@ -113,18 +109,15 @@ public final class SodiumNeighbours {
         }
     }
 
-    private static final Map<CubeFace, Face> FACES = new EnumMap<>(CubeFace.class);
+    private static final Map<Motion, Face> FACES = new LinkedHashMap<>();
     /** The section manager the faces' lists belong to; a new one (Sodium reloaded) starts them again. */
     @Nullable
     private static RenderSectionManager manager;
-    /** The camera's face at the last search. */
-    @Nullable
-    private static CubeFace lastHome;
 
     private SodiumNeighbours() {
     }
 
-    /** A chunk arrived: Sodium learns of it here, since the cube world's chunk store bypasses vanilla's. */
+    /** A chunk arrived: Sodium learns of it here, since the orbifold's chunk store bypasses vanilla's. */
     public static void chunkLoaded(ClientLevel level, int chunkX, int chunkZ) {
         ChunkTrackerHolder.get(level).onChunkStatusAdded(chunkX, chunkZ, net.caffeinemc.mods.sodium.client.render.chunk.map.ChunkStatus.FLAG_HAS_BLOCK_DATA);
     }
@@ -133,19 +126,18 @@ public final class SodiumNeighbours {
         ChunkTrackerHolder.get(level).onChunkStatusRemoved(chunkX, chunkZ, net.caffeinemc.mods.sodium.client.render.chunk.map.ChunkStatus.FLAG_HAS_BLOCK_DATA);
     }
 
-    /** Forgets every face (new level, view distance or renderer). */
+    /** Forgets every image (new level, view distance or renderer). */
     public static void reset() {
         FACES.clear();
     }
 
     /** A chunk or a block in it changed: the columns around it are worked out again. */
-    public static void invalidateAround(CubeFace face, int chunkX, int chunkZ) {
-        Face state = FACES.get(face);
-        if (state != null) state.invalidateAround(chunkX, chunkZ);
+    public static void invalidateAround(int chunkX, int chunkZ) {
+        for (Face state : FACES.values()) state.invalidateAround(chunkX, chunkZ);
     }
 
     /**
-     * After Sodium has searched from the camera: collects each neighbouring face's sections, and adds those to build to
+     * After Sodium has searched from the camera: collects each image's sections, and adds those to build to
      * Sodium's queues. Returns whether a section in view is still building, so the search should run again.
      */
     public static boolean collect(RenderSectionManager sections, Camera camera, int frame) {
@@ -155,11 +147,10 @@ public final class SodiumNeighbours {
         }
         Minecraft minecraft = Minecraft.getInstance();
         ClientLevel level = minecraft.level;
-        CubeGeometry cube = level == null ? null : Cube.of(level);
+        OrbifoldGeometry cube = level == null ? null : Orbifold.of(level);
         Vec3 cam = camera.getPosition();
-        CubeFace home = cube == null ? null : cube.faceAt(cam.x, cam.z);
-        lastHome = home;
-        if (home == null) {
+        List<Motion> images = cube == null ? List.of() : NeighbourRenderer.images(cube, cam);
+        if (images.isEmpty()) {
             FACES.clear();
             return false;
         }
@@ -171,23 +162,16 @@ public final class SodiumNeighbours {
         Frustum frustum = minecraft.levelRenderer.getFrustum();
         int viewDistance = minecraft.options.getEffectiveRenderDistance();
         double reach = (viewDistance + 1) * 16.0;
-        // Buried sections can only be seen from underground (through caves meeting at the edge).
+        // Buried sections can only be seen from underground (through caves meeting at the seam).
         boolean underground = level.getHeight(Heightmap.Types.WORLD_SURFACE, Mth.floor(cam.x), Mth.floor(cam.z)) > cam.y + 2.0;
-        String only = System.getProperty("alpha_omega.dev.onlyFace");
         boolean revisit = false;
-        for (CubeFace face : CubeFace.values()) {
-            Face state = FACES.get(face);
-            if (!home.isNeighbour(face) || (only != null && !only.equals(face.name()))) {
-                if (state != null) state.pending = null;
-                continue;
-            }
-            if (state == null || state.size != viewDistance * 2 + 1) FACES.put(face, state = new Face(viewDistance));
-            if (state.builtFor != home) {
-                state.builtFor = home;
-                state.invalidate();
-            }
-            double[] virtual = cube.transform(home, face, cam.x, cam.y, cam.z);
-            build(state, face, home, level, cube, Math.floorDiv(Mth.floor(virtual[0]), 16), Math.floorDiv(Mth.floor(virtual[2]), 16));
+        FACES.keySet().retainAll(images);
+        for (Motion image : images) {
+            Face state = FACES.get(image);
+            if (state == null || state.size != viewDistance * 2 + 1) FACES.put(image, state = new Face(viewDistance));
+            Vec3 v = Transform.of(image.inverse()).position(cam);
+            double[] virtual = {v.x, v.y, v.z};
+            build(state, image, level, Math.floorDiv(Mth.floor(virtual[0]), 16), Math.floorDiv(Mth.floor(virtual[2]), 16));
             SectionCollector collector = new OcclusionSectionCollector(frame, rebuildQueue, sortQueue);
             // Out of view only queues to build; a build still running there need not search again.
             SectionCollector ahead = new OcclusionSectionCollector(frame, rebuildQueue, sortQueue);
@@ -209,8 +193,8 @@ public final class SodiumNeighbours {
                         state.visible++;
                         if (section.isBuilt()) state.built++;
                     } else {
-                        // Out of view it only queues to build: crossing an edge turns the view a quarter turn, and
-                        // the face then becomes Sodium's own, so whatever it shows should be ready.
+                        // Out of view it only queues to build: a crossing can make the image Sodium's own, so
+                        // whatever it shows should be ready.
                         ahead.visitWithFlags(section, 0);
                     }
                 }
@@ -224,8 +208,8 @@ public final class SodiumNeighbours {
         return revisit;
     }
 
-    /** Works out the face's column slots around the virtual camera's chunk not yet worked out for their chunk. */
-    private static void build(Face state, CubeFace face, CubeFace home, ClientLevel level, CubeGeometry cube, int centreX, int centreZ) {
+    /** Works out the image's column slots around the virtual camera's chunk not yet worked out for their chunk. */
+    private static void build(Face state, Motion image, ClientLevel level, int centreX, int centreZ) {
         int size = state.size;
         int radius = size / 2;
         int height = level.getSectionsCount();
@@ -235,25 +219,24 @@ public final class SodiumNeighbours {
                 long at = ChunkPos.asLong(chunkX, chunkZ);
                 if (state.columns[slot] != null && state.columnAt[slot] == at) continue;
                 state.columnAt[slot] = at;
-                if (cube.faceAtChunk(chunkX, chunkZ) != face || !cube.inFootprint(chunkX, chunkZ)
-                    || level.getChunkSource().getChunk(chunkX, chunkZ, ChunkStatus.FULL, false) == null) {
+                if (level.getChunkSource().getChunk(chunkX, chunkZ, ChunkStatus.FULL, false) == null) {
                     state.columns[slot] = NOTHING;
                     continue;
                 }
                 AABB[] boxes = new AABB[height];
                 for (int y = 0; y < height; y++) {
                     int minY = SectionPos.sectionToBlockCoord(level.getMinSection() + y);
-                    boxes[y] = NeighbourRenderer.toHome(cube, face, home, new AABB(chunkX * 16, minY, chunkZ * 16, chunkX * 16 + 16, minY + 16, chunkZ * 16 + 16));
+                    boxes[y] = NeighbourRenderer.toHome(image, new AABB(chunkX * 16, minY, chunkZ * 16, chunkX * 16 + 16, minY + 16, chunkZ * 16 + 16));
                 }
                 AABB whole = new AABB(chunkX * 16, level.getMinBuildHeight(), chunkZ * 16, chunkX * 16 + 16, level.getMaxBuildHeight(), chunkZ * 16 + 16);
                 int ground = NeighbourRenderer.lowestGroundAround(level, chunkX, chunkZ);
                 int buriedBelow = ground == Integer.MIN_VALUE ? Integer.MIN_VALUE : ground - NeighbourRenderer.BURIED_MARGIN;
-                state.columns[slot] = new Column(chunkX, chunkZ, NeighbourRenderer.toHome(cube, face, home, whole), boxes, buriedBelow);
+                state.columns[slot] = new Column(chunkX, chunkZ, NeighbourRenderer.toHome(image, whole), boxes, buriedBelow);
             }
         }
     }
 
-    /** As Sodium finalises its render lists: the faces' lists from the sections just collected, sorted from their cameras. */
+    /** As Sodium finalises its render lists: the images' lists from the sections just collected, sorted from their cameras. */
     public static void finalizeLists(RenderSectionManager sections) {
         if (sections != manager) return;
         for (Face state : FACES.values()) {
@@ -261,12 +244,11 @@ public final class SodiumNeighbours {
             double[] camera = state.pendingCamera;
             // Only the viewport's position is read in making the lists.
             state.lists = state.pending.createRenderLists(new Viewport(null, new Vector3d(camera[0], camera[1], camera[2])));
-            state.listsFor = state.builtFor;
             state.pending = null;
         }
     }
 
-    /** Keeps the animated textures in the faces' drawn sections ticking, as Sodium does for its own. */
+    /** Keeps the animated textures in the images' drawn sections ticking, as Sodium does for its own. */
     public static void tickVisible(RenderSectionManager sections) {
         if (sections != manager) return;
         for (Face state : FACES.values()) {
@@ -292,13 +274,9 @@ public final class SodiumNeighbours {
         manager = null;
     }
 
-    /** Draws one terrain layer of the neighbouring faces, after Sodium has drawn the camera's face's. */
+    /** Draws one terrain layer of the images, after Sodium has drawn the camera's own. */
     public static void draw(RenderSectionManager sections, RenderType layer, ChunkRenderMatrices matrices, double x, double y, double z) {
         if (sections != manager || FACES.isEmpty()) return;
-        ClientLevel level = Minecraft.getInstance().level;
-        CubeGeometry cube = level == null ? null : Cube.of(level);
-        CubeFace home = cube == null ? null : cube.faceAt(x, z);
-        if (home == null) return;
         TerrainRenderPass[] passes;
         if (layer == RenderType.solid()) {
             passes = new TerrainRenderPass[] {DefaultTerrainRenderPasses.SOLID, DefaultTerrainRenderPasses.CUTOUT};
@@ -310,30 +288,25 @@ public final class SodiumNeighbours {
         RenderSectionManagerAccessor access = (RenderSectionManagerAccessor) sections;
         ChunkRenderer renderer = access.alpha_omega$chunkRenderer();
         boolean indexed = access.alpha_omega$sortBehavior() != SortBehavior.OFF;
-        // Terrain fog is a cylinder about the vertex's own up axis, which on another face is sideways.
-        FogShape fogShape = RenderSystem.getShaderFogShape();
-        RenderSystem.setShaderFogShape(FogShape.SPHERE);
+        // A turn about Y keeps the cylindrical terrain fog right, so the fog shape stays.
         try (CommandList commandList = RenderDevice.INSTANCE.createCommandList()) {
-            for (Map.Entry<CubeFace, Face> entry : FACES.entrySet()) {
-                CubeFace face = entry.getKey();
+            for (Map.Entry<Motion, Face> entry : FACES.entrySet()) {
+                Motion image = entry.getKey();
                 Face state = entry.getValue();
-                if (state.listsFor != home || !home.isNeighbour(face)) continue;
-                double[] virtual = cube.transform(home, face, x, y, z);
-                Matrix4f modelView = new Matrix4f(matrices.modelView()).mul(new Matrix4f().set(NeighbourRenderer.rotation(face, home)));
+                Vec3 virtual = Transform.of(image.inverse()).position(new Vec3(x, y, z));
+                Matrix4f modelView = new Matrix4f(matrices.modelView()).mul(new Matrix4f().set(NeighbourRenderer.rotation(image)));
                 ChunkRenderMatrices rotated = new ChunkRenderMatrices(matrices.projection(), modelView);
-                CameraTransform camera = new CameraTransform(virtual[0], virtual[1], virtual[2]);
+                CameraTransform camera = new CameraTransform(virtual.x, virtual.y, virtual.z);
                 for (TerrainRenderPass pass : passes) renderer.render(rotated, commandList, state.lists, pass, camera, indexed);
             }
             commandList.flush();
-        } finally {
-            RenderSystem.setShaderFogShape(fogShape);
         }
     }
 
-    /** The block entities in a face's drawn sections. */
-    public static void forEachBlockEntity(CubeFace face, CubeFace home, Consumer<BlockEntity> action) {
-        Face state = FACES.get(face);
-        if (state == null || state.listsFor != home) return;
+    /** The block entities in an image's drawn sections. */
+    public static void forEachBlockEntity(Motion image, Consumer<BlockEntity> action) {
+        Face state = FACES.get(image);
+        if (state == null) return;
         Iterator<ChunkRenderList> lists = state.lists.iterator();
         while (lists.hasNext()) {
             ChunkRenderList list = lists.next();
@@ -349,16 +322,12 @@ public final class SodiumNeighbours {
         }
     }
 
-    /** For F3: per neighbouring face, sections built of those in view. */
+    /** For F3: per image, sections built of those in view. */
     @Nullable
     public static String debugLine() {
-        if (FACES.isEmpty() || lastHome == null) return null;
-        StringBuilder line = new StringBuilder("Neighbours (Sodium):");
-        FACES.forEach((face, state) -> {
-            if (state.listsFor == lastHome && lastHome.isNeighbour(face)) {
-                line.append(' ').append(face).append(' ').append(state.built).append('/').append(state.visible);
-            }
-        });
+        if (FACES.isEmpty()) return null;
+        StringBuilder line = new StringBuilder("Images (Sodium):");
+        FACES.forEach((image, state) -> line.append(' ').append(image).append(' ').append(state.built).append('/').append(state.visible));
         return line.toString();
     }
 }
