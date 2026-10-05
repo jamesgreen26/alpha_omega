@@ -140,7 +140,7 @@ The sphere can be rotated freely onto the cone points. Requiring spawn at 0° 0�
 
 - **One cone point at the north pole (`N`), the other three at 19.47° S,** 120° apart in longitude.
 - **Spawn is 61.9° from the nearest cone point.** The theoretical maximum for any point is 70.5°.
-- **The north–south line through spawn is an exact mirror line of the map.** Walking due north from spawn follows the prime meridian straight to the north pole, `5204` blocks away at k = 4. Continuing past it, you come down the far side facing south. Walking due south crosses the south pole.
+- **The north–south line through spawn is an exact mirror line of the map.** Walking due north from spawn follows the prime meridian straight to the north pole, `5204` blocks away at k = 4. The pole is a 180° cone point, so a straight line through it folds back on itself: continuing past it, you come straight back down the prime meridian, facing south, and reach spawn again after another `5204` blocks. Walking due south crosses the south pole.
 - **Three of the special places coincide.** The north pole is already special for the sun and local time; putting a cone point there means one fewer special place.
 
 Landmarks at k = 4:
@@ -149,7 +149,7 @@ Landmarks at k = 4:
 |---|---|
 | 2,600 blocks north | 63.1° N, on the prime meridian |
 | 5,204 blocks north | The north pole (cone point `N`) |
-| 10,408 blocks north | 0° 180°, facing south |
+| 10,408 blocks north | Spawn again (0° 0°), facing south |
 | 5,000 blocks south | 57.2° S, on the 180° meridian (past the south pole) |
 | 3,840 blocks east | 15.1° S, 67.6° E, with world north now 57.7° east of geographic north |
 

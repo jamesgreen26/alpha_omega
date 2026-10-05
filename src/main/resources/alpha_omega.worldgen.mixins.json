@@ -1,0 +1,35 @@
+{
+  "required": true,
+  "package": "g_mungus.alpha_omega.mixin.worldgen",
+  "compatibilityLevel": "JAVA_21",
+  "minVersion": "0.8",
+  "mixins": [
+    "BiomeManagerMixin",
+    "CarverSeedMixin",
+    "ChunkGeneratorMixin",
+    "ChunkMapRandomStateMixin",
+    "NoiseBasedAquiferMixin",
+    "NoiseChunkMixin",
+    "NoiseInterpolatorMixin",
+    "WorldGenRegionMixin",
+    "noise.BlendedNoiseMixin",
+    "noise.ClimateSamplerMixin",
+    "noise.DensityFunctionsNoiseMixin",
+    "noise.ImprovedNoiseMixin",
+    "noise.NoiseThresholdConditionMixin",
+    "noise.NormalNoiseAccessor",
+    "noise.NormalNoiseMixin",
+    "noise.PerlinNoiseAccessor",
+    "noise.RandomStateMixin",
+    "noise.RarityValueMapperAccessor",
+    "noise.ShiftAMixin",
+    "noise.ShiftBMixin",
+    "noise.ShiftMixin",
+    "noise.ShiftedNoiseMixin",
+    "noise.SurfaceSystemMixin",
+    "noise.WeirdScaledSamplerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
