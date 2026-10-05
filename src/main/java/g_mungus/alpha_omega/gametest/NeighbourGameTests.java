@@ -8,6 +8,7 @@ import g_mungus.alpha_omega.mixin.server.ChunkMapAccessor;
 import g_mungus.alpha_omega.mixin.server.TrackedEntityAccessor;
 import g_mungus.alpha_omega.neighbour.CubeTrackingView;
 import g_mungus.alpha_omega.neighbour.NeighbourViews;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
@@ -101,9 +102,13 @@ public class NeighbourGameTests {
         });
     }
 
-    /** A player arriving somewhere new gets its own face loaded before any neighbour chunks are asked for. */
+    /**
+     * A player arriving somewhere new has chunks loaded nearest first along the cube's surface, its own face ahead: a
+     * neighbour chunk is only asked for once the player's own face has loaded {@link NeighbourViews#HOME_LEAD} chunks
+     * further out than it is. In the end every neighbour chunk in reach is asked for.
+     */
     @GameTest(template = TEMPLATE, timeoutTicks = 1200)
-    public static void ownFaceLoadsFirst(GameTestHelper helper) {
+    public static void neighboursLoadBehindHome(GameTestHelper helper) {
         CubeGeometry geometry = geometry(helper);
         ServerLevel level = helper.getLevel();
         // Near DOWN's edge with NORTH, far from anything earlier tests generated.
@@ -112,14 +117,31 @@ public class NeighbourGameTests {
         TestPlayers.receiveChunks(helper, player);
         player.setNoGravity(true);
         player.teleportTo(level, standing.x, standing.y, standing.z, 0.0F, 0.0F);
-        int viewDistance = ((ChunkMapAccessor) level.getChunkSource().chunkMap).alpha_omega$getPlayerViewDistance(player);
-        int[] early = {0};
+        int loadDistance = ((ChunkMapAccessor) level.getChunkSource().chunkMap).alpha_omega$serverViewDistance();
+        LongOpenHashSet[] before = {new LongOpenHashSet()};
+        String[] early = {null};
         helper.onEachTick(() -> {
-            if (!NeighbourViews.homeLoaded(level, player, viewDistance) && !NeighbourViews.current(player).isEmpty()) early[0]++;
+            LongOpenHashSet held = NeighbourViews.held(player);
+            int homeLoaded = NeighbourViews.homeLoadedTo(player);
+            for (long chunk : held) {
+                if (before[0].contains(chunk) || homeLoaded >= loadDistance) continue;
+                ChunkPos pos = new ChunkPos(chunk);
+                // One already loaded is held whatever its distance: that is how crossings keep what they can see.
+                if (level.getChunkSource().getChunkNow(pos.x, pos.z) != null) continue;
+                for (CubeTrackingView.Virtual virtual : NeighbourViews.current(player)) {
+                    if (geometry.faceAtChunk(pos.x, pos.z) != virtual.face()) continue;
+                    int distance = Math.max(Math.abs(pos.x - virtual.center().x), Math.abs(pos.z - virtual.center().z));
+                    if (distance + NeighbourViews.HOME_LEAD > homeLoaded && early[0] == null) {
+                        early[0] = "neighbour chunk " + pos + " " + distance + " out was asked for with home loaded only " + homeLoaded + " out";
+                    }
+                }
+            }
+            before[0] = new LongOpenHashSet(held);
         });
         helper.succeedWhen(() -> {
-            helper.assertTrue(early[0] == 0, "neighbour chunks were asked for before the player's own view had loaded");
-            helper.assertTrue(!NeighbourViews.current(player).isEmpty(), "neighbours never loaded");
+            helper.assertTrue(early[0] == null, early[0]);
+            helper.assertTrue(NeighbourViews.homeLoadedTo(player) >= loadDistance, "home never loaded");
+            helper.assertTrue(!NeighbourViews.held(player).isEmpty(), "no neighbour chunks were asked for");
             level.getServer().getPlayerList().remove(player);
         });
     }

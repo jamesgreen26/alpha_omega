@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -348,6 +349,27 @@ public final class NeighbourRenderer {
             for (int z = 0; z < 16; z++) ground = Math.min(ground, chunk.getHeight(Heightmap.Types.WORLD_SURFACE, x, z));
         }
         return ground;
+    }
+
+    /** How much further than its true distance a neighbour section counts when sections queue to compile, in blocks. */
+    private static final double HOME_LEAD_BLOCKS = 32.0;
+
+    /**
+     * The squared distance a section counts as from the camera when it queues to compile: for a section of a
+     * neighbouring face, from the camera as seen from that face's storage, {@link #HOME_LEAD_BLOCKS} further; NaN for
+     * one of the camera's own face (or outside a cube world), where vanilla's own distance applies.
+     */
+    public static double compileDistanceSqr(AABB box) {
+        Minecraft minecraft = Minecraft.getInstance();
+        CubeGeometry cube = minecraft.level == null ? null : Cube.of(minecraft.level);
+        if (cube == null) return Double.NaN;
+        Vec3 cam = minecraft.gameRenderer.getMainCamera().getPosition();
+        CubeFace camera = cube.faceAt(cam.x, cam.z);
+        CubeFace face = cube.faceAt(box.minX + 8.0, box.minZ + 8.0);
+        if (camera == null || face == null || face == camera) return Double.NaN;
+        double[] virtual = cube.transform(camera, face, cam.x, cam.y, cam.z);
+        double distance = Math.sqrt(Mth.square(box.minX + 8.0 - virtual[0]) + Mth.square(box.minY + 8.0 - virtual[1]) + Mth.square(box.minZ + 8.0 - virtual[2]));
+        return Mth.square(distance + HOME_LEAD_BLOCKS);
     }
 
     /** Distance from a point to the nearest point of a box. */
