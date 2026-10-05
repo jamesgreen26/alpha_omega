@@ -1,7 +1,6 @@
 package g_mungus.alpha_omega.mixin.client;
 
 import com.llamalad7.mixinextras.sugar.Local;
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import g_mungus.alpha_omega.client.NeighbourRenderer;
 import g_mungus.alpha_omega.client.TransferStats;
@@ -13,7 +12,6 @@ import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.core.BlockPos;
@@ -27,7 +25,10 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Hooks {@link NeighbourRenderer} into the level renderer: setup, terrain layers, entities, block entities, dirt. */
+/**
+ * Hooks {@link NeighbourRenderer} into the level renderer: setup, entities, block entities, dirt. The hooks into vanilla's
+ * own terrain pipeline, which Sodium replaces, are in {@link LevelRendererVanillaTerrainMixin}.
+ */
 @Mixin(LevelRenderer.class)
 abstract class LevelRendererNeighbourMixin {
 
@@ -50,22 +51,6 @@ abstract class LevelRendererNeighbourMixin {
                                              @Local Frustum frustum) {
         NeighbourRenderer.setup((LevelRenderer) (Object) this, camera, frustum, this.minecraft.options.getEffectiveRenderDistance());
         TransferStats.frame(this.visibleSections.size());
-    }
-
-    @Inject(method = "setupRender", at = @At("HEAD"))
-    private void alpha_omega$swapAreas(Camera camera, Frustum frustum, boolean capturedFrustum, boolean spectator, CallbackInfo ci) {
-        NeighbourRenderer.beforeSetupRender((LevelRenderer) (Object) this, camera);
-    }
-
-    @Inject(method = "setupRender", at = @At(value = "INVOKE", shift = At.Shift.AFTER,
-        target = "Lnet/minecraft/client/renderer/SectionOcclusionGraph;update(ZLnet/minecraft/client/Camera;Lnet/minecraft/client/renderer/culling/Frustum;Ljava/util/List;)V"))
-    private void alpha_omega$awaitSwappedGraph(Camera camera, Frustum frustum, boolean capturedFrustum, boolean spectator, CallbackInfo ci) {
-        NeighbourRenderer.afterOcclusionUpdate((LevelRenderer) (Object) this);
-    }
-
-    @Inject(method = "renderSectionLayer", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/ShaderInstance;clear()V"))
-    private void alpha_omega$drawNeighbours(RenderType type, double camX, double camY, double camZ, Matrix4f modelView, Matrix4f projection, CallbackInfo ci) {
-        NeighbourRenderer.drawLayer(type, RenderSystem.getShader(), camX, camY, camZ, modelView);
     }
 
     @Inject(method = "renderLevel", at = @At(value = "INVOKE", ordinal = 0,

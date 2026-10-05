@@ -6,6 +6,8 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexBuffer;
 import g_mungus.alpha_omega.AlphaOmegaMod;
+import g_mungus.alpha_omega.compat.sodium.Sodium;
+import g_mungus.alpha_omega.compat.sodium.SodiumNeighbours;
 import g_mungus.alpha_omega.cube.Cube;
 import g_mungus.alpha_omega.cube.CubeFace;
 import g_mungus.alpha_omega.cube.CubeGeometry;
@@ -19,6 +21,7 @@ import java.util.EnumMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -70,9 +73,9 @@ public final class NeighbourRenderer {
     /** Out-of-view neighbour sections compiled per frame. */
     private static final int COMPILE_AHEAD_PER_FRAME = 24;
     /** How far below the lowest ground around its chunk a section's top must be to count as buried. */
-    private static final int BURIED_MARGIN = 16;
+    public static final int BURIED_MARGIN = 16;
     /** Half the diagonal of a section, for culling whole columns by distance. */
-    private static final double SECTION_RADIUS = 14.0;
+    public static final double SECTION_RADIUS = 14.0;
 
     /** One loaded column of an area: its sections bottom to top, their boxes seen from home, and where buried begins. */
     private record Column(AABB box, SectionRenderDispatcher.RenderSection[] sections, AABB[] boxes, int buriedBelow) {
@@ -152,6 +155,7 @@ public final class NeighbourRenderer {
         AREAS.clear();
         DRAWS.clear();
         GROUND.clear();
+        if (Sodium.loaded()) SodiumNeighbours.reset();
         home = null;
         vanillaFace = null;
         swapped = false;
@@ -220,6 +224,16 @@ public final class NeighbourRenderer {
         home = cube.faceAt(cam.x, cam.z);
         DRAWS.clear();
         if (home == null) return;
+        if (Sodium.loaded()) {
+            // Sodium collects and draws the neighbours' terrain (SodiumNeighbours); entities and block entities still
+            // draw from here, in each face's frame.
+            for (CubeFace face : CubeFace.values()) {
+                if (!home.isNeighbour(face)) continue;
+                DRAWS.put(face, new Draw(face, new Matrix4f().set(rotation(face, home)), new Quaternionf().setFromNormalized(rotation(face, home)),
+                    cube.transform(home, face, cam.x, cam.y, cam.z), List.of(), Map.of()));
+            }
+            return;
+        }
         RenderRegionCache cache = new RenderRegionCache();
         int[] budget = {COMPILE_AHEAD_PER_FRAME};
         double reach = (viewDistance + 1) * 16.0;
@@ -329,7 +343,7 @@ public final class NeighbourRenderer {
     }
 
     /** The lowest ground in a chunk and the eight around it, or the bottom of the world if any of them is missing. */
-    private static int lowestGroundAround(ClientLevel level, int chunkX, int chunkZ) {
+    public static int lowestGroundAround(ClientLevel level, int chunkX, int chunkZ) {
         int ground = Integer.MAX_VALUE;
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
@@ -379,7 +393,7 @@ public final class NeighbourRenderer {
     }
 
     /** Distance from a point to the nearest point of a box. */
-    private static double distance(AABB box, Vec3 point) {
+    public static double distance(AABB box, Vec3 point) {
         double dx = Math.max(0.0, Math.max(box.minX - point.x, point.x - box.maxX));
         double dy = Math.max(0.0, Math.max(box.minY - point.y, point.y - box.maxY));
         double dz = Math.max(0.0, Math.max(box.minZ - point.z, point.z - box.maxZ));
@@ -387,13 +401,14 @@ public final class NeighbourRenderer {
     }
 
     /** A box of one face's storage, in another's. */
-    private static AABB toHome(CubeGeometry cube, CubeFace face, CubeFace home, AABB box) {
+    public static AABB toHome(CubeGeometry cube, CubeFace face, CubeFace home, AABB box) {
         double[] a = cube.transform(face, home, box.minX, box.minY, box.minZ);
         double[] b = cube.transform(face, home, box.maxX, box.maxY, box.maxZ);
         return new AABB(a[0], a[1], a[2], b[0], b[1], b[2]);
     }
 
-    private static Matrix3f rotation(CubeFace face, CubeFace home) {
+    /** The rotation taking directions of one face's storage to another's. */
+    public static Matrix3f rotation(CubeFace face, CubeFace home) {
         Matrix3f m = new Matrix3f();
         for (int j = 0; j < 3; j++) {
             double[] r = CubeGeometry.rotate(face, home, j == 0 ? 1 : 0, j == 1 ? 1 : 0, j == 2 ? 1 : 0);
@@ -472,17 +487,20 @@ public final class NeighbourRenderer {
             double[] virtual = draw.camera;
             Vec3 virtualCam = new Vec3(virtual[0], virtual[1], virtual[2]);
             Quaternionf rotation = draw.quaternion;
-            for (SectionRenderDispatcher.RenderSection section : draw.visible) {
-                for (BlockEntity blockEntity : section.getCompiled().getRenderableBlockEntities()) {
-                    BlockEntityRenderer<BlockEntity> blockEntityRenderer = dispatcher.getRenderer(blockEntity);
-                    if (blockEntityRenderer == null || !blockEntityRenderer.shouldRender(blockEntity, virtualCam)) continue;
-                    BlockPos pos = blockEntity.getBlockPos();
-                    pose.pushPose();
-                    pose.mulPose(rotation);
-                    pose.translate(pos.getX() - virtual[0], pos.getY() - virtual[1], pos.getZ() - virtual[2]);
-                    blockEntityRenderer.render(blockEntity, partialTick, pose, buffers, LevelRenderer.getLightColor(level, pos), OverlayTexture.NO_OVERLAY);
-                    pose.popPose();
-                }
+            Consumer<BlockEntity> render = blockEntity -> {
+                BlockEntityRenderer<BlockEntity> blockEntityRenderer = dispatcher.getRenderer(blockEntity);
+                if (blockEntityRenderer == null || !blockEntityRenderer.shouldRender(blockEntity, virtualCam)) return;
+                BlockPos pos = blockEntity.getBlockPos();
+                pose.pushPose();
+                pose.mulPose(rotation);
+                pose.translate(pos.getX() - virtual[0], pos.getY() - virtual[1], pos.getZ() - virtual[2]);
+                blockEntityRenderer.render(blockEntity, partialTick, pose, buffers, LevelRenderer.getLightColor(level, pos), OverlayTexture.NO_OVERLAY);
+                pose.popPose();
+            };
+            if (Sodium.loaded()) {
+                SodiumNeighbours.forEachBlockEntity(draw.face, home, render);
+            } else {
+                for (SectionRenderDispatcher.RenderSection section : draw.visible) section.getCompiled().getRenderableBlockEntities().forEach(render);
             }
         }
     }
@@ -490,6 +508,7 @@ public final class NeighbourRenderer {
     /** For F3: per neighbouring face, sections drawn (with any geometry) of those in view. */
     @Nullable
     public static String debugLine() {
+        if (Sodium.loaded()) return SodiumNeighbours.debugLine();
         if (home == null || DRAWS.isEmpty()) return null;
         StringBuilder line = new StringBuilder("Neighbours:");
         for (Draw draw : DRAWS.values()) {
@@ -506,6 +525,8 @@ public final class NeighbourRenderer {
      * that is left to {@link #blockChanged}.
      */
     public static boolean setDirty(ClientLevel level, int sectionX, int sectionY, int sectionZ, boolean playerChanged) {
+        // Sodium keeps its sections by position, so every face's are its own to mark.
+        if (Sodium.loaded()) return false;
         CubeGeometry cube = Cube.of(level);
         if (cube == null || home == null) return false;
         CubeFace face = cube.faceAtChunk(sectionX, sectionZ);
@@ -529,6 +550,7 @@ public final class NeighbourRenderer {
         CubeFace face = cube.faceAtChunk(chunkX, chunkZ);
         Area area = face == null ? null : AREAS.get(face);
         if (area != null) area.invalidateAround(chunkX, chunkZ);
+        if (face != null && Sodium.loaded()) SodiumNeighbours.invalidateAround(face, chunkX, chunkZ);
     }
 
     /** A chunk arrived or was forgotten: the columns around it are worked out again. */
@@ -538,5 +560,6 @@ public final class NeighbourRenderer {
         CubeFace face = cube == null ? null : cube.faceAtChunk(chunkX, chunkZ);
         Area area = face == null ? null : AREAS.get(face);
         if (area != null) area.invalidateAround(chunkX, chunkZ);
+        if (face != null && Sodium.loaded()) SodiumNeighbours.invalidateAround(face, chunkX, chunkZ);
     }
 }

@@ -3,6 +3,8 @@ package g_mungus.alpha_omega.mixin.client;
 import g_mungus.alpha_omega.client.FaceChunks;
 import g_mungus.alpha_omega.client.NeighbourRenderer;
 import g_mungus.alpha_omega.client.TransferStats;
+import g_mungus.alpha_omega.compat.sodium.Sodium;
+import g_mungus.alpha_omega.compat.sodium.SodiumNeighbours;
 import g_mungus.alpha_omega.cube.Cube;
 import g_mungus.alpha_omega.cube.CubeGeometry;
 import java.util.function.Consumer;
@@ -84,6 +86,7 @@ abstract class ClientChunkCacheMixin {
             chunk.replaceWithPacketData(buffer, heightmaps, blockEntities);
         }
         this.level.onChunkLoaded(pos);
+        if (Sodium.loaded()) SodiumNeighbours.chunkLoaded(this.level, x, z);
         NeighbourRenderer.chunkChanged(this.level, x, z);
         NeoForge.EVENT_BUS.post(new ChunkEvent.Load(chunk, false));
         cir.setReturnValue(chunk);
@@ -96,6 +99,7 @@ abstract class ClientChunkCacheMixin {
         LevelChunk chunk = this.alpha_omega$store().remove(pos.x, pos.z);
         if (chunk != null) {
             TransferStats.chunkForgotten();
+            if (Sodium.loaded()) SodiumNeighbours.chunkDropped(this.level, pos.x, pos.z);
             NeighbourRenderer.chunkChanged(this.level, pos.x, pos.z);
             NeoForge.EVENT_BUS.post(new ChunkEvent.Unload(chunk));
             this.level.unload(chunk);

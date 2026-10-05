@@ -5,7 +5,11 @@
   "compatibilityLevel": "JAVA_21",
   "minVersion": "0.8",
   "mixins": [],
-  "client": [],
+  "client": [
+    "sodium.RenderSectionManagerAccessor",
+    "sodium.RenderSectionManagerMixin",
+    "sodium.SodiumWorldRendererMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   }
