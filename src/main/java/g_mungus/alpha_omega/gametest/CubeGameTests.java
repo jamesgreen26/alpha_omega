@@ -9,10 +9,17 @@ import g_mungus.alpha_omega.cube.CubeSettings;
 import g_mungus.alpha_omega.network.CubePayload;
 import g_mungus.alpha_omega.worldgen.CubeChunkGenerator;
 import io.netty.buffer.Unpooled;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Properties;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.RegistryOps;
+import net.minecraft.server.dedicated.DedicatedServerProperties;
+import net.minecraft.server.dedicated.Settings;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.ChunkGenerator;
@@ -59,5 +66,30 @@ public class CubeGameTests {
         helper.assertTrue(received.toString().equals(geometry.toString()) && received.minY == geometry.minY && received.maxY == geometry.maxY
             && received.settings.equals(geometry.settings), "client geometry matches the server's");
         helper.succeed();
+    }
+
+    /** A dedicated server makes a Cube World unless its properties name another level type, and writes that down. */
+    @GameTest(template = TEMPLATE)
+    public static void dedicatedServersDefaultToCubes(GameTestHelper helper) {
+        helper.assertTrue(levelType(new Properties()).equals(CubeChunkGenerator.PRESET.location().toString()), "no level type should default to a cube");
+        Properties flat = new Properties();
+        flat.setProperty("level-type", "minecraft:flat");
+        helper.assertTrue(levelType(flat).equals("minecraft:flat"), "a named level type should be kept");
+        helper.succeed();
+    }
+
+    /** The level type a dedicated server reads from some properties, as it writes it back to {@code server.properties}. */
+    private static String levelType(Properties properties) {
+        try {
+            Path file = Files.createTempFile("alpha_omega", ".properties");
+            try {
+                new DedicatedServerProperties(properties).store(file);
+                return Settings.loadFromFile(file).getProperty("level-type");
+            } finally {
+                Files.deleteIfExists(file);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 }
