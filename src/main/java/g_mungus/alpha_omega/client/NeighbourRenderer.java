@@ -9,11 +9,14 @@ import g_mungus.alpha_omega.AlphaOmegaMod;
 import g_mungus.alpha_omega.cube.Cube;
 import g_mungus.alpha_omega.cube.CubeFace;
 import g_mungus.alpha_omega.cube.CubeGeometry;
+import g_mungus.alpha_omega.mixin.client.CompiledSectionAccessor;
 import g_mungus.alpha_omega.mixin.client.LevelRendererAccessor;
 import g_mungus.alpha_omega.mixin.client.SectionOcclusionGraphAccessor;
 import g_mungus.alpha_omega.mixin.client.ViewAreaAccessor;
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import net.minecraft.client.Camera;
@@ -32,9 +35,13 @@ import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
@@ -48,14 +55,73 @@ import org.joml.Quaternionf;
  * whose sections compile from that face's chunks like any others. They are drawn in each terrain layer with the
  * face's rotation in the model-view matrix and offsets from the camera's position there; entities and block entities
  * there are drawn with the same rotation.
+ *
+ * <p>Per frame this only walks what can be drawn: each area keeps, per column, whether it lies on its face and is
+ * loaded, with its boxes seen from home; a column is worked out again only when the area moves, a chunk near it comes,
+ * goes or changes, or the camera changes face. Columns are culled whole before their sections are. Sections buried
+ * well below the ground around them are skipped while the camera is above ground. Areas are never freed while the
+ * world lasts: one a face no longer needs is handed to the next face that does, so crossing edges neither frees nor
+ * allocates GPU buffers.
  */
 public final class NeighbourRenderer {
 
     /** Out-of-view neighbour sections compiled per frame. */
     private static final int COMPILE_AHEAD_PER_FRAME = 24;
+    /** How far below the lowest ground around its chunk a section's top must be to count as buried. */
+    private static final int BURIED_MARGIN = 16;
+    /** Half the diagonal of a section, for culling whole columns by distance. */
+    private static final double SECTION_RADIUS = 14.0;
 
-    private static final Map<CubeFace, ViewArea> AREAS = new EnumMap<>(CubeFace.class);
-    private static final Map<CubeFace, List<SectionRenderDispatcher.RenderSection>> VISIBLE = new EnumMap<>(CubeFace.class);
+    /** One loaded column of an area: its sections bottom to top, their boxes seen from home, and where buried begins. */
+    private record Column(AABB box, SectionRenderDispatcher.RenderSection[] sections, AABB[] boxes, int buriedBelow) {
+    }
+
+    /** A column slot worked out to hold nothing worth drawing (off the face, outside the footprint, or not loaded). */
+    private static final Column NOTHING = new Column(new AABB(0, 0, 0, 0, 0, 0), new SectionRenderDispatcher.RenderSection[0], new AABB[0], 0);
+
+    /** A neighbouring face's view area, with its columns worked out. */
+    private static final class Area {
+        final ViewArea view;
+        final int size;
+        CubeFace face;
+        /** The virtual camera's section (as {@code ViewArea.repositionCamera} rounds it) the area was last placed at. */
+        long placedAt = Long.MIN_VALUE;
+        @Nullable
+        CubeFace builtFor;
+        /** Per column slot ({@code x * size + z}, as the view area wraps chunk positions): null until worked out. */
+        final Column[] columns;
+
+        Area(ViewArea view, CubeFace face) {
+            this.view = view;
+            this.face = face;
+            this.size = view.getViewDistance() * 2 + 1;
+            this.columns = new Column[this.size * this.size];
+        }
+
+        void invalidate() {
+            java.util.Arrays.fill(this.columns, null);
+        }
+
+        /** Forgets the columns of a chunk and the eight around it (their buried depth depends on it). */
+        void invalidateAround(int chunkX, int chunkZ) {
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    this.columns[Math.floorMod(chunkX + dx, this.size) * this.size + Math.floorMod(chunkZ + dz, this.size)] = null;
+                }
+            }
+        }
+    }
+
+    /** The lowest ground in each chunk the renderer has looked at, until the chunk changes. */
+    private static final Long2IntOpenHashMap GROUND = new Long2IntOpenHashMap();
+
+    /** What one neighbouring face draws this frame. */
+    private record Draw(CubeFace face, Matrix4f rotation, Quaternionf quaternion, double[] camera, List<SectionRenderDispatcher.RenderSection> visible,
+                        Map<RenderType, List<SectionRenderDispatcher.RenderSection>> layers) {
+    }
+
+    private static final Map<CubeFace, Area> AREAS = new EnumMap<>(CubeFace.class);
+    private static final Map<CubeFace, Draw> DRAWS = new EnumMap<>(CubeFace.class);
 
     @Nullable
     private static SectionRenderDispatcher dispatcher;
@@ -77,9 +143,10 @@ public final class NeighbourRenderer {
 
     /** Releases every area, so they are rebuilt (new level, view distance or renderer). */
     public static void reset() {
-        AREAS.values().forEach(ViewArea::releaseAllBuffers);
+        AREAS.values().forEach(area -> area.view.releaseAllBuffers());
         AREAS.clear();
-        VISIBLE.clear();
+        DRAWS.clear();
+        GROUND.clear();
         home = null;
         vanillaFace = null;
         swapped = false;
@@ -88,7 +155,7 @@ public final class NeighbourRenderer {
 
     /**
      * Before vanilla positions its area for the frame: if the camera has crossed to another face, hand vanilla the
-     * area already built for that face and keep vanilla's old one as a neighbour, so neither face recompiles.
+     * area already built for that face and keep vanilla's old one for the face it left, so neither face recompiles.
      */
     public static void beforeSetupRender(LevelRenderer renderer, Camera camera) {
         LevelRendererAccessor access = (LevelRendererAccessor) renderer;
@@ -100,16 +167,13 @@ public final class NeighbourRenderer {
         CubeFace was = vanillaFace;
         vanillaFace = now;
         if (was == null || now == null || was == now) return;
-        ViewArea incoming = AREAS.remove(now);
+        Area incoming = AREAS.remove(now);
         if (incoming == null) return;
         ViewArea outgoing = access.alpha_omega$viewArea();
-        access.alpha_omega$setViewArea(incoming);
-        access.alpha_omega$sectionOcclusionGraph().waitAndReset(incoming);
+        access.alpha_omega$setViewArea(incoming.view);
+        access.alpha_omega$sectionOcclusionGraph().waitAndReset(incoming.view);
         swapped = true;
-        if (outgoing != null) {
-            if (was.isNeighbour(now)) AREAS.put(was, outgoing);
-            else outgoing.releaseAllBuffers();
-        }
+        if (outgoing != null) AREAS.put(was, new Area(outgoing, was));
     }
 
     /**
@@ -149,58 +213,149 @@ public final class NeighbourRenderer {
         geometry = cube;
         Vec3 cam = camera.getPosition();
         home = cube.faceAt(cam.x, cam.z);
-        VISIBLE.clear();
+        DRAWS.clear();
         if (home == null) return;
-        releaseForgotten(level, cube);
         RenderRegionCache cache = new RenderRegionCache();
-        int budget = COMPILE_AHEAD_PER_FRAME;
+        int[] budget = {COMPILE_AHEAD_PER_FRAME};
         double reach = (viewDistance + 1) * 16.0;
+        // Buried sections can only be seen from underground (through caves meeting at the edge).
+        boolean underground = level.getHeight(Heightmap.Types.WORLD_SURFACE, Mth.floor(cam.x), Mth.floor(cam.z)) > cam.y + 2.0;
         String only = System.getProperty("alpha_omega.dev.onlyFace");
         for (CubeFace face : CubeFace.values()) {
             if (!home.isNeighbour(face)) continue;
             if (only != null && !only.equals(face.name())) continue;
-            ViewArea area = AREAS.computeIfAbsent(face, f -> new ViewArea(sections, level, viewDistance, renderer));
+            Area area = areaFor(face, level, sections, viewDistance, renderer);
             double[] virtual = cube.transform(home, face, cam.x, cam.y, cam.z);
-            area.repositionCamera(virtual[0], virtual[2]);
-            List<SectionRenderDispatcher.RenderSection> visible = new ArrayList<>();
-            for (SectionRenderDispatcher.RenderSection section : area.sections) {
-                BlockPos origin = section.getOrigin();
-                int chunkX = origin.getX() >> 4, chunkZ = origin.getZ() >> 4;
-                if (cube.faceAtChunk(chunkX, chunkZ) != face || !cube.inFootprint(chunkX, chunkZ)) continue;
-                if (level.getChunkSource().getChunk(chunkX, chunkZ, ChunkStatus.FULL, false) == null) continue;
-                AABB box = toHome(cube, face, home, new AABB(origin.getX(), origin.getY(), origin.getZ(), origin.getX() + 16, origin.getY() + 16, origin.getZ() + 16));
-                if (box.getCenter().distanceTo(cam) > reach) continue;
-                boolean inView = frustum.isVisible(box);
-                if (inView) visible.add(section);
-                // Compile out of view too (within a budget): crossing an edge turns the view a quarter turn, and the
-                // face then becomes vanilla's, so whatever it shows should be ready.
-                if (section.isDirty() && (inView || budget > 0) && level.getLightEngine().lightOnInSection(SectionPos.of(origin)) && section.hasAllNeighbors()) {
-                    if (!inView) budget--;
-                    section.rebuildSectionAsync(sections, cache);
-                    section.setNotDirty();
+            long placedAt = ChunkPos.asLong(Math.floorDiv(Mth.ceil(virtual[0]), 16), Math.floorDiv(Mth.ceil(virtual[2]), 16));
+            if (placedAt != area.placedAt) {
+                area.view.repositionCamera(virtual[0], virtual[2]);
+                area.placedAt = placedAt;
+                area.invalidate();
+            }
+            if (area.builtFor != home) {
+                area.builtFor = home;
+                area.invalidate();
+            }
+            build(area, level, cube);
+            Draw draw = new Draw(face, new Matrix4f().set(rotation(face, home)), new Quaternionf().setFromNormalized(rotation(face, home)), virtual,
+                new ArrayList<>(), new IdentityHashMap<>());
+            for (Column column : area.columns) {
+                if (column == NOTHING) continue;
+                if (distance(column.box, cam) > reach + SECTION_RADIUS) continue;
+                boolean columnInView = frustum.isVisible(column.box);
+                // Out of view, only compile ahead (within a budget): crossing an edge turns the view a quarter turn,
+                // and the face then becomes vanilla's, so whatever it shows should be ready.
+                if (!columnInView && budget[0] <= 0) continue;
+                for (int y = column.sections.length - 1; y >= 0; y--) {
+                    SectionRenderDispatcher.RenderSection section = column.sections[y];
+                    if (!underground && section.getOrigin().getY() + 16 <= column.buriedBelow) break;
+                    AABB box = column.boxes[y];
+                    if (distance(box, cam) > reach) continue;
+                    boolean inView = columnInView && frustum.isVisible(box);
+                    if (inView) {
+                        draw.visible.add(section);
+                        for (RenderType layer : ((CompiledSectionAccessor) section.getCompiled()).alpha_omega$hasBlocks()) {
+                            draw.layers.computeIfAbsent(layer, l -> new ArrayList<>()).add(section);
+                        }
+                    }
+                    if (section.isDirty() && (inView || budget[0] > 0) && level.getLightEngine().lightOnInSection(SectionPos.of(section.getOrigin()))
+                        && section.hasAllNeighbors()) {
+                        if (!inView) budget[0]--;
+                        section.rebuildSectionAsync(sections, cache);
+                        section.setNotDirty();
+                    }
                 }
             }
-            VISIBLE.put(face, visible);
+            DRAWS.put(face, draw);
         }
     }
 
     /**
-     * Keeps the area of a face that is no longer a neighbour (the far side, after crossing) while the client still
-     * holds any of its chunks, as it does while the server lets them linger: crossing back then finds it built.
-     * Once they are all gone, so is the area.
+     * The area for a face: its own if it has one, else one a face no longer near has left behind (its buffers are
+     * reused, its sections recompile for the new face), else a new one.
      */
-    private static void releaseForgotten(ClientLevel level, CubeGeometry cube) {
-        AREAS.entrySet().removeIf(entry -> {
-            CubeFace face = entry.getKey();
-            if (home.isNeighbour(face) || face == home) return false;
-            for (SectionRenderDispatcher.RenderSection section : entry.getValue().sections) {
-                BlockPos origin = section.getOrigin();
-                int chunkX = origin.getX() >> 4, chunkZ = origin.getZ() >> 4;
-                if (cube.faceAtChunk(chunkX, chunkZ) == face && level.getChunkSource().getChunk(chunkX, chunkZ, ChunkStatus.FULL, false) != null) return false;
+    private static Area areaFor(CubeFace face, ClientLevel level, SectionRenderDispatcher sections, int viewDistance, LevelRenderer renderer) {
+        Area area = AREAS.get(face);
+        if (area != null) return area;
+        for (Area spare : AREAS.values()) {
+            if (spare.face == home || home.isNeighbour(spare.face)) continue;
+            AREAS.remove(spare.face);
+            spare.face = face;
+            spare.placedAt = Long.MIN_VALUE;
+            spare.invalidate();
+            AREAS.put(face, spare);
+            return spare;
+        }
+        area = new Area(new ViewArea(sections, level, viewDistance, renderer), face);
+        AREAS.put(face, area);
+        return area;
+    }
+
+    /** Works out the area's column slots not yet worked out: whether each is on its face and loaded, its boxes, its buried depth. */
+    private static void build(Area area, ClientLevel level, CubeGeometry cube) {
+        ViewArea view = area.view;
+        int size = area.size;
+        int height = level.getSectionsCount();
+        for (int x = 0; x < size; x++) {
+            for (int z = 0; z < size; z++) {
+                SectionRenderDispatcher.RenderSection bottom = view.sections[z * height * size + x];
+                int chunkX = bottom.getOrigin().getX() >> 4, chunkZ = bottom.getOrigin().getZ() >> 4;
+                int slot = Math.floorMod(chunkX, size) * size + Math.floorMod(chunkZ, size);
+                if (area.columns[slot] != null) continue;
+                if (cube.faceAtChunk(chunkX, chunkZ) != area.face || !cube.inFootprint(chunkX, chunkZ)
+                    || level.getChunkSource().getChunk(chunkX, chunkZ, ChunkStatus.FULL, false) == null) {
+                    area.columns[slot] = NOTHING;
+                    continue;
+                }
+                SectionRenderDispatcher.RenderSection[] column = new SectionRenderDispatcher.RenderSection[height];
+                AABB[] boxes = new AABB[height];
+                for (int y = 0; y < height; y++) {
+                    column[y] = view.sections[(z * height + y) * size + x];
+                    boxes[y] = toHome(cube, area.face, home, column[y].getBoundingBox());
+                }
+                AABB whole = new AABB(chunkX * 16, level.getMinBuildHeight(), chunkZ * 16, chunkX * 16 + 16, level.getMaxBuildHeight(), chunkZ * 16 + 16);
+                int ground = lowestGroundAround(level, chunkX, chunkZ);
+                int buriedBelow = ground == Integer.MIN_VALUE ? Integer.MIN_VALUE : ground - BURIED_MARGIN;
+                area.columns[slot] = new Column(toHome(cube, area.face, home, whole), column, boxes, buriedBelow);
             }
-            entry.getValue().releaseAllBuffers();
-            return true;
-        });
+        }
+    }
+
+    /** The lowest ground in a chunk and the eight around it, or the bottom of the world if any of them is missing. */
+    private static int lowestGroundAround(ClientLevel level, int chunkX, int chunkZ) {
+        int ground = Integer.MAX_VALUE;
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                long key = ChunkPos.asLong(chunkX + dx, chunkZ + dz);
+                int chunkGround;
+                if (GROUND.containsKey(key)) {
+                    chunkGround = GROUND.get(key);
+                } else {
+                    LevelChunk chunk = level.getChunkSource().getChunk(chunkX + dx, chunkZ + dz, ChunkStatus.FULL, false);
+                    chunkGround = chunk == null ? Integer.MIN_VALUE : lowestGround(chunk);
+                    // A missing chunk is not remembered: it is worked out again once it arrives.
+                    if (chunk != null) GROUND.put(key, chunkGround);
+                }
+                ground = Math.min(ground, chunkGround);
+            }
+        }
+        return ground;
+    }
+
+    private static int lowestGround(LevelChunk chunk) {
+        int ground = Integer.MAX_VALUE;
+        for (int x = 0; x < 16; x++) {
+            for (int z = 0; z < 16; z++) ground = Math.min(ground, chunk.getHeight(Heightmap.Types.WORLD_SURFACE, x, z));
+        }
+        return ground;
+    }
+
+    /** Distance from a point to the nearest point of a box. */
+    private static double distance(AABB box, Vec3 point) {
+        double dx = Math.max(0.0, Math.max(box.minX - point.x, point.x - box.maxX));
+        double dy = Math.max(0.0, Math.max(box.minY - point.y, point.y - box.maxY));
+        double dz = Math.max(0.0, Math.max(box.minZ - point.z, point.z - box.maxZ));
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
     }
 
     /** A box of one face's storage, in another's. */
@@ -221,7 +376,7 @@ public final class NeighbourRenderer {
 
     /** Draws one terrain layer of the neighbouring faces, with the shader vanilla has just drawn its own with. */
     public static void drawLayer(RenderType type, ShaderInstance shader, double camX, double camY, double camZ, Matrix4f modelView) {
-        if (home == null || geometry == null || VISIBLE.isEmpty()) return;
+        if (home == null || DRAWS.isEmpty()) return;
         Uniform offset = shader.CHUNK_OFFSET;
         Uniform modelViewUniform = shader.MODEL_VIEW_MATRIX;
         // Vanilla's terrain fog is a cylinder about the vertex's own up axis, which on another face is sideways.
@@ -231,18 +386,16 @@ public final class NeighbourRenderer {
             fogShape.upload();
         }
         boolean forward = type != RenderType.translucent();
-        for (Map.Entry<CubeFace, List<SectionRenderDispatcher.RenderSection>> entry : VISIBLE.entrySet()) {
-            List<SectionRenderDispatcher.RenderSection> sections = entry.getValue();
-            if (sections.isEmpty()) continue;
-            CubeFace face = entry.getKey();
+        for (Draw draw : DRAWS.values()) {
+            List<SectionRenderDispatcher.RenderSection> sections = draw.layers.get(type);
+            if (sections == null) continue;
             if (modelViewUniform != null) {
-                modelViewUniform.set(new Matrix4f(modelView).mul(new Matrix4f().set(rotation(face, home))));
+                modelViewUniform.set(new Matrix4f(modelView).mul(draw.rotation));
                 modelViewUniform.upload();
             }
-            double[] virtual = geometry.transform(home, face, camX, camY, camZ);
+            double[] virtual = draw.camera;
             for (int i = 0; i < sections.size(); i++) {
                 SectionRenderDispatcher.RenderSection section = sections.get(forward ? i : sections.size() - 1 - i);
-                if (section.getCompiled().isEmpty(type)) continue;
                 BlockPos origin = section.getOrigin();
                 if (offset != null) {
                     offset.set((float) (origin.getX() - virtual[0]), (float) (origin.getY() - virtual[1]), (float) (origin.getZ() - virtual[2]));
@@ -265,18 +418,18 @@ public final class NeighbourRenderer {
 
     /** Draws the entities standing on the neighbouring faces. */
     public static void renderEntities(LevelRenderer renderer, Camera camera, Frustum frustum, DeltaTracker delta, PoseStack pose, MultiBufferSource buffers) {
-        if (home == null || geometry == null || VISIBLE.isEmpty()) return;
+        if (home == null || geometry == null || DRAWS.isEmpty()) return;
         ClientLevel level = ((LevelRendererAccessor) renderer).alpha_omega$level();
-        Vec3 cam = camera.getPosition();
         for (Entity entity : level.entitiesForRendering()) {
             CubeFace face = geometry.faceAt(entity.getX(), entity.getZ());
-            if (face == null || !VISIBLE.containsKey(face)) continue;
-            double[] virtual = geometry.transform(home, face, cam.x, cam.y, cam.z);
+            Draw draw = face == null ? null : DRAWS.get(face);
+            if (draw == null) continue;
+            double[] virtual = draw.camera;
             if (!entity.shouldRender(virtual[0], virtual[1], virtual[2])) continue;
             if (!frustum.isVisible(toHome(geometry, face, home, entity.getBoundingBoxForCulling()))) continue;
             float partialTick = delta.getGameTimeDeltaPartialTick(!level.tickRateManager().isEntityFrozen(entity));
             pose.pushPose();
-            pose.mulPose(new Quaternionf().setFromNormalized(rotation(face, home)));
+            pose.mulPose(draw.quaternion);
             ((LevelRendererAccessor) renderer).alpha_omega$renderEntity(entity, virtual[0], virtual[1], virtual[2], partialTick, pose, buffers);
             pose.popPose();
         }
@@ -285,15 +438,13 @@ public final class NeighbourRenderer {
     /** Draws the block entities in the neighbouring faces' visible sections. */
     public static void renderBlockEntities(LevelRenderer renderer, Camera camera, float partialTick, PoseStack pose, MultiBufferSource buffers,
                                            BlockEntityRenderDispatcher dispatcher) {
-        if (home == null || geometry == null || VISIBLE.isEmpty()) return;
+        if (home == null || DRAWS.isEmpty()) return;
         ClientLevel level = ((LevelRendererAccessor) renderer).alpha_omega$level();
-        Vec3 cam = camera.getPosition();
-        for (Map.Entry<CubeFace, List<SectionRenderDispatcher.RenderSection>> entry : VISIBLE.entrySet()) {
-            CubeFace face = entry.getKey();
-            double[] virtual = geometry.transform(home, face, cam.x, cam.y, cam.z);
+        for (Draw draw : DRAWS.values()) {
+            double[] virtual = draw.camera;
             Vec3 virtualCam = new Vec3(virtual[0], virtual[1], virtual[2]);
-            Quaternionf rotation = new Quaternionf().setFromNormalized(rotation(face, home));
-            for (SectionRenderDispatcher.RenderSection section : entry.getValue()) {
+            Quaternionf rotation = draw.quaternion;
+            for (SectionRenderDispatcher.RenderSection section : draw.visible) {
                 for (BlockEntity blockEntity : section.getCompiled().getRenderableBlockEntities()) {
                     BlockEntityRenderer<BlockEntity> blockEntityRenderer = dispatcher.getRenderer(blockEntity);
                     if (blockEntityRenderer == null || !blockEntityRenderer.shouldRender(blockEntity, virtualCam)) continue;
@@ -311,11 +462,11 @@ public final class NeighbourRenderer {
     /** For F3: per neighbouring face, sections drawn (with any geometry) of those in view. */
     @Nullable
     public static String debugLine() {
-        if (home == null || VISIBLE.isEmpty()) return null;
+        if (home == null || DRAWS.isEmpty()) return null;
         StringBuilder line = new StringBuilder("Neighbours:");
-        for (Map.Entry<CubeFace, List<SectionRenderDispatcher.RenderSection>> entry : VISIBLE.entrySet()) {
-            long built = entry.getValue().stream().filter(section -> section.getCompiled() != SectionRenderDispatcher.CompiledSection.UNCOMPILED).count();
-            line.append(' ').append(entry.getKey()).append(' ').append(built).append('/').append(entry.getValue().size());
+        for (Draw draw : DRAWS.values()) {
+            long built = draw.visible.stream().filter(section -> section.getCompiled() != SectionRenderDispatcher.CompiledSection.UNCOMPILED).count();
+            line.append(' ').append(draw.face).append(' ').append(built).append('/').append(draw.visible.size());
         }
         return line.toString();
     }
@@ -327,14 +478,28 @@ public final class NeighbourRenderer {
     public static boolean setDirty(ClientLevel level, int sectionX, int sectionY, int sectionZ, boolean playerChanged) {
         CubeGeometry cube = Cube.of(level);
         if (cube == null || home == null) return false;
+        // Its ground may have changed: on the home face too, which becomes a neighbour once the camera crosses.
+        GROUND.remove(ChunkPos.asLong(sectionX, sectionZ));
         CubeFace face = cube.faceAtChunk(sectionX, sectionZ);
         if (face == home) return false;
-        ViewArea area = face == null ? null : AREAS.get(face);
+        Area area = face == null ? null : AREAS.get(face);
         if (area != null) {
             BlockPos origin = new BlockPos(sectionX << 4, sectionY << 4, sectionZ << 4);
-            SectionRenderDispatcher.RenderSection section = ((ViewAreaAccessor) area).alpha_omega$getRenderSectionAt(origin);
-            if (section != null && section.getOrigin().equals(origin)) section.setDirty(playerChanged);
+            SectionRenderDispatcher.RenderSection section = ((ViewAreaAccessor) area.view).alpha_omega$getRenderSectionAt(origin);
+            if (section != null && section.getOrigin().equals(origin)) {
+                section.setDirty(playerChanged);
+                area.invalidateAround(sectionX, sectionZ);
+            }
         }
         return true;
+    }
+
+    /** A chunk arrived or was forgotten: the columns around it are worked out again. */
+    public static void chunkChanged(ClientLevel level, int chunkX, int chunkZ) {
+        GROUND.remove(ChunkPos.asLong(chunkX, chunkZ));
+        CubeGeometry cube = Cube.of(level);
+        CubeFace face = cube == null ? null : cube.faceAtChunk(chunkX, chunkZ);
+        Area area = face == null ? null : AREAS.get(face);
+        if (area != null) area.invalidateAround(chunkX, chunkZ);
     }
 }

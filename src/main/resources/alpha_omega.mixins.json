@@ -9,6 +9,7 @@
     "client.ClientChunkCacheMixin",
     "client.ClientLevelSkyMixin",
     "client.ClockItemPropertyMixin",
+    "client.CompiledSectionAccessor",
     "client.DebugScreenOverlayMixin",
     "client.EntityLerpMixin",
     "client.FogRendererSkyMixin",
