@@ -4,15 +4,18 @@
   "compatibilityLevel": "JAVA_21",
   "minVersion": "0.8",
   "client": [
+    "client.CameraMixin",
     "client.ClientLevelSkyMixin",
     "client.ClockItemPropertyMixin",
     "client.DebugScreenOverlayMixin",
     "client.FogRendererSkyMixin",
-    "client.LevelRendererSkyMixin"
+    "client.LevelRendererSkyMixin",
+    "client.LocalPlayerMixin"
   ],
   "mixins": [
     "server.GameTestServerMixin",
     "server.LevelMixin",
+    "server.ServerLevelMixin",
     "server.WorldGenRegionMixin",
     "server.time.BeeLocalTimeMixin",
     "server.time.BeehiveBlockEntityLocalTimeMixin",

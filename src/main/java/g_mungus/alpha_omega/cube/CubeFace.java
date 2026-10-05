@@ -85,6 +85,11 @@ public enum CubeFace {
         return this.m(i, 1);
     }
 
+    /** The direction of {@code other}'s normal in this face's storage axes: toward that face, or up for itself. */
+    public double[] toward(CubeFace other) {
+        return this.toLocal((double) other.normal(0), other.normal(1), other.normal(2));
+    }
+
     // Local to cube: c = M l. Cube to local: l = Mᵀ c. Integer forms for exact cell maps.
 
     public long toCubeX(long u, long up, long v) {

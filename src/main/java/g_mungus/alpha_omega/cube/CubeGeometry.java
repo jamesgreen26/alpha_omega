@@ -219,6 +219,22 @@ public final class CubeGeometry {
     }
 
     /**
+     * A direction of {@code from}'s storage turned with the unfold across the shared edge, in {@code to}'s storage
+     * axes: up stays up, and heading toward the edge becomes heading away from it on {@code to}. How upright things
+     * (players, mobs) carry their velocity and gaze over an edge. Neighbours only.
+     */
+    public static double[] rotateUpright(CubeFace from, CubeFace to, double x, double y, double z) {
+        if (!from.isNeighbour(to)) throw new IllegalArgumentException(from + " and " + to + " do not share an edge");
+        double[] p = from.toCube(x, y, z);
+        double da = p[from.axis];
+        double db = p[to.axis];
+        double[] q = p.clone();
+        q[to.axis] = da * from.sign * to.sign;
+        q[from.axis] = -db * to.sign * from.sign;
+        return to.toLocal(q[0], q[1], q[2]);
+    }
+
+    /**
      * {@code U}: a storage point of {@code from} unfolded across the shared edge into {@code to}'s storage, as if
      * {@code to}'s surface carried on flat past that edge. A point {@code s} blocks short of the edge at height
      * {@code h} on {@code from} lands {@code s} blocks past the edge at height {@code h} on {@code to}. Neighbours only.

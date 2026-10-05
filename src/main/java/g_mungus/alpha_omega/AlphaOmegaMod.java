@@ -9,9 +9,12 @@ import g_mungus.alpha_omega.cube.Cube;
 import g_mungus.alpha_omega.gametest.CubeGameTests;
 import g_mungus.alpha_omega.gametest.FaceGameTests;
 import g_mungus.alpha_omega.gametest.LocalTimeGameTests;
+import g_mungus.alpha_omega.gametest.TransferGameTests;
 import g_mungus.alpha_omega.gametest.ModLoadGameTests;
 import g_mungus.alpha_omega.network.CubeConfigurationTask;
 import g_mungus.alpha_omega.network.CubePayload;
+import g_mungus.alpha_omega.network.FaceTransferPayload;
+import g_mungus.alpha_omega.transfer.FaceTransfers;
 import g_mungus.alpha_omega.worldgen.CubeChunkGenerator;
 import java.lang.reflect.Field;
 import java.util.Map;
@@ -20,6 +23,7 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
@@ -95,6 +99,8 @@ public class AlphaOmegaMod {
     private static void registerPayloads(RegisterPayloadHandlersEvent event) {
         event.registrar("1").configurationToClient(CubePayload.TYPE, CubePayload.STREAM_CODEC,
             (payload, context) -> Cube.setClient(payload.geometry().orElse(null)));
+        event.registrar("1").playToServer(FaceTransferPayload.TYPE, FaceTransferPayload.STREAM_CODEC,
+            (payload, context) -> FaceTransfers.handleClaim((ServerPlayer) context.player(), payload));
     }
 
     private static void registerGameTests(RegisterGameTestsEvent event) {
@@ -102,5 +108,6 @@ public class AlphaOmegaMod {
         event.register(CubeGameTests.class);
         event.register(FaceGameTests.class);
         event.register(LocalTimeGameTests.class);
+        event.register(TransferGameTests.class);
     }
 }
