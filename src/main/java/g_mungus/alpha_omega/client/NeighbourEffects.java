@@ -1,7 +1,10 @@
 package g_mungus.alpha_omega.client;
 
 import g_mungus.alpha_omega.orbifold.Motion;
+import g_mungus.alpha_omega.neighbour.ImageGeometry;
 import g_mungus.alpha_omega.orbifold.Orbifold;
+import g_mungus.alpha_omega.orbifold.OrbifoldGeometry;
+import net.minecraft.client.Minecraft;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
@@ -10,7 +13,7 @@ import org.jetbrains.annotations.Nullable;
  * Where things the client hears of are seen from the camera: particles and sounds at an image's position play at the
  * transformed position, and a remote entity that jumped by an element of {@code Γ} is re-expressed in its new frame.
  *
- * <p>Inactive until phase 6 (image views), which works out the elements; until then everything plays where it is.
+ * <p>Crossings ({@link #crossing}) are phase 5's; until then a remote entity is never re-expressed.
  */
 public final class NeighbourEffects {
 
@@ -18,13 +21,17 @@ public final class NeighbourEffects {
     }
 
     /**
-     * The element taking a point to where the camera sees it, or null when it is already there. Phase 6: the image
-     * element whose view holds the point.
+     * The element taking a point to where the camera sees it, or null when that is where it is. A point is seen at its
+     * source in the tile and at that source moved by each image the camera has ({@link ImageGeometry#placements});
+     * a sound or particle plays at whichever of those is nearest the camera.
      */
     @Nullable
     public static Motion toCamera(Level level, double x, double z) {
-        if (Orbifold.of(level) == null) return null;
-        return null;
+        OrbifoldGeometry geometry = Orbifold.of(level);
+        if (geometry == null) return null;
+        Vec3 camera = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+        Motion k = ImageGeometry.nearestPlacement(geometry, ImageRenderer.currentImages(geometry), x, z, camera.x, camera.z);
+        return k.isIdentity() ? null : k;
     }
 
     /**

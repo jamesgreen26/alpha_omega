@@ -13,7 +13,7 @@ import net.neoforged.neoforge.common.NeoForge;
  * {@code tick:action} separated by {@code ;}, counted in client ticks after joining a world. An action is a command
  * ({@code /tp @s 0 100 0}), {@code shot <name>} (saved to {@code screenshots/<name>.png}), {@code hud on|off},
  * {@code forward on|off} (holds the walk key), {@code jump on|off} (holds the jump key),
- * {@code camera first|back|front} (the point of view), {@code pos} (logs the player), {@code debug} (toggles F3) or {@code quit}. Used with {@code -PquickPlay=<world>}.
+ * {@code camera first|back|front} (the point of view), {@code pos} (logs the player), {@code debug} (toggles F3) or {@code quit}. Used with {@code -PquickPlay=<world>}. {@code @file} reads the steps from a file instead (one or more per line).
  */
 public final class DevScript {
 
@@ -29,6 +29,15 @@ public final class DevScript {
     public static void init() {
         String script = System.getProperty("alpha_omega.dev.script");
         if (script == null || script.isBlank()) return;
+        if (script.startsWith("@")) {
+            // @file: the steps are in that file (relative to the game directory), one or more per line.
+            try {
+                script = String.join(";", java.nio.file.Files.readAllLines(java.nio.file.Path.of(script.substring(1))));
+            } catch (java.io.IOException e) {
+                AlphaOmegaMod.LOGGER.error("Dev script file {} could not be read", script, e);
+                return;
+            }
+        }
         for (String part : script.split(";")) {
             int colon = part.indexOf(':');
             if (colon <= 0) continue;

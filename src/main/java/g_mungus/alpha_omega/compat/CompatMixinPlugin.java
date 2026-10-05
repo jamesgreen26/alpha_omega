@@ -9,11 +9,13 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
 /**
  * Applies compat mixins only when their mod is installed. A mixin's mod is named by its package:
- * {@code mixin.compat.<modid>.*}.
+ * {@code mixin.compat.<modid>.*} (or {@code mixin.images.compat.<modid>.*}).
  */
 public final class CompatMixinPlugin implements IMixinConfigPlugin {
 
     private static final String PACKAGE = "g_mungus.alpha_omega.mixin.compat.";
+    /** Image views' own compat mixins ({@code alpha_omega.images.mixins.json}), named the same way. */
+    private static final String IMAGES_PACKAGE = "g_mungus.alpha_omega.mixin.images.compat.";
 
     @Override
     public void onLoad(String mixinPackage) {
@@ -26,8 +28,9 @@ public final class CompatMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-        if (!mixinClassName.startsWith(PACKAGE)) return false;
-        String rest = mixinClassName.substring(PACKAGE.length());
+        String prefix = mixinClassName.startsWith(PACKAGE) ? PACKAGE : mixinClassName.startsWith(IMAGES_PACKAGE) ? IMAGES_PACKAGE : null;
+        if (prefix == null) return false;
+        String rest = mixinClassName.substring(prefix.length());
         int dot = rest.indexOf('.');
         return dot > 0 && isLoaded(rest.substring(0, dot));
     }

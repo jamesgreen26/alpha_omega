@@ -63,7 +63,9 @@ import org.joml.Vector3d;
  * to build. Each terrain layer of an image then draws with its turn in the model-view matrix and Sodium's camera at
  * the image's virtual camera.
  *
- * <p>Inactive until phase 6: {@link ImageRenderer#images} gives no images.
+ * <p>Clipped as the vanilla path is: an image collects only tile chunks it takes past the band
+ * ({@link ImageRenderer#shows}), and Sodium's own search skips the skirt and the void beyond
+ * ({@code mixin.images.compat.sodium.SectionCollectorMixin}).
  */
 public final class SodiumNeighbours {
 
@@ -71,7 +73,7 @@ public final class SodiumNeighbours {
     private record Column(int chunkX, int chunkZ, AABB box, AABB[] boxes, int buriedBelow) {
     }
 
-    /** A column slot worked out to hold nothing worth drawing (not shown by its image, or not loaded). */
+    /** A column slot worked out to hold nothing worth drawing (not drawn by its image, or not loaded). */
     private static final Column NOTHING = new Column(0, 0, new AABB(0, 0, 0, 0, 0, 0), new AABB[0], 0);
 
     /** An image: its columns around the virtual camera, and what Sodium draws of it. */
@@ -210,6 +212,7 @@ public final class SodiumNeighbours {
 
     /** Works out the image's column slots around the virtual camera's chunk not yet worked out for their chunk. */
     private static void build(Face state, Motion image, ClientLevel level, int centreX, int centreZ) {
+        OrbifoldGeometry geometry = Orbifold.of(level);
         int size = state.size;
         int radius = size / 2;
         int height = level.getSectionsCount();
@@ -219,7 +222,7 @@ public final class SodiumNeighbours {
                 long at = ChunkPos.asLong(chunkX, chunkZ);
                 if (state.columns[slot] != null && state.columnAt[slot] == at) continue;
                 state.columnAt[slot] = at;
-                if (level.getChunkSource().getChunk(chunkX, chunkZ, ChunkStatus.FULL, false) == null) {
+                if (!ImageRenderer.shows(geometry, image, chunkX, chunkZ) || level.getChunkSource().getChunk(chunkX, chunkZ, ChunkStatus.FULL, false) == null) {
                     state.columns[slot] = NOTHING;
                     continue;
                 }

@@ -10,6 +10,7 @@ import g_mungus.alpha_omega.mixin.client.CompiledSectionAccessor;
 import g_mungus.alpha_omega.mixin.client.LevelRendererAccessor;
 import g_mungus.alpha_omega.mixin.client.SectionOcclusionGraphAccessor;
 import g_mungus.alpha_omega.mixin.client.ViewAreaAccessor;
+import g_mungus.alpha_omega.neighbour.ImageGeometry;
 import g_mungus.alpha_omega.orbifold.Motion;
 import g_mungus.alpha_omega.orbifold.Orbifold;
 import g_mungus.alpha_omega.orbifold.OrbifoldGeometry;
@@ -65,8 +66,12 @@ import org.joml.Quaternionf;
  * sections are. Sections buried well below the ground around them are skipped while the camera is above ground.
  * Areas are never freed while the world lasts: one an image no longer needs is handed to the next image that does.
  *
- * <p>Inactive until phase 6: {@link #images} gives no images, so nothing is drawn. The area handling is v2's
- * neighbour renderer, keyed by image instead of face.
+ * <p>The clip ({@link ImageGeometry}): vanilla draws the tile and band ({@link #hideDead} drops the rest from its
+ * visible sections), and each image draws only tile chunks it takes past the band ({@link #shows}), so every place in
+ * view is drawn once. Entities are drawn at every place the camera sees them ({@link #renderEntities}).
+ *
+ * <p>The area handling is v2's neighbour renderer, keyed by image instead of face; the occlusion graph is skipped for
+ * images, as v2 did.
  */
 public final class ImageRenderer {
 
@@ -154,23 +159,86 @@ public final class ImageRenderer {
     }
 
     /**
-     * The images the camera needs drawn: the elements {@code g} whose view around {@code g⁻¹(camera)} reaches tile
-     * cells the band does not show (at most four). Phase 6 works them out; none until then.
+     * The images the camera needs, with the client's render distance ({@link ImageGeometry#images}): at most four,
+     * near a cone point or a corner of the tile.
      */
     public static List<Motion> images(OrbifoldGeometry geometry, Vec3 camera) {
-        return List.of();
-    }
-
-    /** Whether an image's area draws a chunk column: phase 6 skips those whose image falls inside the home footprint. */
-    private static boolean shows(OrbifoldGeometry geometry, Motion image, int chunkX, int chunkZ) {
-        return true;
+        int view = Minecraft.getInstance().options.getEffectiveRenderDistance();
+        return ImageGeometry.images(geometry, Mth.floor(camera.x) >> 4, Mth.floor(camera.z) >> 4, view);
     }
 
     /**
-     * Before vanilla positions its area for the frame. With faces, a crossing handed vanilla the area built for the face
-     * the camera came onto. Phase 6: when the camera crosses by {@code g}, hand vanilla the area built for {@code g}.
+     * Whether an image's area draws a chunk column: a tile chunk the image takes past the band. Home (vanilla) draws
+     * the tile and band from local chunks, so everything else would be drawn twice; band and skirt are never drawn
+     * from an image.
+     */
+    public static boolean shows(OrbifoldGeometry geometry, Motion image, int chunkX, int chunkZ) {
+        return ImageGeometry.draws(geometry, image, chunkX, chunkZ);
+    }
+
+    /** What the frame's images were, for things worked out off the render thread or outside the frame. */
+    private record Snapshot(OrbifoldGeometry geometry, List<Motion> images, Vec3 camera, int viewDistance) {
+    }
+
+    @Nullable
+    private static volatile Snapshot snapshot;
+
+    /** The images drawn this frame (empty outside an orbifold world). */
+    public static List<Motion> currentImages(OrbifoldGeometry geometry) {
+        Snapshot now = snapshot;
+        return now == null || now.geometry != geometry ? List.of() : now.images;
+    }
+
+    /** Where the camera was last frame, to catch a crossing: a jump by an element of {@code Γ}. */
+    @Nullable
+    private static Vec3 lastCamera;
+
+    /**
+     * Before vanilla positions its area for the frame: if the camera has jumped by an element {@code h} of {@code Γ}
+     * (a crossing, or a teleport to an image of where it was), hand vanilla the area built for the image whose camera
+     * is where the camera now is ({@code h⁻¹}), keep vanilla's old one as the image {@code h}, and re-key the others,
+     * so nothing recompiles.
      */
     public static void beforeSetupRender(LevelRenderer renderer, Camera camera) {
+        LevelRendererAccessor access = (LevelRendererAccessor) renderer;
+        ClientLevel level = access.alpha_omega$level();
+        OrbifoldGeometry cube = level == null ? null : Orbifold.of(level);
+        Vec3 cam = camera.getPosition();
+        Vec3 was = lastCamera;
+        lastCamera = cam;
+        if (cube == null || was == null || cam.distanceToSqr(was) < CROSSING_SLACK * CROSSING_SLACK) return;
+        for (Motion h : ImageGeometry.candidates(cube)) {
+            if (Transform.of(h).position(was).distanceToSqr(cam) >= CROSSING_SLACK * CROSSING_SLACK) continue;
+            Area incoming = AREAS.remove(h.inverse());
+            ViewArea outgoing = access.alpha_omega$viewArea();
+            if (incoming == null || outgoing == null || incoming.size != outgoing.getViewDistance() * 2 + 1) return;
+            Map<Motion, Area> rekeyed = new LinkedHashMap<>();
+            for (Area area : AREAS.values()) {
+                area.image = area.image.then(h);
+                area.invalidate();
+                rekeyed.put(area.image, area);
+            }
+            AREAS.clear();
+            AREAS.putAll(rekeyed);
+            AREAS.put(h, new Area(outgoing, h));
+            access.alpha_omega$setViewArea(incoming.view);
+            access.alpha_omega$sectionOcclusionGraph().waitAndReset(incoming.view);
+            swapped = true;
+            return;
+        }
+    }
+
+    /** How far from a pure jump by an element of {@code Γ} the camera may land and still count as crossing, in blocks. */
+    private static final double CROSSING_SLACK = 8.0;
+
+    /**
+     * After vanilla has chosen its visible sections: drop those home does not draw (the skirt, and the void beyond the
+     * footprint), which images draw instead. They are then never compiled either.
+     */
+    public static void hideDead(ClientLevel level, List<SectionRenderDispatcher.RenderSection> visible) {
+        OrbifoldGeometry cube = level == null ? null : Orbifold.of(level);
+        if (cube == null || visible.isEmpty()) return;
+        visible.removeIf(section -> !ImageGeometry.homeDraws(cube, section.getOrigin().getX() >> 4, section.getOrigin().getZ() >> 4));
     }
 
     /**
@@ -199,6 +267,8 @@ public final class ImageRenderer {
         OrbifoldGeometry cube = level == null ? null : Orbifold.of(level);
         if (cube == null || sections == null) {
             if (!AREAS.isEmpty()) reset();
+            snapshot = null;
+            geometry = null;
             return;
         }
         if (sections != dispatcher || level != areaLevel || viewDistance != areaViewDistance) {
@@ -211,6 +281,7 @@ public final class ImageRenderer {
         Vec3 cam = camera.getPosition();
         DRAWS.clear();
         List<Motion> images = images(cube, cam);
+        snapshot = new Snapshot(cube, images, cam, viewDistance);
         if (images.isEmpty()) return;
         if (Sodium.loaded()) {
             // Sodium collects and draws the images' terrain (SodiumNeighbours); entities and block entities still
@@ -357,12 +428,28 @@ public final class ImageRenderer {
         return ground;
     }
 
+    /** How much further than its true distance an image's section counts when sections queue to compile, in blocks. */
+    private static final double HOME_LEAD_BLOCKS = 32.0;
+
     /**
      * The squared distance a section counts as from the camera when it queues to compile: NaN where vanilla's own
-     * distance applies. Phase 6: an image's sections count from that image's virtual camera, a little further.
+     * distance applies (within the camera's own square). Beyond it, a section counts from the nearest image camera
+     * ({@code g⁻¹(camera)}), {@link #HOME_LEAD_BLOCKS} further.
      */
     public static double compileDistanceSqr(AABB box) {
-        return Double.NaN;
+        Snapshot now = snapshot;
+        if (now == null || now.images.isEmpty()) return Double.NaN;
+        double x = box.minX + 8.0, y = box.minY + 8.0, z = box.minZ + 8.0;
+        int chunkX = Mth.floor(x) >> 4, chunkZ = Mth.floor(z) >> 4;
+        int camX = Mth.floor(now.camera.x) >> 4, camZ = Mth.floor(now.camera.z) >> 4;
+        if (Math.max(Math.abs(chunkX - camX), Math.abs(chunkZ - camZ)) <= now.viewDistance + 1) return Double.NaN;
+        double best = Double.MAX_VALUE;
+        for (Motion image : now.images) {
+            Motion back = image.inverse();
+            double dx = x - back.pointX(now.camera.x), dy = y - now.camera.y, dz = z - back.pointZ(now.camera.z);
+            best = Math.min(best, dx * dx + dy * dy + dz * dz);
+        }
+        return Mth.square(Math.sqrt(best) + HOME_LEAD_BLOCKS);
     }
 
     /** Distance from a point to the nearest point of a box. */
@@ -416,20 +503,29 @@ public final class ImageRenderer {
         }
     }
 
-    /** Draws the entities each image shows, with its turn. */
+    /**
+     * Draws entities wherever else the camera sees them ({@link ImageGeometry#placements}): one standing in the band
+     * also at its source in the tile, and every one at its source moved by each image (past a seam, that is at a band
+     * copy, and further out in the image's terrain). Vanilla draws each where it is stored.
+     */
     public static void renderEntities(LevelRenderer renderer, Camera camera, Frustum frustum, DeltaTracker delta, PoseStack pose, MultiBufferSource buffers) {
-        if (geometry == null || DRAWS.isEmpty()) return;
+        OrbifoldGeometry cube = geometry;
+        if (cube == null) return;
         ClientLevel level = ((LevelRendererAccessor) renderer).alpha_omega$level();
+        List<Motion> images = new ArrayList<>(DRAWS.keySet());
+        Vec3 cam = camera.getPosition();
         for (Entity entity : level.entitiesForRendering()) {
-            for (Draw draw : DRAWS.values()) {
-                if (!shows(geometry, draw.image, entity.getBlockX() >> 4, entity.getBlockZ() >> 4)) continue;
-                double[] virtual = draw.camera;
-                if (!entity.shouldRender(virtual[0], virtual[1], virtual[2])) continue;
-                if (!frustum.isVisible(toHome(draw.image, entity.getBoundingBoxForCulling()))) continue;
+            // Most entities are far from every seam: only where they are stored.
+            if (images.isEmpty() && cube.cellDepth(entity.getBlockX(), entity.getBlockZ()) == 0) continue;
+            for (Motion k : ImageGeometry.placements(cube, images, entity.getX(), entity.getZ())) {
+                if (k.isIdentity()) continue;
+                Vec3 virtual = Transform.of(k.inverse()).position(cam);
+                if (!entity.shouldRender(virtual.x, virtual.y, virtual.z)) continue;
+                if (!frustum.isVisible(toHome(k, entity.getBoundingBoxForCulling()))) continue;
                 float partialTick = delta.getGameTimeDeltaPartialTick(!level.tickRateManager().isEntityFrozen(entity));
                 pose.pushPose();
-                pose.mulPose(draw.quaternion);
-                ((LevelRendererAccessor) renderer).alpha_omega$renderEntity(entity, virtual[0], virtual[1], virtual[2], partialTick, pose, buffers);
+                pose.mulPose(new Quaternionf().setFromNormalized(rotation(k)));
+                ((LevelRendererAccessor) renderer).alpha_omega$renderEntity(entity, virtual.x, virtual.y, virtual.z, partialTick, pose, buffers);
                 pose.popPose();
             }
         }
@@ -488,7 +584,11 @@ public final class ImageRenderer {
             SectionRenderDispatcher.RenderSection section = ((ViewAreaAccessor) area.view).alpha_omega$getRenderSectionAt(origin);
             if (section != null && section.getOrigin().equals(origin)) section.setDirty(playerChanged);
         }
-        return false;
+        // Vanilla's area marks whichever of its sections shares the slot, which for a section of an image (far away in
+        // storage) is an unrelated one of its own: skip it then. A section moved into the slot later compiles anyway.
+        ViewArea own = ((LevelRendererAccessor) Minecraft.getInstance().levelRenderer).alpha_omega$viewArea();
+        SectionRenderDispatcher.RenderSection section = own == null ? null : ((ViewAreaAccessor) own).alpha_omega$getRenderSectionAt(origin);
+        return section != null && !section.getOrigin().equals(origin);
     }
 
     /** A block changed: its chunk's ground may have moved, and with it the buried depth of the columns around it. */

@@ -29,12 +29,13 @@ public final class FaceChunks {
     }
 
     /**
-     * The store a client keeps for a level's footprint, or null to leave every chunk to vanilla. Null until phase 6
-     * (image views), which needs the whole footprint on the client.
+     * The store a client keeps for a level's footprint: image views draw chunks far from the camera in storage, so the
+     * whole footprint is kept, not vanilla's ring around the player.
      */
     @Nullable
     public static FaceChunks forGeometry(OrbifoldGeometry geometry) {
-        return null;
+        int[] f = geometry.footprintChunks();
+        return new FaceChunks(f[0], f[1], f[2] - f[0] + 1, f[3] - f[1] + 1);
     }
 
     public boolean contains(int x, int z) {
