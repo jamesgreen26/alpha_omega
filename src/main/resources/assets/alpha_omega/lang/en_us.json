@@ -5,5 +5,7 @@
   "alpha_omega.cube.sun_axis": "Sun axis",
   "alpha_omega.cube.sun_axis.diagonal": "Diagonal",
   "alpha_omega.cube.sun_axis.polar": "Polar",
-  "alpha_omega.cube.hint": "Diagonal: every face has days. Polar: two faces stay in twilight."
+  "alpha_omega.cube.hint": "Diagonal: every face has days. Polar: two faces stay in twilight.",
+  "block.alpha_omega.edge_air": "Edge Air",
+  "block.alpha_omega.filler": "Other Face"
 }

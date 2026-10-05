@@ -110,6 +110,42 @@ class CubeGeometryTest {
         assertEquals(CubeFace.NORTH.slot(), SMALL.cellOwner(face, cx, y, cz - r + 8));
     }
 
+    /** Each column has one barrier cell of its own face: owned above, other faces' below. */
+    @Test
+    void barrierIsAHeightfield() {
+        for (CubeFace face : CubeFace.values()) {
+            for (int x = SMALL.centerX(face) - SMALL.footprint - 2; x < SMALL.centerX(face) + SMALL.footprint + 2; x++) {
+                for (int z = SMALL.centerZ() - SMALL.footprint - 2; z < SMALL.centerZ() + SMALL.footprint + 2; z++) {
+                    int barrierY = SMALL.barrierY(face, x, z);
+                    for (int y = SMALL.minY; y < SMALL.maxY; y++) {
+                        int owner = SMALL.cellOwner(face, x, y, z);
+                        if (y > barrierY) assertEquals(face.slot(), owner);
+                        else if (y == barrierY) assertEquals(CubeGeometry.BARRIER, owner);
+                        // Below: other faces' cells, or (in corner columns) the barrier between two other faces.
+                        else assertNotEquals(face.slot(), owner);
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    void boxOwnedKeepsClearOfTheBarrier() {
+        CubeFace up = CubeFace.UP;
+        int cx = DEFAULT.centerX(up), cz = DEFAULT.centerZ(), r = DEFAULT.radius, y0 = DEFAULT.planeY;
+        assertTrue(DEFAULT.boxOwned(up, cx - 10, y0 - 20, cz - 10, cx + 10, y0 + 20, cz + 10, 8));
+        // Reaching past the edge at ground level crosses the barrier.
+        assertFalse(DEFAULT.boxOwned(up, cx + r - 5, y0, cz, cx + r + 5, y0 + 10, cz + 5, 0));
+        // High enough up, the same columns are owned overhang, but not within the margin.
+        assertTrue(DEFAULT.boxOwned(up, cx + r - 5, y0 + 20, cz, cx + r + 5, y0 + 30, cz + 5, 0));
+        assertFalse(DEFAULT.boxOwned(up, cx + r - 5, y0 + 10, cz, cx + r + 5, y0 + 30, cz + 5, 8));
+        // Deep down near an edge belongs to the neighbour.
+        assertFalse(DEFAULT.boxOwned(up, cx + r - 40, y0 - 50, cz, cx + r - 30, y0 - 40, cz + 5, 0));
+        // Above the build limit, or in another face's storage.
+        assertFalse(DEFAULT.boxOwned(up, cx, DEFAULT.maxY - 5, cz, cx + 5, DEFAULT.maxY, cz + 5, 0));
+        assertFalse(DEFAULT.boxOwned(CubeFace.EAST, cx - 5, y0, cz - 5, cx + 5, y0 + 5, cz + 5, 0));
+    }
+
     @Test
     void blockTransformsMatchPointTransformsAndRoundTrip() {
         Random random = new Random(1);

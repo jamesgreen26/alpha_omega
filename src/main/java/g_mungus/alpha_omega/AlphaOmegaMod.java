@@ -2,10 +2,12 @@ package g_mungus.alpha_omega;
 
 import com.mojang.logging.LogUtils;
 import com.mojang.serialization.MapCodec;
+import g_mungus.alpha_omega.block.CubeBlocks;
 import g_mungus.alpha_omega.command.CubeCommand;
 import g_mungus.alpha_omega.config.AlphaOmegaConfig;
 import g_mungus.alpha_omega.cube.Cube;
 import g_mungus.alpha_omega.gametest.CubeGameTests;
+import g_mungus.alpha_omega.gametest.FaceGameTests;
 import g_mungus.alpha_omega.gametest.ModLoadGameTests;
 import g_mungus.alpha_omega.network.CubeConfigurationTask;
 import g_mungus.alpha_omega.network.CubePayload;
@@ -44,6 +46,7 @@ public class AlphaOmegaMod {
     public AlphaOmegaMod(IEventBus modEventBus, ModContainer container) {
         container.registerConfig(ModConfig.Type.COMMON, AlphaOmegaConfig.SPEC);
         CHUNK_GENERATORS.register(modEventBus);
+        CubeBlocks.register(modEventBus);
         modEventBus.addListener(AlphaOmegaMod::registerGameTests);
         modEventBus.addListener(AlphaOmegaMod::registerPayloads);
         modEventBus.addListener((RegisterConfigurationTasksEvent event) -> event.register(new CubeConfigurationTask(event.getListener())));
@@ -96,5 +99,6 @@ public class AlphaOmegaMod {
     private static void registerGameTests(RegisterGameTestsEvent event) {
         event.register(ModLoadGameTests.class);
         event.register(CubeGameTests.class);
+        event.register(FaceGameTests.class);
     }
 }

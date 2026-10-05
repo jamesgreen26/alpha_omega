@@ -1,6 +1,7 @@
 package g_mungus.alpha_omega.cube;
 
 import g_mungus.alpha_omega.worldgen.CubeChunkGenerator;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
@@ -24,6 +25,20 @@ public final class Cube {
             return server.getChunkSource().getGenerator() instanceof CubeChunkGenerator generator ? generator.geometry(server) : null;
         }
         return client;
+    }
+
+    /**
+     * Whether a block may be written at {@code pos}: anywhere outside a cube world, only owned cells inside one. The
+     * barrier and other faces' cells are fixed once generated (design §3).
+     */
+    public static boolean canWrite(Level level, BlockPos pos) {
+        CubeGeometry geometry = of(level);
+        return geometry == null || canWrite(geometry, pos);
+    }
+
+    public static boolean canWrite(CubeGeometry geometry, BlockPos pos) {
+        CubeFace face = geometry.faceAt(pos.getX(), pos.getZ());
+        return face != null && geometry.isOwned(face, pos.getX(), pos.getY(), pos.getZ());
     }
 
     public static void setClient(@Nullable CubeGeometry geometry) {

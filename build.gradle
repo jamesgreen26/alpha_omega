@@ -147,6 +147,11 @@ def syncC2meMod = tasks.register('syncC2meMod') {
 tasks.matching { it.name ==~ /run[A-Z].*/ }.configureEach {
     dependsOn syncSableMod, syncC2meMod
 }
+// Gametests start from a fresh world: chunks saved by an earlier run would hide generation changes.
+tasks.matching { it.name == 'runGameTestServer' }.configureEach {
+    def world = file('run/world')
+    doFirst { project.delete(world) }
+}
 
 sourceSets {
     test {

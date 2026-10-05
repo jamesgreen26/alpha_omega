@@ -142,6 +142,29 @@ public final class CubeGeometry {
         return this.cellOwner(face, x, y, z) == BARRIER;
     }
 
+    /**
+     * The y of the one barrier cell in a column of {@code face}'s storage: cells above it are owned, cells below
+     * belong to other faces. May lie outside the build limits.
+     */
+    public int barrierY(CubeFace face, int x, int z) {
+        long a = Math.abs(2L * (x - this.centerX(face)) + 1);
+        long b = Math.abs(2L * (z - this.centerZ) + 1);
+        return (int) ((Math.max(a, b) - 1) / 2) - this.radius + this.planeY;
+    }
+
+    /**
+     * Whether a box of blocks (inclusive bounds) lies wholly in {@code face}'s owned region, at least {@code margin}
+     * blocks from the barrier sideways and below. The owned region is convex, so its corners decide.
+     */
+    public boolean boxOwned(CubeFace face, int minX, int minY, int minZ, int maxX, int maxY, int maxZ, int margin) {
+        for (int x : new int[] {minX - margin, maxX + margin}) {
+            for (int z : new int[] {minZ - margin, maxZ + margin}) {
+                if (minY - margin <= this.barrierY(face, x, z)) return false;
+            }
+        }
+        return maxY < this.maxY && this.faceAt(minX, minZ) == face && this.faceAt(maxX, maxZ) == face;
+    }
+
     /** The face owning a point of {@code face}'s storage; ties (measure zero) go to {@code face}. */
     public CubeFace ownerAt(CubeFace face, double x, double y, double z) {
         double[] c = this.toCube(face, x, y, z);

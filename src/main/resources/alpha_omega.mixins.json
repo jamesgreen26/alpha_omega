@@ -12,6 +12,8 @@
   ],
   "mixins": [
     "server.GameTestServerMixin",
+    "server.LevelMixin",
+    "server.WorldGenRegionMixin",
     "server.time.BeeLocalTimeMixin",
     "server.time.BeehiveBlockEntityLocalTimeMixin",
     "server.time.BrainLocalTimeMixin",
@@ -37,7 +39,8 @@
     "server.time.ServerPlayerLocalTimeMixin",
     "server.time.StrollThroughVillageGoalLocalTimeMixin",
     "server.time.TurtleEggBlockLocalTimeMixin",
-    "server.time.VillagerLocalTimeMixin"
+    "server.time.VillagerLocalTimeMixin",
+    "worldgen.ChunkGeneratorMixin"
   ],
   "injectors": {
     "defaultRequire": 1
