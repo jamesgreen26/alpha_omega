@@ -31,7 +31,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /**
  * In a cube world the client keeps every chunk the server sends in {@link FaceChunks} (design §6.2), not vanilla's ring
  * around the player: chunks of the neighbouring faces lie thousands of blocks away in storage, and crossing an edge
- * jumps the player there. Chunks still go only when the server forgets them.
+ * jumps the player there. Chunks still go only when the server forgets them. Only chunks of a face's storage are
+ * kept here: others (Sable's plots, far out in the same level) are left to vanilla and whichever mod serves them.
  */
 @Mixin(ClientChunkCache.class)
 abstract class ClientChunkCacheMixin {
@@ -50,6 +51,13 @@ abstract class ClientChunkCacheMixin {
         return Cube.of(this.level) != null;
     }
 
+    /** Whether a chunk is one of a face's storage, in a cube world: one this store keeps. */
+    @Unique
+    private boolean alpha_omega$faceChunk(int x, int z) {
+        CubeGeometry geometry = Cube.of(this.level);
+        return geometry != null && geometry.faceAtChunk(x, z) != null;
+    }
+
     /** The chunk store for this world's cube, made (on the main thread) when first needed. */
     @Unique
     private FaceChunks alpha_omega$store() {
@@ -62,7 +70,7 @@ abstract class ClientChunkCacheMixin {
     @Inject(method = "getChunk(IILnet/minecraft/world/level/chunk/status/ChunkStatus;Z)Lnet/minecraft/world/level/chunk/LevelChunk;",
         at = @At("HEAD"), cancellable = true)
     private void alpha_omega$getChunk(int x, int z, ChunkStatus status, boolean load, CallbackInfoReturnable<LevelChunk> cir) {
-        if (!this.alpha_omega$cube()) return;
+        if (!this.alpha_omega$faceChunk(x, z)) return;
         FaceChunks chunks = this.alpha_omega$chunks;
         LevelChunk chunk = chunks == null ? null : chunks.get(x, z);
         if (chunk != null) cir.setReturnValue(chunk);
@@ -73,7 +81,7 @@ abstract class ClientChunkCacheMixin {
     @Inject(method = "replaceWithPacketData", at = @At("HEAD"), cancellable = true)
     private void alpha_omega$replace(int x, int z, FriendlyByteBuf buffer, CompoundTag heightmaps,
                                      Consumer<ClientboundLevelChunkPacketData.BlockEntityTagOutput> blockEntities, CallbackInfoReturnable<LevelChunk> cir) {
-        if (!this.alpha_omega$cube()) return;
+        if (!this.alpha_omega$faceChunk(x, z)) return;
         ChunkPos pos = new ChunkPos(x, z);
         FaceChunks chunks = this.alpha_omega$store();
         LevelChunk chunk = chunks.get(x, z);
@@ -94,7 +102,7 @@ abstract class ClientChunkCacheMixin {
 
     @Inject(method = "drop", at = @At("HEAD"), cancellable = true)
     private void alpha_omega$drop(ChunkPos pos, CallbackInfo ci) {
-        if (!this.alpha_omega$cube()) return;
+        if (!this.alpha_omega$faceChunk(pos.x, pos.z)) return;
         ci.cancel();
         LevelChunk chunk = this.alpha_omega$store().remove(pos.x, pos.z);
         if (chunk != null) {
@@ -108,7 +116,7 @@ abstract class ClientChunkCacheMixin {
 
     @Inject(method = "replaceBiomes", at = @At("HEAD"), cancellable = true)
     private void alpha_omega$replaceBiomes(int x, int z, FriendlyByteBuf buffer, CallbackInfo ci) {
-        if (!this.alpha_omega$cube()) return;
+        if (!this.alpha_omega$faceChunk(x, z)) return;
         ci.cancel();
         LevelChunk chunk = this.alpha_omega$store().get(x, z);
         if (chunk != null) chunk.replaceBiomes(buffer);

@@ -56,6 +56,11 @@ public final class FaceTransfers {
         transfer(level, geometry, root, face, to, root.position(), null);
     }
 
+    /** Moves an entity and its passengers to another face where they are now, as if they had crossed themselves. */
+    public static void carry(ServerLevel level, CubeGeometry geometry, Entity root, CubeFace from, CubeFace to) {
+        transfer(level, geometry, root, from, to, root.position(), null);
+    }
+
     /**
      * Moves {@code root} and its passengers from one face to another. {@code rootPos} is where the root is taken to
      * be (a client's claim, or its server position). {@code look} is the claiming player's yaw and pitch when its own

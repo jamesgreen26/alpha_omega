@@ -4,8 +4,13 @@
   "plugin": "g_mungus.alpha_omega.compat.CompatMixinPlugin",
   "compatibilityLevel": "JAVA_21",
   "minVersion": "0.8",
-  "mixins": [],
+  "mixins": [
+    "sable.SubLevelPhysicsSystemMixin",
+    "sable.SubLevelTrackingSystemMixin"
+  ],
   "client": [
+    "sable.client.ClientSubLevelMixin",
+    "sable.client.SubLevelSnapshotInterpolatorAccessor",
     "sodium.RenderSectionManagerAccessor",
     "sodium.RenderSectionManagerMixin",
     "sodium.SodiumWorldRendererMixin"

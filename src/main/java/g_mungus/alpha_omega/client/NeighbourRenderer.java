@@ -530,8 +530,9 @@ public final class NeighbourRenderer {
         CubeGeometry cube = Cube.of(level);
         if (cube == null || home == null) return false;
         CubeFace face = cube.faceAtChunk(sectionX, sectionZ);
-        if (face == home) return false;
-        Area area = face == null ? null : AREAS.get(face);
+        // Sections outside every face (Sable's plots) are not ours: vanilla's path is where their own renderer hears of them.
+        if (face == home || face == null) return false;
+        Area area = AREAS.get(face);
         if (area != null) {
             BlockPos origin = new BlockPos(sectionX << 4, sectionY << 4, sectionZ << 4);
             SectionRenderDispatcher.RenderSection section = ((ViewAreaAccessor) area.view).alpha_omega$getRenderSectionAt(origin);
