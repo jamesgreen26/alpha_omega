@@ -51,6 +51,31 @@ public class SableGameTests {
         helper.succeed();
     }
 
+    /**
+     * Blocks can be placed on and broken off a sub-level (its plot is outside every face, so the cube's write guard
+     * leaves it to Sable), while the face around it stays guarded.
+     */
+    @GameTest(template = TEMPLATE)
+    public static void buildsOnASubLevel(GameTestHelper helper) {
+        if (!sable(helper)) return;
+        ServerLevel level = helper.getLevel();
+        BlockPos anchor = helper.absolutePos(new BlockPos(3, 2, 3));
+        List<BlockPos> blocks = List.of(anchor, anchor.east());
+        for (BlockPos pos : blocks) level.setBlockAndUpdate(pos, Blocks.IRON_BLOCK.defaultBlockState());
+        BlockPos plot = SableTestOps.assemble(level, anchor, blocks);
+        helper.assertTrue(level.setBlockAndUpdate(plot.above(), Blocks.STONE.defaultBlockState()), "placing a block on the sub-level was refused");
+        helper.assertTrue(level.getBlockState(plot.above()).is(Blocks.STONE), "the placed block is not there: " + level.getBlockState(plot.above()));
+        helper.assertTrue(level.destroyBlock(plot.east(), false), "breaking a block of the sub-level was refused");
+        helper.assertTrue(level.getBlockState(plot.east()).isAir(), "the broken block is still there: " + level.getBlockState(plot.east()));
+        // Outside every face and every plot stays guarded.
+        CubeGeometry geometry = Cube.of(level);
+        BlockPos between = new BlockPos(geometry.centerX(CubeFace.UP), 100, geometry.centerZ() + 8 * geometry.spacingChunks + 16);
+        helper.assertTrue(geometry.faceAt(between.getX(), between.getZ()) == null, "expected a position between faces: " + between);
+        helper.assertTrue(!level.setBlockAndUpdate(between, Blocks.STONE.defaultBlockState()), "a block was placed between faces");
+        SableTestOps.remove(level, plot);
+        helper.succeed();
+    }
+
     /** A sub-level dropped over a face falls onto it and comes to rest. */
     @GameTest(template = TEMPLATE, timeoutTicks = 400)
     public static void fallsOntoTheFace(GameTestHelper helper) {
