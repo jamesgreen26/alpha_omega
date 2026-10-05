@@ -32,8 +32,10 @@ public class EdgeFillerBlock extends FillerBlock {
         CubeFace face = cube == null ? null : cube.faceAt(pos.getX(), pos.getZ());
         CubeGeometry.Cell source = face == null ? null : cube.bandSource(face, pos.getX(), pos.getY(), pos.getZ());
         if (source == null) return Shapes.empty();
-        // Never load the neighbour's chunk from inside movement. Until it is here, nothing is known to be there.
-        BlockGetter chunk = level.getChunkForCollisions(source.x() >> 4, source.z() >> 4);
+        // Never load the neighbour's chunk from inside movement. Until it is here, nothing is known to be there. Not
+        // getChunkForCollisions: on the server thread it waits for a chunk whose ticket says it should be loaded but
+        // that is still loading (from disk, or generating), which stalls the tick.
+        BlockGetter chunk = level.getChunkSource().getChunkNow(source.x() >> 4, source.z() >> 4);
         if (chunk == null) return Shapes.empty();
         BlockPos there = new BlockPos(source.x(), source.y(), source.z());
         // An empty context: the entity's one describes "above" and "descending" in this face's frame, not the neighbour's.

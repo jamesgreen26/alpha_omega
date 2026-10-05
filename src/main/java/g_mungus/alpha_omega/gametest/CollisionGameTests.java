@@ -10,6 +10,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.TicketType;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.projectile.Arrow;
@@ -196,6 +197,32 @@ public class CollisionGameTests {
         BlockState state = level.getBlockState(band);
         helper.assertTrue(state.getCollisionShape(level, band, CollisionContext.empty()).isEmpty(), "a band cell over a missing chunk should not collide");
         TestChunks.release(level, forced);
+        helper.succeed();
+    }
+
+    /**
+     * Where the neighbour's chunk is due to load but has not yet, the band is open too, and asking does not load it: a
+     * collision check must never wait for a chunk on the server thread.
+     */
+    @GameTest(template = TEMPLATE)
+    public static void neighbourStillLoadingIsOpen(GameTestHelper helper) {
+        CubeGeometry geometry = geometry(helper);
+        ServerLevel level = helper.getLevel();
+        // Far along the edge the other way from the other tests, so nothing else holds EAST's chunk there.
+        BlockPos band = bandCell(geometry, -110);
+        BlockPos source = source(geometry, band);
+        ChunkPos there = new ChunkPos(source);
+        helper.assertTrue(level.getChunkSource().getChunkNow(there.x, there.z) == null, "EAST's chunk should not be loaded for this test");
+        // A ticket makes the chunk due to load (full, not ticking, so little around it loads); running the ticket
+        // updates now gives it a holder before it can load.
+        level.getChunkSource().addRegionTicket(TicketType.FORCED, there, 0, there);
+        var chunkMap = level.getChunkSource().chunkMap;
+        chunkMap.getDistanceManager().runAllUpdates(chunkMap);
+        helper.assertTrue(chunkMap.getVisibleChunkIfPresent(there.toLong()) != null, "the forced chunk should have a holder");
+        BlockState edge = CubeBlocks.EDGE_FILLER.get().defaultBlockState();
+        helper.assertTrue(edge.getCollisionShape(level, band, CollisionContext.empty()).isEmpty(), "a band cell over a loading chunk should not collide");
+        helper.assertTrue(level.getChunkSource().getChunkNow(there.x, there.z) == null, "the collision check loaded EAST's chunk");
+        level.getChunkSource().removeRegionTicket(TicketType.FORCED, there, 0, there);
         helper.succeed();
     }
 }
