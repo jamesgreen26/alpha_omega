@@ -58,19 +58,15 @@ public class FaceGameTests {
         int z = geometry.centerZ() + 3 + 32 * lane;
         BlockPos pos = new BlockPos(x, geometry.barrierY(CubeFace.UP, x, z), z);
         ChunkPos chunk = new ChunkPos(pos);
-        // Generate the neighbourhood now: gametest ticks run back to back, faster than chunks generate around a ticket.
-        for (int dx = -3; dx <= 2; dx++) {
-            for (int dz = -2; dz <= 2; dz++) helper.getLevel().getChunk(chunk.x + dx, chunk.z + dz);
-        }
-        helper.getLevel().setChunkForced(chunk.x, chunk.z, true);
-        helper.getLevel().setChunkForced(chunk.x - 1, chunk.z, true);
+        TestChunks.force(helper.getLevel(), chunk);
+        TestChunks.force(helper.getLevel(), new ChunkPos(chunk.x - 1, chunk.z));
         return pos;
     }
 
     private static void release(GameTestHelper helper, BlockPos pos) {
         ChunkPos chunk = new ChunkPos(pos);
-        helper.getLevel().setChunkForced(chunk.x, chunk.z, false);
-        helper.getLevel().setChunkForced(chunk.x - 1, chunk.z, false);
+        TestChunks.release(helper.getLevel(), chunk);
+        TestChunks.release(helper.getLevel(), new ChunkPos(chunk.x - 1, chunk.z));
     }
 
     private static void assertState(GameTestHelper helper, BlockPos pos, BlockState expected, String what) {
@@ -152,7 +148,7 @@ public class FaceGameTests {
     }
 
     /** Water poured beside the barrier spreads on its own face but never into edge air or filler. */
-    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    @GameTest(template = TEMPLATE, timeoutTicks = 400)
     public static void fluidsStopAtTheBarrier(GameTestHelper helper) {
         CubeGeometry geometry = geometry(helper);
         ServerLevel level = helper.getLevel();
@@ -167,12 +163,13 @@ public class FaceGameTests {
             helper.assertTrue(state.is(CubeBlocks.EDGE_AIR.get()) && state.getFluidState().isEmpty(), "edge air took water: " + state);
             helper.assertTrue(level.getBlockState(barrier.below()).is(CubeBlocks.FILLER.get()), "filler took water");
             helper.assertTrue(!level.getFluidState(source.west()).isEmpty(), "water should still spread on its own face");
+            // Remove the source and let the rest drain (it runs down the barrier's staircase) before letting go.
             level.setBlockAndUpdate(source, Blocks.AIR.defaultBlockState());
-            level.setBlockAndUpdate(source.west(), Blocks.AIR.defaultBlockState());
-            level.setBlockAndUpdate(source.below(), Blocks.AIR.defaultBlockState());
             level.setBlockAndUpdate(source.below().west(), Blocks.AIR.defaultBlockState());
-            release(helper, barrier);
-            helper.succeed();
+            helper.runAfterDelay(200, () -> {
+                release(helper, barrier);
+                helper.succeed();
+            });
         });
     }
 

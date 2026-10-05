@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 
-/** F3 shows the local sun in the overworld, after the coordinates. */
+/** F3 shows the local sun in the overworld, after the coordinates, and how much of the neighbouring faces is drawn. */
 @Mixin(DebugScreenOverlay.class)
 abstract class DebugScreenOverlayMixin {
 
@@ -25,7 +25,14 @@ abstract class DebugScreenOverlayMixin {
     @ModifyReturnValue(method = "getGameInformation", at = @At("RETURN"))
     private List<String> alpha_omega$sun(List<String> lines) {
         Entity camera = this.minecraft.getCameraEntity();
-        return camera == null ? lines : alpha_omega$withSun(lines, camera);
+        if (camera == null) return lines;
+        List<String> result = alpha_omega$withSun(lines, camera);
+        String neighbours = g_mungus.alpha_omega.client.NeighbourRenderer.debugLine();
+        if (neighbours != null) {
+            result = new ArrayList<>(result);
+            result.add(neighbours);
+        }
+        return result;
     }
 
     @Unique

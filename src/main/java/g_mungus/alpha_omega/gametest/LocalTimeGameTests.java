@@ -47,12 +47,7 @@ public class LocalTimeGameTests {
         if (geometry == null) helper.fail("the gametest overworld should be a cube world");
         if (geometry.settings.sunAxis() != g_mungus.alpha_omega.cube.CubeSettings.SunAxis.DIAGONAL) helper.fail("tests expect the diagonal sun axis");
         BlockPos pos = new BlockPos(geometry.centerX(CubeFace.DOWN) + 8, PLATFORM_Y, geometry.centerZ() + 8 + dz);
-        ChunkPos chunk = new ChunkPos(pos);
-        // Generate the neighbourhood now: gametest ticks run back to back, faster than chunks generate around a ticket.
-        for (int dx = -2; dx <= 2; dx++) {
-            for (int dz2 = -2; dz2 <= 2; dz2++) level.getChunk(chunk.x + dx, chunk.z + dz2);
-        }
-        level.setChunkForced(chunk.x, chunk.z, true);
+        TestChunks.force(level, new ChunkPos(pos));
         for (int x = -2; x <= 2; x++) {
             for (int z = -2; z <= 2; z++) {
                 level.setBlockAndUpdate(pos.offset(x, -1, z), Blocks.STONE.defaultBlockState());
@@ -63,8 +58,7 @@ public class LocalTimeGameTests {
     }
 
     private static void release(GameTestHelper helper, BlockPos pos) {
-        ChunkPos chunk = new ChunkPos(pos);
-        helper.getLevel().setChunkForced(chunk.x, chunk.z, false);
+        TestChunks.release(helper.getLevel(), new ChunkPos(pos));
     }
 
     /** Sets the global time, some days in, so that the local clock at {@code pos} reads {@code localTicks}. */
@@ -105,6 +99,7 @@ public class LocalTimeGameTests {
         setLocalTime(level, pos, 6000);
         helper.assertTrue(!level.isDay(), "it should be night by the global clock");
         Zombie zombie = EntityType.ZOMBIE.create(level);
+        zombie.setPersistenceRequired();
         zombie.moveTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5);
         level.addFreshEntity(zombie);
         helper.succeedWhen(() -> {
@@ -121,6 +116,7 @@ public class LocalTimeGameTests {
         setLocalTime(level, pos, 18000);
         helper.assertTrue(level.isDay(), "it should be day by the global clock");
         Zombie zombie = EntityType.ZOMBIE.create(level);
+        zombie.setPersistenceRequired();
         zombie.moveTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5);
         level.addFreshEntity(zombie);
         helper.runAfterDelay(200, () -> {
@@ -153,6 +149,7 @@ public class LocalTimeGameTests {
         BlockPos pos = platform(helper, 0);
         setLocalTime(level, pos, 18000);
         Villager villager = EntityType.VILLAGER.create(level);
+        villager.setPersistenceRequired();
         villager.moveTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5);
         level.addFreshEntity(villager);
         helper.succeedWhen(() -> {

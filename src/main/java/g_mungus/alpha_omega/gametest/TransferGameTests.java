@@ -59,21 +59,18 @@ public class TransferGameTests {
             geometry.centerZ() + toward[2] * along + toward[0] * lateral);
     }
 
-    /** Generates the chunks around each point and forces their middle, so entities there tick. */
+    /** Forces the chunk of each point (generating around it), so entities there tick. */
     private static Set<ChunkPos> load(ServerLevel level, Vec3... points) {
         Set<ChunkPos> forced = new HashSet<>();
         for (Vec3 point : points) {
-            ChunkPos centre = new ChunkPos(BlockPos.containing(point));
-            for (int dx = -2; dx <= 2; dx++) {
-                for (int dz = -2; dz <= 2; dz++) level.getChunk(centre.x + dx, centre.z + dz);
-            }
-            if (forced.add(centre)) level.setChunkForced(centre.x, centre.z, true);
+            ChunkPos chunk = new ChunkPos(BlockPos.containing(point));
+            if (forced.add(chunk)) TestChunks.force(level, chunk);
         }
         return forced;
     }
 
     private static void release(ServerLevel level, Set<ChunkPos> forced) {
-        for (ChunkPos chunk : forced) level.setChunkForced(chunk.x, chunk.z, false);
+        TestChunks.release(level, forced);
     }
 
     private static Vec3 transformed(CubeGeometry geometry, CubeFace from, CubeFace to, Vec3 pos) {
@@ -162,6 +159,7 @@ public class TransferGameTests {
         double[] toward = from.toward(to);
         float yaw = (float) Math.toDegrees(Math.atan2(-toward[0], toward[2]));
         Zombie zombie = EntityType.ZOMBIE.create(level);
+        zombie.setPersistenceRequired();
         zombie.setNoAi(true);
         zombie.setNoGravity(true);
         zombie.moveTo(start.x, start.y, start.z, yaw, 0.0F);

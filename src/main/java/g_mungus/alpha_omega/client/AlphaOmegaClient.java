@@ -28,6 +28,7 @@ public class AlphaOmegaClient {
         container.registerConfig(ModConfig.Type.CLIENT, SkyClientConfig.SPEC, SkyClientConfig.FILE_NAME);
         SkyState.prepare();
         AtmosphereRenderer.register(modBus);
+        DevScript.init();
         modBus.addListener((RegisterPresetEditorsEvent event) -> event.register(CubeChunkGenerator.PRESET, CubePresetScreen::create));
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> Cube.setClient(null));
         if (Boolean.getBoolean("alpha_omega.auditMixins")) {

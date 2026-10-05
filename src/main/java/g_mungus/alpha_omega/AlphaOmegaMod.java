@@ -9,9 +9,11 @@ import g_mungus.alpha_omega.cube.Cube;
 import g_mungus.alpha_omega.gametest.CubeGameTests;
 import g_mungus.alpha_omega.gametest.FaceGameTests;
 import g_mungus.alpha_omega.gametest.LocalTimeGameTests;
+import g_mungus.alpha_omega.gametest.NeighbourGameTests;
 import g_mungus.alpha_omega.gametest.TransferGameTests;
 import g_mungus.alpha_omega.gametest.ModLoadGameTests;
 import g_mungus.alpha_omega.network.CubeConfigurationTask;
+import g_mungus.alpha_omega.neighbour.NeighbourViews;
 import g_mungus.alpha_omega.network.CubePayload;
 import g_mungus.alpha_omega.network.FaceTransferPayload;
 import g_mungus.alpha_omega.transfer.FaceTransfers;
@@ -23,12 +25,15 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import net.neoforged.neoforge.network.event.RegisterConfigurationTasksEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -56,6 +61,10 @@ public class AlphaOmegaMod {
         modEventBus.addListener(AlphaOmegaMod::registerPayloads);
         modEventBus.addListener((RegisterConfigurationTasksEvent event) -> event.register(new CubeConfigurationTask(event.getListener())));
         NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent event) -> CubeCommand.register(event.getDispatcher()));
+        NeoForge.EVENT_BUS.addListener((LevelTickEvent.Post event) -> {
+            if (event.getLevel() instanceof ServerLevel level) NeighbourViews.tick(level);
+        });
+        NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> NeighbourViews.clear());
         if (Boolean.getBoolean("alpha_omega.auditMixins")) {
             NeoForge.EVENT_BUS.addListener((ServerStartedEvent event) -> auditMixins());
         }
@@ -109,5 +118,6 @@ public class AlphaOmegaMod {
         event.register(FaceGameTests.class);
         event.register(LocalTimeGameTests.class);
         event.register(TransferGameTests.class);
+        event.register(NeighbourGameTests.class);
     }
 }

@@ -20,6 +20,9 @@ neoForge {
             programArguments.addAll(providers.gradleProperty('quickPlay').map { ['--quickPlaySingleplayer', it] }.orElse([]))
             if (project.hasProperty('auditMixins')) systemProperty 'alpha_omega.auditMixins', 'true'
             if (project.hasProperty('quitAfterAudit')) systemProperty 'alpha_omega.quitAfterAudit', 'true'
+            // -PdevScript='40:/tp @s 0 100 0;200:shot test;210:quit' scripts a dev client (see client.DevScript).
+            if (project.hasProperty('onlyFace')) systemProperty 'alpha_omega.dev.onlyFace', project.property('onlyFace')
+            if (project.hasProperty('devScript')) systemProperty 'alpha_omega.dev.script', project.property('devScript')
         }
         server {
             server()
