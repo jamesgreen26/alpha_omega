@@ -23,13 +23,15 @@
     "client.RenderSectionMixin",
     "client.SectionOcclusionGraphAccessor",
     "client.SoundEngineMixin",
-    "client.ViewAreaAccessor"
+    "client.ViewAreaAccessor",
+    "client.WorldCreationUiStateMixin"
   ],
   "mixins": [
     "server.ChunkMapAccessor",
     "server.ChunkMapMixin",
     "server.ChunkMapUnloadMixin",
     "server.ChunkTrackingViewMixin",
+    "server.DedicatedServerPropertiesMixin",
     "server.DistanceManagerAccessor",
     "server.EntityTransferCooldownMixin",
     "server.GameTestServerMixin",

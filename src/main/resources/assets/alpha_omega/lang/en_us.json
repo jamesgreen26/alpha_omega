@@ -1,2 +1,7 @@
 {
+  "generator.alpha_omega.orbifold": "Orbifold World",
+  "alpha_omega.orbifold.customize": "Orbifold World",
+  "alpha_omega.orbifold.size": "Size",
+  "alpha_omega.orbifold.size.value": "k = %s (%s blocks round)",
+  "alpha_omega.orbifold.hint": "Larger worlds take longer to walk round; the sky turns more slowly."
 }
