@@ -5,9 +5,11 @@ import com.mojang.serialization.MapCodec;
 import g_mungus.alpha_omega.command.OrbifoldCommand;
 import g_mungus.alpha_omega.config.AlphaOmegaConfig;
 import g_mungus.alpha_omega.gametest.GameTestFilter;
+import g_mungus.alpha_omega.gametest.GeneratorGameTests;
 import g_mungus.alpha_omega.gametest.ModLoadGameTests;
 import g_mungus.alpha_omega.gametest.OrbifoldGameTests;
 import g_mungus.alpha_omega.gametest.SableGameTests;
+import g_mungus.alpha_omega.gametest.TerrainGameTests;
 import g_mungus.alpha_omega.neighbour.ImageViews;
 import g_mungus.alpha_omega.network.FaceTransferPayload;
 import g_mungus.alpha_omega.network.OrbifoldConfigurationTask;
@@ -110,7 +112,7 @@ public class AlphaOmegaMod {
     }
 
     private static void registerGameTests(RegisterGameTestsEvent event) {
-        GameTestFilter.register(java.util.List.of(ModLoadGameTests.class, OrbifoldGameTests.class, SableGameTests.class, g_mungus.alpha_omega.gametest.LocalTimeGameTests.class,
+        GameTestFilter.register(java.util.List.of(ModLoadGameTests.class, OrbifoldGameTests.class, GeneratorGameTests.class, TerrainGameTests.class, SableGameTests.class, g_mungus.alpha_omega.gametest.LocalTimeGameTests.class,
             g_mungus.alpha_omega.gametest.ImageGameTests.class), event::register);
     }
 
