@@ -113,7 +113,7 @@ When copy X of a band cell is written:
 
 1. X's write runs as vanilla: section, heightmaps, light, `onPlace`/`onRemove`, block entity creation or removal (§3.4).
 2. The **mirrored write** puts `state.rotate(Rot_XY)` into copy Y at `G_XY(pos)`. It writes the section, heightmaps and light, but creates no block entity and calls no `onPlace`/`onRemove`. A re-entry guard stops it mirroring back.
-3. **Neighbour updates** are sent in both storages, each around its own copy. Each storage's neighbours then react or not, depending on who owns them (§3.5).
+3. **The mirrored write sends no neighbour updates**, only block update packets. Vanilla often writes without updates and then notifies its own neighbours explicitly (redstone dust, diodes, observers, pistons), so updates are handled where they are sent: an update aimed at a non-owner copy is forwarded to the owner (§3.5). (Changed after the phase 4 spike, 2026-10-05.)
 4. Block update packets go out for both copies, to whoever tracks each chunk. No packet type changes.
 
 A write to a cell that is not owned in X is still applied in X first, then mirrored. Placing, breaking, pistons, explosions, fluids and mob griefing therefore all work through the band without being routed anywhere.
@@ -142,8 +142,8 @@ These run only at the owner copy. At the other copy, they are skipped:
 
 | Reaction | Hook |
 |---|---|
-| Neighbour updates (`neighborChanged`) | `NeighborUpdater` dispatch |
-| Shape updates (`updateShape`): returns the state unchanged | `BlockState.updateShape` call sites in `Level` / `NeighborUpdater` |
+| Neighbour updates (`neighborChanged`, NeoForge `onNeighborChange`): **forwarded** to the owner, with target, source and direction moved by the motion between the copies | `BlockStateBase.handleNeighborChanged`, `Level.updateNeighbourForOutputSignal` |
+| Shape updates (`updateShape`): **forwarded** to the owner the same way | `Level.neighborShapeChanged` |
 | Random ticks and precipitation | `ServerLevel.tickChunk`, per-section ownership mask |
 | Block entity tickers | Not registered at non-owners (§3.4) |
 | POI registration | `ServerLevel.onBlockStateChange` (§5.2) |
@@ -154,12 +154,14 @@ These run only at the owner copy. At the other copy, they are skipped:
 
 Worked example: a redstone line crossing a 90° seam, with the dust owned by A and the repeater owned by B.
 
-1. The dust powers up in A. The mirrored write sets the dust's copy in B's storage.
-2. In A, the neighbour update reaches the repeater's copy. A doesn't own it, so nothing happens.
-3. In B, the mirrored write's neighbour update reaches the repeater, which B owns. It schedules its tick in B, as vanilla would.
-4. The tick powers the repeater in B. The mirrored write sets A's copy, and A's neighbours react in A.
+1. The dust powers up in A. The mirrored write sets the dust's copy in B's storage, with no updates.
+2. In A, the dust's neighbour update reaches the repeater's copy. A doesn't own it, so the update is forwarded to the repeater in B, with its source and direction moved into B's frame.
+3. The repeater in B reacts and schedules its tick in B, as vanilla would.
+4. The tick powers the repeater in B. The mirrored write sets A's copy, and the repeater's own update to its output neighbour is delivered (or forwarded) to that neighbour's owner.
 
-Each component reacts once, in its own frame, in the same tick order as vanilla. All reads see turned copies that are up to date, so connections, facing and power levels match.
+Each component reacts once, in its own frame, in the same tick order as vanilla. Across a fold, an owner reacts in its own frame, so vanilla's neighbour update order is turned for the part of a build on the other side: simple builds match vanilla tick for tick (spike gametests), but an order-sensitive build could differ.
+
+**Block entities created explicitly claim their cell.** `PistonBaseBlock.moveBlocks` puts a moving-piston block entity at the destination with `setBlockEntity`, in the piston's frame. A block entity created at a copy owns that cell while it exists, so a push across a seam lands. This is the minimum of §3.3's claims, needed from phase 4 on. All reads see turned copies that are up to date, so connections, facing and power levels match.
 
 ### 3.6 Light, heightmaps, fluids
 

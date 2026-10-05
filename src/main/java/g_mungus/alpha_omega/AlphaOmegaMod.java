@@ -112,7 +112,7 @@ public class AlphaOmegaMod {
     }
 
     private static void registerGameTests(RegisterGameTestsEvent event) {
-        GameTestFilter.register(java.util.List.of(ModLoadGameTests.class, OrbifoldGameTests.class, GeneratorGameTests.class, TerrainGameTests.class, SableGameTests.class), event::register);
+        GameTestFilter.register(java.util.List.of(ModLoadGameTests.class, OrbifoldGameTests.class, GeneratorGameTests.class, TerrainGameTests.class, SableGameTests.class, g_mungus.alpha_omega.gametest.LocalTimeGameTests.class), event::register);
     }
 
 }

@@ -205,9 +205,10 @@ This is the core of the work (RS §3), with nominal ownership only. **Start with
 - [ ] `band/CopyLinks`: per loaded chunk, whether it has a source or copies, and the list of linked chunks with their `g`. A field on `LevelChunk` (mixin), so chunks away from edges pay one check.
 - [ ] Paired tickets: a ticket on a band or skirt chunk adds one on its source, and a ticket on a tile chunk with copies adds them on the copies. Use v2's neighbour ticket levels.
 - [ ] Promotion gate: a band or skirt chunk does not become full until its source is full. On promotion, fill it from the source: sections turned by `g`, ownership masks, light recomputed locally. Copy a 16×16 index permutation per section for 180°, and use a straight copy for `T`.
-- [ ] Mirrored writes at `LevelChunk.setBlockState` (RS §3.2): write the turned state into every linked copy, with sections, heightmaps and light updated; no block entity creation, `onPlace` or `onRemove`; a re-entry guard. Send neighbour updates around each copy. Block update packets go out for each copy.
+- [ ] Mirrored writes at `LevelChunk.setBlockState` (RS §3.2): write the turned state into every linked copy, with sections, heightmaps and light updated; no block entity creation, `onPlace` or `onRemove`; a re-entry guard. The mirror runs right after the section write, before `onRemove`/`onPlace`. Mirrored writes send packets only, no neighbour updates.
 - [ ] Ownership: per-section bitset attachment (empty at first: everything nominal). The owner of a band cell is its source unless claimed (phase 8).
-- [ ] Owned reactions (RS §3.5): skip `neighborChanged` and `updateShape` (return the state unchanged) at non-owner copies, in the `NeighborUpdater` dispatch and `Level` call sites. Skip random ticks and precipitation by mask in `ServerLevel.tickChunk`. Do not register block entity tickers at non-owner copies.
+- [ ] Owned reactions (RS §3.5, as revised by the spike): forward neighbour and shape updates aimed at a non-owner copy to the owner, at `BlockStateBase.handleNeighborChanged`, `Level.neighborShapeChanged` and `Level.updateNeighbourForOutputSignal`.
+- [ ] Block entity claims: a block entity created at a copy (pistons' `setBlockEntity`) owns that cell while it exists. Skip random ticks and precipitation by mask in `ServerLevel.tickChunk`. Do not register block entity tickers at non-owner copies.
 - [ ] Scheduled ticks run where scheduled. Skip scheduling if a linked copy already has the same tick pending.
 - [ ] Block entities (RS §3.4): `Level.getBlockEntity` and `LevelChunk.getBlockEntity` at a non-owner copy return the owner's object. `Level.getCapability` redirects to the owner with `side` turned. Block events run once, and their packets are sent for every copy.
 - [ ] Client block entity replicas: chunk packets for non-owner copies carry the owner's update tag. `ClientboundBlockEntityDataPacket` is sent for every copy.
@@ -365,6 +366,10 @@ Compasses and maps (heading from the projection); F3 (canonical position, frame,
 ## 6. Progress log
 
 Add a dated line here at the end of each phase, as in v2's `progress.md`: what landed, test counts, measurements, and anything deferred.
+
+- 2026-10-05 Phases 0–1 merged: cube code stripped (kept systems stubbed inactive, see the stub table in the phase 0 report), `OrbifoldGeometry`/`Motion`/`Transform`, settings, preset, `/orbifold info`. 25 unit tests, 9 gametests.
+- 2026-10-05 Phase 2 merged: `HexOrbifoldProjection` behind `PlanetProjection` (world coordinates), `LocalSky` rebuilt on it with its API unchanged, celestial rotation in double precision, night skip at the sleepers' mean position, F3 and `/orbifold time`. 47 unit tests, 19 gametests. Finding: W §5's "10,408 blocks north = 0° 180°" is wrong; walking straight through cone point N (a half turn) returns to spawn, turned round.
+- 2026-10-05 Phase 4 spike (`orbifold-band-spike`): the rule holds for dust, repeaters, comparators, observers, pistons and breaking across a translation and a fold, with 0 reactions at non-owners. Two rule changes adopted: forward updates instead of skipping them, and block entity claims (RS §3.2, §3.5 updated).
 
 ---
 
