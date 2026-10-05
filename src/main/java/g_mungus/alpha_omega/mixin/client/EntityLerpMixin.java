@@ -1,5 +1,6 @@
 package g_mungus.alpha_omega.mixin.client;
 
+import g_mungus.alpha_omega.client.EntityTurns;
 import g_mungus.alpha_omega.cube.Cube;
 import g_mungus.alpha_omega.cube.CubeFace;
 import g_mungus.alpha_omega.cube.CubeGeometry;
@@ -14,7 +15,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /**
  * A remote entity that crossed an edge arrives thousands of blocks away in storage (design §5.3). Before it starts
  * moving toward its new position, its current one is re-expressed on the new face, so it glides on from where it
- * really was instead of streaking across storage.
+ * really was instead of streaking across storage. A living one's model then turns upright over a few ticks
+ * ({@link EntityTurns}).
  */
 @Mixin({Entity.class, LivingEntity.class})
 abstract class EntityLerpMixin {
@@ -38,5 +40,6 @@ abstract class EntityLerpMixin {
             living.yBodyRot = living.yBodyRotO = rotation[0];
             living.yHeadRot = living.yHeadRotO = rotation[0];
         }
+        EntityTurns.start(entity, from, to);
     }
 }

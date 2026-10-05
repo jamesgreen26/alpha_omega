@@ -44,16 +44,23 @@ public final class FaceCamera {
      * storage). {@code mover} is what carries the player (itself, or its vehicle), already in the new face's storage.
      */
     public static void start(CubeGeometry geometry, CubeFace from, CubeFace to, Vec3 eyeBefore, Vec3 eyeAfter, Entity mover) {
-        // Seen from the new face: the true direction of an old view is W·d, the player's new view U·d; start at W·Uᵀ.
-        Matrix3f world = columns(from, to, false);
-        Matrix3f upright = from.isNeighbour(to) ? columns(from, to, true) : world;
-        world.mul(upright.transpose(new Matrix3f())).getNormalizedRotation(offset);
+        offset.set(crossingTurn(from, to));
         double[] before = geometry.transform(from, to, eyeBefore.x, eyeBefore.y, eyeBefore.z);
         shift = new Vec3(before[0], before[1], before[2]).subtract(eyeAfter);
         FaceCamera.from = from;
         FaceCamera.to = to;
         duration = Mth.clamp(ticksToLand(mover), MIN_TICKS, MAX_TICKS);
         left = leftBefore = 1.0F;
+    }
+
+    /**
+     * The rotation, in the new face's storage axes, that takes something upright after crossing back to how it really
+     * stood before: the true direction of an old view is W·d, its new upright one U·d, so the turn is W·Uᵀ.
+     */
+    public static Quaternionf crossingTurn(CubeFace from, CubeFace to) {
+        Matrix3f world = columns(from, to, false);
+        Matrix3f upright = from.isNeighbour(to) ? columns(from, to, true) : world;
+        return world.mul(upright.transpose(new Matrix3f())).getNormalizedRotation(new Quaternionf());
     }
 
     private static Matrix3f columns(CubeFace from, CubeFace to, boolean upright) {
