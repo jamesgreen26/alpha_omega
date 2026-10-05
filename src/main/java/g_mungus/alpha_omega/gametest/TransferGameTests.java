@@ -219,6 +219,35 @@ public class TransferGameTests {
         });
     }
 
+    /** A mob waits at the diagonal while the other side is solid, and crosses once there is room. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    public static void mobsWaitForRoom(GameTestHelper helper) {
+        CubeGeometry geometry = geometry(helper);
+        ServerLevel level = helper.getLevel();
+        CubeFace from = CubeFace.UP, to = CubeFace.WEST;
+        Vec3 start = crossing(geometry, from, to, 1.0, 21.0);
+        Vec3 landing = transformed(geometry, from, to, start);
+        Set<ChunkPos> forced = load(level, start, landing);
+        BlockPos block = BlockPos.containing(landing.add(0, 0.5, 0));
+        level.setBlockAndUpdate(block, net.minecraft.world.level.block.Blocks.STONE.defaultBlockState());
+        Zombie zombie = EntityType.ZOMBIE.create(level);
+        zombie.setPersistenceRequired();
+        zombie.setNoAi(true);
+        zombie.setNoGravity(true);
+        zombie.moveTo(start.x, start.y, start.z);
+        level.addFreshEntity(zombie);
+        helper.runAfterDelay(10, () -> {
+            helper.assertTrue(geometry.faceAt(zombie.getX(), zombie.getZ()) == from, "the zombie crossed into stone");
+            level.setBlockAndUpdate(block, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState());
+            helper.runAfterDelay(5, () -> {
+                helper.assertTrue(geometry.faceAt(zombie.getX(), zombie.getZ()) == to, "the zombie did not cross once there was room");
+                zombie.discard();
+                release(level, forced);
+                helper.succeed();
+            });
+        });
+    }
+
     /** A client's claim to have crossed is applied when it fits the server's view, and refused when it does not. */
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void playerClaimsAreChecked(GameTestHelper helper) {

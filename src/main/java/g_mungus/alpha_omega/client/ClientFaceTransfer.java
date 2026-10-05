@@ -35,7 +35,7 @@ public final class ClientFaceTransfer {
         if (root == player || root.isControlledByLocalInstance()) {
             CubeFace face = geometry.faceAt(root.getX(), root.getZ());
             CubeFace to = face == null ? null : FaceTransfer.destination(geometry, face, root.getX(), root.getY(), root.getZ());
-            if (to != null) cross(geometry, player, root, face, to);
+            if (to != null && FaceTransfer.roomToCross(geometry, root, face, to)) cross(geometry, player, root, face, to);
         }
         CubeFace now = geometry.faceAt(player.getX(), player.getZ());
         if (lastFace != null && now != null && now != lastFace) FaceCamera.start(geometry, lastFace, now, lastEye, player.getEyePosition());

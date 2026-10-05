@@ -6,6 +6,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.vehicle.VehicleEntity;
+import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -40,6 +41,21 @@ public final class FaceTransfer {
         if (owner == face) return null;
         if (owner.isNeighbour(face) && geometry.depthInto(face, owner, x, y, z) < MARGIN) return null;
         return owner;
+    }
+
+    /** How far past the margin an upright entity may wait for room on the other side before crossing anyway. */
+    public static final double WAIT_DEPTH = 2.0;
+
+    /**
+     * Whether an entity crossing now would land somewhere it fits. Upright things wait at the diagonal (within
+     * {@link #WAIT_DEPTH}) rather than land inside the ground; past that, they cross and vanilla pushes them out.
+     */
+    public static boolean roomToCross(CubeGeometry geometry, Entity entity, CubeFace from, CubeFace to) {
+        if (mode(entity) != Mode.UPRIGHT || !from.isNeighbour(to)) return true;
+        if (geometry.depthInto(from, to, entity.getX(), entity.getY(), entity.getZ()) > WAIT_DEPTH) return true;
+        double[] p = geometry.transform(from, to, entity.getX(), entity.getY(), entity.getZ());
+        AABB box = entity.getDimensions(entity.getPose()).makeBoundingBox(p[0], p[1], p[2]);
+        return entity.level().noCollision(entity, box);
     }
 
     /** A direction (velocity) crossing from one face to another. */

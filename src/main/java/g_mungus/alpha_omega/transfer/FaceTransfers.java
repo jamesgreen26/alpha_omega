@@ -51,6 +51,7 @@ public final class FaceTransfers {
         if (to == null) return;
         boolean carriesPlayer = root.getSelfAndPassengers().anyMatch(entity -> entity instanceof ServerPlayer);
         if (carriesPlayer && to.isNeighbour(face) && geometry.depthInto(face, to, root.getX(), root.getY(), root.getZ()) < FORCE_DEPTH) return;
+        if (!FaceTransfer.roomToCross(geometry, root, face, to)) return;
         transfer(level, geometry, root, face, to, root.position(), null);
     }
 
