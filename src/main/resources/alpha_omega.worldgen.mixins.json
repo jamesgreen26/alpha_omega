@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "package": "g_mungus.alpha_omega.mixin.worldgen",
+  "compatibilityLevel": "JAVA_21",
+  "minVersion": "0.8",
+  "mixins": [
+    "ChunkGeneratorMixin",
+    "WorldGenRegionMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
