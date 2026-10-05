@@ -2,7 +2,7 @@ package g_mungus.alpha_omega.mixin.client;
 
 import com.llamalad7.mixinextras.sugar.Local;
 import com.mojang.blaze3d.vertex.PoseStack;
-import g_mungus.alpha_omega.client.NeighbourRenderer;
+import g_mungus.alpha_omega.client.ImageRenderer;
 import g_mungus.alpha_omega.client.TransferStats;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
@@ -26,7 +26,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Hooks {@link NeighbourRenderer} into the level renderer: setup, entities, block entities, dirt. The hooks into vanilla's
+ * Hooks {@link ImageRenderer} into the level renderer: setup, entities, block entities, dirt. The hooks into vanilla's
  * own terrain pipeline, which Sodium replaces, are in {@link LevelRendererVanillaTerrainMixin}.
  */
 @Mixin(LevelRenderer.class)
@@ -49,7 +49,7 @@ abstract class LevelRendererNeighbourMixin {
     private void alpha_omega$setupNeighbours(DeltaTracker delta, boolean renderBlockOutline, Camera camera, GameRenderer gameRenderer,
                                              LightTexture lightTexture, Matrix4f frustumMatrix, Matrix4f projectionMatrix, CallbackInfo ci,
                                              @Local Frustum frustum) {
-        NeighbourRenderer.setup((LevelRenderer) (Object) this, camera, frustum, this.minecraft.options.getEffectiveRenderDistance());
+        ImageRenderer.setup((LevelRenderer) (Object) this, camera, frustum, this.minecraft.options.getEffectiveRenderDistance());
         TransferStats.frame(this.visibleSections.size());
     }
 
@@ -58,7 +58,7 @@ abstract class LevelRendererNeighbourMixin {
     private void alpha_omega$neighbourEntities(DeltaTracker delta, boolean renderBlockOutline, Camera camera, GameRenderer gameRenderer,
                                                LightTexture lightTexture, Matrix4f frustumMatrix, Matrix4f projectionMatrix, CallbackInfo ci,
                                                @Local Frustum frustum, @Local PoseStack pose, @Local MultiBufferSource.BufferSource buffers) {
-        NeighbourRenderer.renderEntities((LevelRenderer) (Object) this, camera, frustum, delta, pose, buffers);
+        ImageRenderer.renderEntities((LevelRenderer) (Object) this, camera, frustum, delta, pose, buffers);
     }
 
     @Inject(method = "renderLevel", at = @At(value = "INVOKE", ordinal = 1,
@@ -66,22 +66,22 @@ abstract class LevelRendererNeighbourMixin {
     private void alpha_omega$neighbourBlockEntities(DeltaTracker delta, boolean renderBlockOutline, Camera camera, GameRenderer gameRenderer,
                                                     LightTexture lightTexture, Matrix4f frustumMatrix, Matrix4f projectionMatrix, CallbackInfo ci,
                                                     @Local PoseStack pose, @Local MultiBufferSource.BufferSource buffers) {
-        NeighbourRenderer.renderBlockEntities((LevelRenderer) (Object) this, camera, delta.getGameTimeDeltaPartialTick(false), pose, buffers,
+        ImageRenderer.renderBlockEntities((LevelRenderer) (Object) this, camera, delta.getGameTimeDeltaPartialTick(false), pose, buffers,
             this.blockEntityRenderDispatcher);
     }
 
     @Inject(method = "setSectionDirty(IIIZ)V", at = @At("HEAD"), cancellable = true)
     private void alpha_omega$neighbourDirt(int x, int y, int z, boolean playerChanged, CallbackInfo ci) {
-        if (this.level != null && NeighbourRenderer.setDirty(this.level, x, y, z, playerChanged)) ci.cancel();
+        if (this.level != null && ImageRenderer.setDirty(this.level, x, y, z, playerChanged)) ci.cancel();
     }
 
     @Inject(method = "blockChanged", at = @At("HEAD"))
     private void alpha_omega$neighbourGround(BlockGetter getter, BlockPos pos, BlockState oldState, BlockState newState, int flags, CallbackInfo ci) {
-        if (this.level != null) NeighbourRenderer.blockChanged(this.level, pos);
+        if (this.level != null) ImageRenderer.blockChanged(this.level, pos);
     }
 
     @Inject(method = {"allChanged", "setLevel"}, at = @At("HEAD"))
     private void alpha_omega$resetNeighbours(CallbackInfo ci) {
-        NeighbourRenderer.reset();
+        ImageRenderer.reset();
     }
 }

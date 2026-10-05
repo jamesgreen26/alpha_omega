@@ -8,7 +8,7 @@ import g_mungus.alpha_omega.gametest.GameTestFilter;
 import g_mungus.alpha_omega.gametest.ModLoadGameTests;
 import g_mungus.alpha_omega.gametest.OrbifoldGameTests;
 import g_mungus.alpha_omega.gametest.SableGameTests;
-import g_mungus.alpha_omega.neighbour.NeighbourViews;
+import g_mungus.alpha_omega.neighbour.ImageViews;
 import g_mungus.alpha_omega.network.FaceTransferPayload;
 import g_mungus.alpha_omega.network.OrbifoldConfigurationTask;
 import g_mungus.alpha_omega.network.OrbifoldPayload;
@@ -58,9 +58,9 @@ public class AlphaOmegaMod {
         modEventBus.addListener((RegisterConfigurationTasksEvent event) -> event.register(new OrbifoldConfigurationTask(event.getListener())));
         NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent event) -> OrbifoldCommand.register(event.getDispatcher()));
         NeoForge.EVENT_BUS.addListener((LevelTickEvent.Post event) -> {
-            if (event.getLevel() instanceof ServerLevel level) NeighbourViews.tick(level);
+            if (event.getLevel() instanceof ServerLevel level) ImageViews.tick(level);
         });
-        NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> NeighbourViews.clear());
+        NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> ImageViews.clear());
         if (net.neoforged.fml.ModList.get().isLoaded("sable")) g_mungus.alpha_omega.compat.sable.SableCompat.init();
         if (Boolean.getBoolean("alpha_omega.auditMixins")) {
             NeoForge.EVENT_BUS.addListener((ServerStartedEvent event) -> auditMixins());
@@ -110,7 +110,8 @@ public class AlphaOmegaMod {
     }
 
     private static void registerGameTests(RegisterGameTestsEvent event) {
-        GameTestFilter.register(java.util.List.of(ModLoadGameTests.class, OrbifoldGameTests.class, SableGameTests.class, g_mungus.alpha_omega.gametest.LocalTimeGameTests.class), event::register);
+        GameTestFilter.register(java.util.List.of(ModLoadGameTests.class, OrbifoldGameTests.class, SableGameTests.class, g_mungus.alpha_omega.gametest.LocalTimeGameTests.class,
+            g_mungus.alpha_omega.gametest.ImageGameTests.class), event::register);
     }
 
 }

@@ -68,7 +68,7 @@ import org.joml.Quaternionf;
  * <p>Inactive until phase 6: {@link #images} gives no images, so nothing is drawn. The area handling is v2's
  * neighbour renderer, keyed by image instead of face.
  */
-public final class NeighbourRenderer {
+public final class ImageRenderer {
 
     /** Out-of-view neighbour sections compiled per frame. */
     private static final int COMPILE_AHEAD_PER_FRAME = 24;
@@ -139,7 +139,7 @@ public final class NeighbourRenderer {
     /** Vanilla's area was swapped this frame, and its visible-section graph starts again from nothing. */
     private static boolean swapped;
 
-    private NeighbourRenderer() {
+    private ImageRenderer() {
     }
 
     /** Releases every area, so they are rebuilt (new level, view distance or renderer). */

@@ -9,17 +9,17 @@ import net.minecraft.world.level.ChunkPos;
 
 /**
  * The chunks a player in an orbifold world sees: vanilla's square around it, plus, for each image it has, the same
- * square around its virtual position there, kept to what that image shows ({@link NeighbourViews#shows}). Squares a
- * crossing took out of view linger for a while ({@code transfer-retention.md} §3.3), kept the same way.
+ * square around its image position, kept to live storage ({@link ImageViews#shows}). Squares that left the view all at
+ * once linger for a while ({@code transfer-retention.md} §3.3), kept the same way.
  */
-public record CubeTrackingView(ChunkTrackingView.Positioned home, List<Virtual> virtuals, List<Virtual> lingering, OrbifoldGeometry geometry)
+public record ImageTrackingView(ChunkTrackingView.Positioned home, List<Virtual> virtuals, List<Virtual> lingering, OrbifoldGeometry geometry)
     implements ChunkTrackingView {
 
-    /** A player's virtual position for an image {@code g}: the chunk {@code g⁻¹(pos)} is in. */
+    /** A player's image position for an image {@code g}: the chunk {@code g⁻¹(pos)} is in (the identity for a lingering square of its own). */
     public record Virtual(Motion image, ChunkPos center) {
     }
 
-    public CubeTrackingView(ChunkTrackingView.Positioned home, List<Virtual> virtuals, OrbifoldGeometry geometry) {
+    public ImageTrackingView(ChunkTrackingView.Positioned home, List<Virtual> virtuals, OrbifoldGeometry geometry) {
         this(home, virtuals, List.of(), geometry);
     }
 
@@ -29,7 +29,7 @@ public record CubeTrackingView(ChunkTrackingView.Positioned home, List<Virtual> 
 
     private boolean inSquare(Virtual square, int x, int z, boolean includeOuter) {
         return ChunkTrackingView.isWithinDistance(square.center.x, square.center.z, this.viewDistance(), x, z, includeOuter)
-            && NeighbourViews.shows(this.geometry, square, x, z);
+            && ImageViews.shows(this.geometry, square, x, z);
     }
 
     @Override

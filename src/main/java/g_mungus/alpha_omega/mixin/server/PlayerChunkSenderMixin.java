@@ -2,7 +2,7 @@ package g_mungus.alpha_omega.mixin.server;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import g_mungus.alpha_omega.neighbour.NeighbourViews;
+import g_mungus.alpha_omega.neighbour.ImageViews;
 import java.util.Comparator;
 import java.util.function.ToIntFunction;
 import net.minecraft.server.level.ServerPlayer;
@@ -18,7 +18,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /**
  * Vanilla sends a player's pending chunks nearest first by storage distance, which with image views puts every chunk
  * of an image (far away in storage) after every chunk of its own square. They go by distance from the player's
- * position in their own square instead, its own square a little ahead ({@link NeighbourViews#sendPriority}).
+ * position in their own square instead, its own square a little ahead ({@link ImageViews#sendPriority}).
  */
 @Mixin(PlayerChunkSender.class)
 abstract class PlayerChunkSenderMixin {
@@ -37,9 +37,9 @@ abstract class PlayerChunkSenderMixin {
         target = "Ljava/util/Comparator;comparingInt(Ljava/util/function/ToIntFunction;)Ljava/util/Comparator;"))
     private Comparator<Object> alpha_omega$alongTheSurface(ToIntFunction<Object> distance, Operation<Comparator<Object>> original) {
         ServerPlayer player = this.alpha_omega$player;
-        if (player == null || !NeighbourViews.active(player.serverLevel())) return original.call(distance);
+        if (player == null || !ImageViews.active(player.serverLevel())) return original.call(distance);
         // Pending chunks are sorted as positions, or as loaded chunks once they are ready.
-        return Comparator.comparingDouble(chunk -> NeighbourViews.sendPriority(player,
+        return Comparator.comparingDouble(chunk -> ImageViews.sendPriority(player,
             chunk instanceof LevelChunk loaded ? loaded.getPos().toLong() : (Long) chunk));
     }
 }

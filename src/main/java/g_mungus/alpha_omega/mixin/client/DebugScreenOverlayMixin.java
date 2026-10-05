@@ -27,7 +27,7 @@ abstract class DebugScreenOverlayMixin {
         Entity camera = this.minecraft.getCameraEntity();
         if (camera == null) return lines;
         List<String> result = alpha_omega$withSun(lines, camera);
-        String neighbours = g_mungus.alpha_omega.client.NeighbourRenderer.debugLine();
+        String neighbours = g_mungus.alpha_omega.client.ImageRenderer.debugLine();
         if (neighbours != null) {
             result = new ArrayList<>(result);
             result.add(neighbours);

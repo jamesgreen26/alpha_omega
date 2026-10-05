@@ -12,7 +12,7 @@ import dev.ryanhcode.sable.mixinterface.entity.entity_sublevel_collision.EntityM
 import dev.ryanhcode.sable.sublevel.ServerSubLevel;
 import dev.ryanhcode.sable.sublevel.system.SubLevelPhysicsSystem;
 import dev.ryanhcode.sable.sublevel.system.ticket.PhysicsChunkTicketManager;
-import g_mungus.alpha_omega.neighbour.NeighbourViews;
+import g_mungus.alpha_omega.neighbour.ImageViews;
 import g_mungus.alpha_omega.orbifold.Motion;
 import g_mungus.alpha_omega.orbifold.Orbifold;
 import g_mungus.alpha_omega.orbifold.OrbifoldGeometry;
@@ -147,12 +147,12 @@ public final class SubLevelTransfers {
 
     /**
      * Whether a player should see a sub-level from one of its image positions: it is within Sable's tracking range of
-     * the nearest of them ({@link NeighbourViews#playerPositionFor}).
+     * the nearest of them ({@link ImageViews#playerPositionFor}).
      */
     public static boolean nearVirtual(Player player, Vector3dc position) {
         if (!(player.level() instanceof ServerLevel level) || Orbifold.of(level) == null) return false;
         Vec3 at = new Vec3(position.x(), position.y(), position.z());
-        Vec3 from = NeighbourViews.playerPositionFor(level, player.position(), at);
+        Vec3 from = ImageViews.playerPositionFor(level, player.position(), at);
         if (from.equals(player.position())) return false;
         double range = SableConfig.SUB_LEVEL_TRACKING_RANGE.getAsDouble();
         return from.distanceToSqr(at) < range * range;

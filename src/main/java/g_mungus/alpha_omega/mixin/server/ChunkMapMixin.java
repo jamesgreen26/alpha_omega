@@ -2,8 +2,8 @@ package g_mungus.alpha_omega.mixin.server;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import g_mungus.alpha_omega.neighbour.CubeTrackingView;
-import g_mungus.alpha_omega.neighbour.NeighbourViews;
+import g_mungus.alpha_omega.neighbour.ImageTrackingView;
+import g_mungus.alpha_omega.neighbour.ImageViews;
 import net.minecraft.network.protocol.game.ClientboundSetChunkCacheCenterPacket;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ChunkTrackingView;
@@ -19,7 +19,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * With image views a player's chunk tracking view also covers its virtual squares for nearby images
- * ({@link CubeTrackingView}). Vanilla only tells the client its new centre for a plain square view; this does it for
+ * ({@link ImageTrackingView}). Vanilla only tells the client its new centre for a plain square view; this does it for
  * the image view's home square.
  */
 @Mixin(ChunkMap.class)
@@ -32,16 +32,16 @@ abstract class ChunkMapMixin {
     @WrapOperation(method = "updateChunkTracking", at = @At(value = "INVOKE",
         target = "Lnet/minecraft/server/level/ChunkTrackingView;of(Lnet/minecraft/world/level/ChunkPos;I)Lnet/minecraft/server/level/ChunkTrackingView;"))
     private ChunkTrackingView alpha_omega$withNeighbours(ChunkPos center, int viewDistance, Operation<ChunkTrackingView> original, ServerPlayer player) {
-        if (!NeighbourViews.active(this.level)) return original.call(center, viewDistance);
-        return NeighbourViews.view(this.level, player, center, viewDistance);
+        if (!ImageViews.active(this.level)) return original.call(center, viewDistance);
+        return ImageViews.view(this.level, player, center, viewDistance);
     }
 
     @Inject(method = "applyChunkTrackingView", at = @At("HEAD"))
     private void alpha_omega$sendCenter(ServerPlayer player, ChunkTrackingView view, CallbackInfo ci) {
-        if (!(view instanceof CubeTrackingView cube) || player.level() != this.level) return;
+        if (!(view instanceof ImageTrackingView cube) || player.level() != this.level) return;
         ChunkPos center = cube.home().center();
         ChunkTrackingView old = player.getChunkTrackingView();
-        ChunkPos oldCenter = old instanceof CubeTrackingView oldCube ? oldCube.home().center()
+        ChunkPos oldCenter = old instanceof ImageTrackingView oldCube ? oldCube.home().center()
             : old instanceof ChunkTrackingView.Positioned positioned ? positioned.center() : null;
         if (!center.equals(oldCenter)) player.connection.send(new ClientboundSetChunkCacheCenterPacket(center.x, center.z));
     }

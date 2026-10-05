@@ -2,7 +2,7 @@ package g_mungus.alpha_omega.mixin.server;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
-import g_mungus.alpha_omega.neighbour.NeighbourViews;
+import g_mungus.alpha_omega.neighbour.ImageViews;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -25,6 +25,6 @@ abstract class TrackedEntityMixin {
     private Vec3 alpha_omega$virtualPosition(ServerPlayer player, Operation<Vec3> original) {
         Vec3 pos = original.call(player);
         if (!(this.entity.level() instanceof ServerLevel level)) return pos;
-        return NeighbourViews.playerPositionFor(level, pos, this.entity.position());
+        return ImageViews.playerPositionFor(level, pos, this.entity.position());
     }
 }

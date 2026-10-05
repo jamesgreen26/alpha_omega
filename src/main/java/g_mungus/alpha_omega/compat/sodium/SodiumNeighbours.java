@@ -1,6 +1,6 @@
 package g_mungus.alpha_omega.compat.sodium;
 
-import g_mungus.alpha_omega.client.NeighbourRenderer;
+import g_mungus.alpha_omega.client.ImageRenderer;
 import g_mungus.alpha_omega.mixin.compat.sodium.RenderSectionManagerAccessor;
 import g_mungus.alpha_omega.orbifold.Motion;
 import g_mungus.alpha_omega.orbifold.Orbifold;
@@ -59,11 +59,11 @@ import org.joml.Vector3d;
  * <p>When Sodium searches for visible sections, each image's are collected here from the camera as seen from that
  * image ({@code g⁻¹(camera)}): per chunk column within view, shown by the image and loaded, with its boxes as the camera
  * sees them and the depth below which it is buried, worked out again only when its chunk or one near it changes (as
- * in {@link NeighbourRenderer}). Sections in view go into the image's own render lists; those out of view only queue
+ * in {@link ImageRenderer}). Sections in view go into the image's own render lists; those out of view only queue
  * to build. Each terrain layer of an image then draws with its turn in the model-view matrix and Sodium's camera at
  * the image's virtual camera.
  *
- * <p>Inactive until phase 6: {@link NeighbourRenderer#images} gives no images.
+ * <p>Inactive until phase 6: {@link ImageRenderer#images} gives no images.
  */
 public final class SodiumNeighbours {
 
@@ -149,7 +149,7 @@ public final class SodiumNeighbours {
         ClientLevel level = minecraft.level;
         OrbifoldGeometry cube = level == null ? null : Orbifold.of(level);
         Vec3 cam = camera.getPosition();
-        List<Motion> images = cube == null ? List.of() : NeighbourRenderer.images(cube, cam);
+        List<Motion> images = cube == null ? List.of() : ImageRenderer.images(cube, cam);
         if (images.isEmpty()) {
             FACES.clear();
             return false;
@@ -179,13 +179,13 @@ public final class SodiumNeighbours {
             state.built = 0;
             for (Column column : state.columns) {
                 if (column == NOTHING) continue;
-                if (NeighbourRenderer.distance(column.box, cam) > reach + NeighbourRenderer.SECTION_RADIUS) continue;
+                if (ImageRenderer.distance(column.box, cam) > reach + ImageRenderer.SECTION_RADIUS) continue;
                 boolean columnInView = frustum.isVisible(column.box);
                 for (int y = column.boxes.length - 1; y >= 0; y--) {
                     int sectionY = level.getMinSection() + y;
                     if (!underground && SectionPos.sectionToBlockCoord(sectionY) + 16 <= column.buriedBelow) break;
                     AABB box = column.boxes[y];
-                    if (NeighbourRenderer.distance(box, cam) > reach) continue;
+                    if (ImageRenderer.distance(box, cam) > reach) continue;
                     RenderSection section = byPosition.get(SectionPos.asLong(column.chunkX, sectionY, column.chunkZ));
                     if (section == null) continue;
                     if (columnInView && frustum.isVisible(box)) {
@@ -226,12 +226,12 @@ public final class SodiumNeighbours {
                 AABB[] boxes = new AABB[height];
                 for (int y = 0; y < height; y++) {
                     int minY = SectionPos.sectionToBlockCoord(level.getMinSection() + y);
-                    boxes[y] = NeighbourRenderer.toHome(image, new AABB(chunkX * 16, minY, chunkZ * 16, chunkX * 16 + 16, minY + 16, chunkZ * 16 + 16));
+                    boxes[y] = ImageRenderer.toHome(image, new AABB(chunkX * 16, minY, chunkZ * 16, chunkX * 16 + 16, minY + 16, chunkZ * 16 + 16));
                 }
                 AABB whole = new AABB(chunkX * 16, level.getMinBuildHeight(), chunkZ * 16, chunkX * 16 + 16, level.getMaxBuildHeight(), chunkZ * 16 + 16);
-                int ground = NeighbourRenderer.lowestGroundAround(level, chunkX, chunkZ);
-                int buriedBelow = ground == Integer.MIN_VALUE ? Integer.MIN_VALUE : ground - NeighbourRenderer.BURIED_MARGIN;
-                state.columns[slot] = new Column(chunkX, chunkZ, NeighbourRenderer.toHome(image, whole), boxes, buriedBelow);
+                int ground = ImageRenderer.lowestGroundAround(level, chunkX, chunkZ);
+                int buriedBelow = ground == Integer.MIN_VALUE ? Integer.MIN_VALUE : ground - ImageRenderer.BURIED_MARGIN;
+                state.columns[slot] = new Column(chunkX, chunkZ, ImageRenderer.toHome(image, whole), boxes, buriedBelow);
             }
         }
     }
@@ -294,7 +294,7 @@ public final class SodiumNeighbours {
                 Motion image = entry.getKey();
                 Face state = entry.getValue();
                 Vec3 virtual = Transform.of(image.inverse()).position(new Vec3(x, y, z));
-                Matrix4f modelView = new Matrix4f(matrices.modelView()).mul(new Matrix4f().set(NeighbourRenderer.rotation(image)));
+                Matrix4f modelView = new Matrix4f(matrices.modelView()).mul(new Matrix4f().set(ImageRenderer.rotation(image)));
                 ChunkRenderMatrices rotated = new ChunkRenderMatrices(matrices.projection(), modelView);
                 CameraTransform camera = new CameraTransform(virtual.x, virtual.y, virtual.z);
                 for (TerrainRenderPass pass : passes) renderer.render(rotated, commandList, state.lists, pass, camera, indexed);

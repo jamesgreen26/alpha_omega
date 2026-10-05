@@ -34,10 +34,20 @@ public final class ImageGeometry {
      * tile corners, as {@link OrbifoldGeometry#frame} produces them. Closed under inverses.
      */
     public static List<Motion> candidates(OrbifoldGeometry geometry) {
-        return List.of(geometry.east, geometry.west, geometry.northFold, geometry.southFold,
+        Candidates last = lastCandidates;
+        if (last != null && last.geometry == geometry) return last.elements;
+        List<Motion> elements = List.of(geometry.east, geometry.west, geometry.northFold, geometry.southFold,
             geometry.northFold.then(geometry.east), geometry.northFold.then(geometry.west),
             geometry.southFold.then(geometry.east), geometry.southFold.then(geometry.west));
+        lastCandidates = new Candidates(geometry, elements);
+        return elements;
     }
+
+    /** The candidates last worked out, for the geometry they were worked out for (asked for per entity and player). */
+    private record Candidates(OrbifoldGeometry geometry, List<Motion> elements) {
+    }
+
+    private static volatile Candidates lastCandidates;
 
     /** Whether a chunk is live storage: tile or band. Home draws exactly these; images track exactly these. */
     public static boolean live(OrbifoldGeometry geometry, int chunkX, int chunkZ) {
@@ -59,9 +69,12 @@ public final class ImageGeometry {
 
     /**
      * The images a viewer at chunk {@code (centerX, centerZ)} needs with a view distance: each element whose live
-     * chunks, moved by it, come within the view (as vanilla counts it, outer ring included). In a fixed order.
+     * chunks, moved by it, come within the view (as vanilla counts it, outer ring included). In a fixed order; none
+     * for a viewer outside the footprint.
      */
     public static List<Motion> images(OrbifoldGeometry geometry, int centerX, int centerZ, int viewDistance) {
+        // Outside the footprint (a spectator flying off, another mod's storage) there is nothing to see images of.
+        if (!geometry.inFootprintChunk(centerX, centerZ)) return List.of();
         int[] live = liveChunks(geometry);
         List<Motion> images = new ArrayList<>(4);
         for (Motion g : candidates(geometry)) {

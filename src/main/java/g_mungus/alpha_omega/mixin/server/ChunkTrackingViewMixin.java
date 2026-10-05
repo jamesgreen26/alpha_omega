@@ -1,6 +1,6 @@
 package g_mungus.alpha_omega.mixin.server;
 
-import g_mungus.alpha_omega.neighbour.CubeTrackingView;
+import g_mungus.alpha_omega.neighbour.ImageTrackingView;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.util.function.Consumer;
 import net.minecraft.server.level.ChunkTrackingView;
@@ -20,7 +20,7 @@ interface ChunkTrackingViewMixin {
     @Inject(method = "difference", at = @At("HEAD"), cancellable = true)
     private static void alpha_omega$cubeDifference(ChunkTrackingView old, ChunkTrackingView now, Consumer<ChunkPos> added,
                                                    Consumer<ChunkPos> removed, CallbackInfo ci) {
-        if (!(old instanceof CubeTrackingView) && !(now instanceof CubeTrackingView)) return;
+        if (!(old instanceof ImageTrackingView) && !(now instanceof ImageTrackingView)) return;
         ci.cancel();
         if (old.equals(now)) return;
         LongOpenHashSet before = new LongOpenHashSet();
