@@ -17,6 +17,10 @@ public interface ChunkMapAccessor {
     @Invoker("getChunks")
     Iterable<net.minecraft.server.level.ChunkHolder> alpha_omega$visibleChunks();
 
+    /** How far vanilla's player tickets reach, whatever distance each player asks to be sent. */
+    @Accessor("serverViewDistance")
+    int alpha_omega$serverViewDistance();
+
     @Invoker("getPlayerViewDistance")
     int alpha_omega$getPlayerViewDistance(ServerPlayer player);
 

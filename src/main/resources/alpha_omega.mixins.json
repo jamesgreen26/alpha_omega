@@ -18,6 +18,7 @@
     "client.LocalPlayerMixin",
     "client.ParticleAccessor",
     "client.ParticleEngineMixin",
+    "client.SectionOcclusionGraphAccessor",
     "client.SoundEngineMixin",
     "client.ViewAreaAccessor"
   ],

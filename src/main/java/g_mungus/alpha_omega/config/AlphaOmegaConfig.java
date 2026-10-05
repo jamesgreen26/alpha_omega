@@ -3,13 +3,19 @@ package g_mungus.alpha_omega.config;
 import g_mungus.alpha_omega.cube.CubeSettings;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
-/** Defaults for cube worlds whose preset leaves settings out (dedicated servers, gametests). */
+/**
+ * Defaults for cube worlds whose preset leaves settings out (dedicated servers, gametests), and how long a crossing
+ * keeps the view it left.
+ */
 public final class AlphaOmegaConfig {
+
+    private static final int DEFAULT_LINGER_TICKS = 200;
 
     public static final ModConfigSpec SPEC;
     public static final ModConfigSpec.IntValue FACE_CHUNKS;
     public static final ModConfigSpec.EnumValue<CubeSettings.SunAxis> SUN_AXIS;
     public static final ModConfigSpec.DoubleValue HORIZONTAL_SCALE;
+    public static final ModConfigSpec.IntValue TRANSFER_LINGER_TICKS;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -20,10 +26,17 @@ public final class AlphaOmegaConfig {
             .defineEnum("sunAxis", CubeSettings.DEFAULT.sunAxis());
         HORIZONTAL_SCALE = builder.comment("How much smaller terrain and biomes are sideways than vanilla's (1 is vanilla's size).")
             .defineInRange("horizontalScale", CubeSettings.DEFAULT.horizontalScale(), CubeSettings.MIN_SCALE, CubeSettings.MAX_SCALE);
+        TRANSFER_LINGER_TICKS = builder.comment("How long, in ticks, chunks a player's crossing of an edge took out of view stay loaded and sent, so",
+                "crossing back costs nothing. 0 forgets them at once.")
+            .defineInRange("transferLingerTicks", DEFAULT_LINGER_TICKS, 0, 6000);
         SPEC = builder.build();
     }
 
     private AlphaOmegaConfig() {
+    }
+
+    public static int lingerTicks() {
+        return SPEC.isLoaded() ? TRANSFER_LINGER_TICKS.get() : DEFAULT_LINGER_TICKS;
     }
 
     public static CubeSettings defaults() {

@@ -10,6 +10,9 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 @Mixin(targets = "net.minecraft.server.level.ChunkMap$TrackedEntity")
 public interface TrackedEntityAccessor {
 
+    @Accessor("entity")
+    net.minecraft.world.entity.Entity alpha_omega$entity();
+
     @Accessor("seenBy")
     Set<ServerPlayerConnection> alpha_omega$seenBy();
 

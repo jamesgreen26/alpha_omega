@@ -5,10 +5,12 @@ import com.mojang.blaze3d.shaders.Uniform;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexBuffer;
+import g_mungus.alpha_omega.AlphaOmegaMod;
 import g_mungus.alpha_omega.cube.Cube;
 import g_mungus.alpha_omega.cube.CubeFace;
 import g_mungus.alpha_omega.cube.CubeGeometry;
 import g_mungus.alpha_omega.mixin.client.LevelRendererAccessor;
+import g_mungus.alpha_omega.mixin.client.SectionOcclusionGraphAccessor;
 import g_mungus.alpha_omega.mixin.client.ViewAreaAccessor;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -67,6 +69,8 @@ public final class NeighbourRenderer {
     /** The face vanilla's own area holds, so a change of face can be caught before vanilla moves it. */
     @Nullable
     private static CubeFace vanillaFace;
+    /** Vanilla's area was swapped this frame, and its visible-section graph starts again from nothing. */
+    private static boolean swapped;
 
     private NeighbourRenderer() {
     }
@@ -78,6 +82,7 @@ public final class NeighbourRenderer {
         VISIBLE.clear();
         home = null;
         vanillaFace = null;
+        swapped = false;
         geometry = null;
     }
 
@@ -100,9 +105,28 @@ public final class NeighbourRenderer {
         ViewArea outgoing = access.alpha_omega$viewArea();
         access.alpha_omega$setViewArea(incoming);
         access.alpha_omega$sectionOcclusionGraph().waitAndReset(incoming);
+        swapped = true;
         if (outgoing != null) {
             if (was.isNeighbour(now)) AREAS.put(was, outgoing);
             else outgoing.releaseAllBuffers();
+        }
+    }
+
+    /**
+     * After vanilla has scheduled its visible-section graph: in the frame of a swap, wait for that first rebuild, which
+     * runs in the background. Until it lands the graph is empty, and the face the camera has just come onto would not
+     * draw at all.
+     */
+    public static void afterOcclusionUpdate(LevelRenderer renderer) {
+        if (!swapped) return;
+        swapped = false;
+        java.util.concurrent.Future<?> task = ((SectionOcclusionGraphAccessor) ((LevelRendererAccessor) renderer).alpha_omega$sectionOcclusionGraph())
+            .alpha_omega$fullUpdateTask();
+        if (task == null) return;
+        try {
+            task.get();
+        } catch (Exception e) {
+            AlphaOmegaMod.LOGGER.warn("Visible sections after crossing an edge did not rebuild", e);
         }
     }
 
@@ -127,6 +151,7 @@ public final class NeighbourRenderer {
         home = cube.faceAt(cam.x, cam.z);
         VISIBLE.clear();
         if (home == null) return;
+        releaseForgotten(level, cube);
         RenderRegionCache cache = new RenderRegionCache();
         int budget = COMPILE_AHEAD_PER_FRAME;
         double reach = (viewDistance + 1) * 16.0;
@@ -157,6 +182,25 @@ public final class NeighbourRenderer {
             }
             VISIBLE.put(face, visible);
         }
+    }
+
+    /**
+     * Keeps the area of a face that is no longer a neighbour (the far side, after crossing) while the client still
+     * holds any of its chunks, as it does while the server lets them linger: crossing back then finds it built.
+     * Once they are all gone, so is the area.
+     */
+    private static void releaseForgotten(ClientLevel level, CubeGeometry cube) {
+        AREAS.entrySet().removeIf(entry -> {
+            CubeFace face = entry.getKey();
+            if (home.isNeighbour(face) || face == home) return false;
+            for (SectionRenderDispatcher.RenderSection section : entry.getValue().sections) {
+                BlockPos origin = section.getOrigin();
+                int chunkX = origin.getX() >> 4, chunkZ = origin.getZ() >> 4;
+                if (cube.faceAtChunk(chunkX, chunkZ) == face && level.getChunkSource().getChunk(chunkX, chunkZ, ChunkStatus.FULL, false) != null) return false;
+            }
+            entry.getValue().releaseAllBuffers();
+            return true;
+        });
     }
 
     /** A box of one face's storage, in another's. */

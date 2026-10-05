@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.sugar.Local;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import g_mungus.alpha_omega.client.NeighbourRenderer;
+import g_mungus.alpha_omega.client.TransferStats;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -35,6 +36,9 @@ abstract class LevelRendererNeighbourMixin {
     @Shadow
     @Final
     private BlockEntityRenderDispatcher blockEntityRenderDispatcher;
+    @Shadow
+    @Final
+    private it.unimi.dsi.fastutil.objects.ObjectArrayList<net.minecraft.client.renderer.chunk.SectionRenderDispatcher.RenderSection> visibleSections;
 
     @Inject(method = "renderLevel", at = @At(value = "INVOKE", shift = At.Shift.AFTER,
         target = "Lnet/minecraft/client/renderer/LevelRenderer;compileSections(Lnet/minecraft/client/Camera;)V"))
@@ -42,11 +46,18 @@ abstract class LevelRendererNeighbourMixin {
                                              LightTexture lightTexture, Matrix4f frustumMatrix, Matrix4f projectionMatrix, CallbackInfo ci,
                                              @Local Frustum frustum) {
         NeighbourRenderer.setup((LevelRenderer) (Object) this, camera, frustum, this.minecraft.options.getEffectiveRenderDistance());
+        TransferStats.frame(this.visibleSections.size());
     }
 
     @Inject(method = "setupRender", at = @At("HEAD"))
     private void alpha_omega$swapAreas(Camera camera, Frustum frustum, boolean capturedFrustum, boolean spectator, CallbackInfo ci) {
         NeighbourRenderer.beforeSetupRender((LevelRenderer) (Object) this, camera);
+    }
+
+    @Inject(method = "setupRender", at = @At(value = "INVOKE", shift = At.Shift.AFTER,
+        target = "Lnet/minecraft/client/renderer/SectionOcclusionGraph;update(ZLnet/minecraft/client/Camera;Lnet/minecraft/client/renderer/culling/Frustum;Ljava/util/List;)V"))
+    private void alpha_omega$awaitSwappedGraph(Camera camera, Frustum frustum, boolean capturedFrustum, boolean spectator, CallbackInfo ci) {
+        NeighbourRenderer.afterOcclusionUpdate((LevelRenderer) (Object) this);
     }
 
     @Inject(method = "renderSectionLayer", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/ShaderInstance;clear()V"))

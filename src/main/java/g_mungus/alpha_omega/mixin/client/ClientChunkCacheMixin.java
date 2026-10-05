@@ -1,5 +1,6 @@
 package g_mungus.alpha_omega.mixin.client;
 
+import g_mungus.alpha_omega.client.TransferStats;
 import g_mungus.alpha_omega.cube.Cube;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -59,6 +60,7 @@ abstract class ClientChunkCacheMixin {
         if (!this.alpha_omega$cube()) return;
         ChunkPos pos = new ChunkPos(x, z);
         LevelChunk chunk = this.alpha_omega$chunks.get(pos.toLong());
+        TransferStats.chunkReceived(chunk != null);
         if (chunk == null) {
             chunk = new LevelChunk(this.level, pos);
             chunk.replaceWithPacketData(buffer, heightmaps, blockEntities);
@@ -77,6 +79,7 @@ abstract class ClientChunkCacheMixin {
         ci.cancel();
         LevelChunk chunk = this.alpha_omega$chunks.remove(pos.toLong());
         if (chunk != null) {
+            TransferStats.chunkForgotten();
             NeoForge.EVENT_BUS.post(new ChunkEvent.Unload(chunk));
             this.level.unload(chunk);
         }
