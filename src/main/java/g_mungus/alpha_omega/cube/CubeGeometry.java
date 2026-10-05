@@ -194,6 +194,42 @@ public final class CubeGeometry {
         return (int) ((Math.max(a, b) - 1) / 2) - this.radius + this.planeY;
     }
 
+    /** How many foreign cells under each column's barrier cell collide like the neighbour's own (design: neighbour collision). */
+    public static final int BAND = 16;
+
+    /** A cell of another face's storage: the one a band cell takes its collision from. */
+    public record Cell(CubeFace face, int x, int y, int z) {
+    }
+
+    /**
+     * For a cell of {@code face}'s storage in the band ({@link #BAND} cells under its column's barrier cell), the same
+     * physical cell in the storage of a face that has it: the face owning it, or for a barrier cell between other
+     * faces, the first of them in slot order that is not the opposite face. Null outside the band, or where only the
+     * opposite face has it.
+     */
+    @Nullable
+    public Cell bandSource(CubeFace face, int x, int y, int z) {
+        int depth = this.barrierY(face, x, z) - y;
+        if (depth < 1 || depth > BAND) return null;
+        long[] c = this.cubeCell2(face, x, y, z);
+        int owner = owner(c[0], c[1], c[2]);
+        CubeFace source = null;
+        if (owner == BARRIER) {
+            long most = Math.max(Math.abs(c[0]), Math.max(Math.abs(c[1]), Math.abs(c[2])));
+            for (CubeFace candidate : CubeFace.values()) {
+                if (candidate != face && candidate != face.opposite() && c[candidate.axis] * candidate.sign == most) {
+                    source = candidate;
+                    break;
+                }
+            }
+        } else if (owner != face.slot()) {
+            source = CubeFace.bySlot(owner);
+        }
+        if (source == null || source == face.opposite()) return null;
+        int[] cell = this.transformBlock(face, source, x, y, z);
+        return new Cell(source, cell[0], cell[1], cell[2]);
+    }
+
     /**
      * Whether a box of blocks (inclusive bounds) lies wholly in {@code face}'s owned region, at least {@code margin}
      * blocks from the barrier sideways and below. The owned region is convex, so its corners decide.

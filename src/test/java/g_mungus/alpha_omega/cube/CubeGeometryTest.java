@@ -332,4 +332,69 @@ class CubeGeometryTest {
             assertTrue(g.isBarrier(up, g.centerX(up) - g.footprint, g.maxY - 1, g.centerZ()));
         }
     }
+
+    /**
+     * A band cell (up to {@link CubeGeometry#BAND} under its column's barrier) reads a cell the neighbour owns, up to
+     * BAND above that face's barrier, or a barrier cell there; and that cell maps straight back.
+     */
+    @Test
+    void bandCellsReadTheNeighboursCellsNearItsBarrier() {
+        for (CubeFace face : CubeFace.values()) {
+            int cx = SMALL.centerX(face), cz = SMALL.centerZ();
+            int reach = SMALL.radius + 8;
+            for (int x = cx - reach; x < cx + reach; x++) {
+                for (int z = cz - reach; z < cz + reach; z++) {
+                    int barrierY = SMALL.barrierY(face, x, z);
+                    for (int y = barrierY - CubeGeometry.BAND - 2; y <= barrierY + 1; y++) {
+                        CubeGeometry.Cell cell = SMALL.bandSource(face, x, y, z);
+                        int depth = barrierY - y;
+                        if (depth < 1 || depth > CubeGeometry.BAND) {
+                            assertNull(cell, "cell " + depth + " under the barrier is not in the band");
+                            continue;
+                        }
+                        if (cell == null) {
+                            // Only possible on a cube this small, where the band reaches its centre.
+                            assertEquals(face.opposite().slot(), SMALL.cellOwner(face, x, y, z), face + " band cell has no source: " + x + " " + y + " " + z);
+                            continue;
+                        }
+                        assertTrue(cell.face() != face && cell.face() != face.opposite(), face + " band cell reads " + cell.face());
+                        int above = cell.y() - SMALL.barrierY(cell.face(), cell.x(), cell.z());
+                        int owner = SMALL.cellOwner(cell.face(), cell.x(), cell.y(), cell.z());
+                        if (owner == CubeGeometry.BARRIER) {
+                            assertEquals(0, above, "a barrier source is its column's barrier cell");
+                        } else {
+                            assertEquals(cell.face().slot(), owner, "source cell is owned by the face it is read from");
+                            assertTrue(above >= 1 && above <= CubeGeometry.BAND, "source cell " + above + " above its barrier");
+                        }
+                        assertArrayEquals(new int[] {x, y, z}, SMALL.transformBlock(cell.face(), face, cell.x(), cell.y(), cell.z()));
+                    }
+                }
+            }
+        }
+    }
+
+    /** Every cell a face owns within the band above its barrier is read by the band of each face it shares that barrier with. */
+    @Test
+    void neighboursBandCellsAreEachReadOnce() {
+        for (CubeFace face : CubeFace.values()) {
+            int cx = SMALL.centerX(face), cz = SMALL.centerZ();
+            int reach = SMALL.radius + 8;
+            for (int x = cx - reach; x < cx + reach; x++) {
+                for (int z = cz - reach; z < cz + reach; z++) {
+                    int barrierY = SMALL.barrierY(face, x, z);
+                    if (barrierY < SMALL.minY || barrierY >= SMALL.maxY) continue;
+                    for (CubeFace partner : SMALL.barrierFaces(face, x, barrierY, z)) {
+                        if (partner == face) continue;
+                        for (int k = 1; k <= CubeGeometry.BAND; k++) {
+                            if (!SMALL.isOwned(face, x, barrierY + k, z)) continue;
+                            int[] there = SMALL.transformBlock(face, partner, x, barrierY + k, z);
+                            CubeGeometry.Cell cell = SMALL.bandSource(partner, there[0], there[1], there[2]);
+                            assertTrue(cell != null && cell.face() == face && cell.x() == x && cell.y() == barrierY + k && cell.z() == z,
+                                face + " cell " + k + " above its barrier is not read by " + partner + ": " + cell);
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

@@ -6,6 +6,7 @@ import g_mungus.alpha_omega.block.CubeBlocks;
 import g_mungus.alpha_omega.command.CubeCommand;
 import g_mungus.alpha_omega.config.AlphaOmegaConfig;
 import g_mungus.alpha_omega.cube.Cube;
+import g_mungus.alpha_omega.gametest.CollisionGameTests;
 import g_mungus.alpha_omega.gametest.CubeGameTests;
 import g_mungus.alpha_omega.gametest.FaceGameTests;
 import g_mungus.alpha_omega.gametest.GameTestFilter;
@@ -116,7 +117,7 @@ public class AlphaOmegaMod {
     }
 
     private static void registerGameTests(RegisterGameTestsEvent event) {
-        GameTestFilter.register(java.util.List.of(ModLoadGameTests.class, CubeGameTests.class, FaceGameTests.class, LocalTimeGameTests.class, TransferGameTests.class, NeighbourGameTests.class, TerrainGameTests.class, RetentionGameTests.class), event::register);
+        GameTestFilter.register(java.util.List.of(ModLoadGameTests.class, CubeGameTests.class, FaceGameTests.class, LocalTimeGameTests.class, TransferGameTests.class, NeighbourGameTests.class, TerrainGameTests.class, RetentionGameTests.class, CollisionGameTests.class), event::register);
     }
 
 }

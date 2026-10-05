@@ -1,7 +1,11 @@
 package g_mungus.alpha_omega.block;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
@@ -38,5 +42,17 @@ public class FillerBlock extends Block {
     @Override
     protected VoxelShape getOcclusionShape(BlockState state, BlockGetter level, BlockPos pos) {
         return Shapes.block();
+    }
+
+    /** Nothing is drawn here, so landing on it (edge filler collides) raises no dust. */
+    @Override
+    public boolean addLandingEffects(BlockState state, ServerLevel level, BlockPos pos, BlockState sameState, LivingEntity entity, int particles) {
+        return true;
+    }
+
+    /** Nor does running on it. */
+    @Override
+    public boolean addRunningEffects(BlockState state, Level level, BlockPos pos, Entity entity) {
+        return true;
     }
 }

@@ -8,6 +8,7 @@
   "alpha_omega.cube.hint": "Diagonal: every face has days. Polar: two faces stay in twilight.",
   "block.alpha_omega.edge_air": "Edge Air",
   "block.alpha_omega.filler": "Other Face",
+  "block.alpha_omega.edge_filler": "Other Face (Edge)",
   "alpha_omega.cube.horizontal_scale": "Terrain scale: %s\u00d7 smaller",
   "block.alpha_omega.edge_bedrock": "Edge Bedrock"
 }

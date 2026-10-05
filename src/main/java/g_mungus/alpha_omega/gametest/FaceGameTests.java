@@ -100,10 +100,13 @@ public class FaceGameTests {
                             if (isBedrock) bedrock++;
                             else edgeAir++;
                         } else if (y < barrierY) {
-                            helper.assertTrue(state.is(CubeBlocks.FILLER.get()), "foreign cell at " + pos.toShortString() + " is " + state);
+                            // The band just under the barrier is edge filler (it collides like the neighbour); the rest plain filler.
+                            boolean band = barrierY - y <= CubeGeometry.BAND;
+                            helper.assertTrue(state.is(band ? CubeBlocks.EDGE_FILLER.get() : CubeBlocks.FILLER.get()),
+                                "foreign cell " + (barrierY - y) + " under the barrier at " + pos.toShortString() + " is " + state);
                             filler++;
                         } else {
-                            helper.assertTrue(!state.is(CubeBlocks.FILLER.get()) && !state.is(CubeBlocks.EDGE_AIR.get()),
+                            helper.assertTrue(!CubeBlocks.isFiller(state) && !state.is(CubeBlocks.EDGE_AIR.get()),
                                 "owned cell at " + pos.toShortString() + " is " + state);
                         }
                     }
@@ -139,7 +142,7 @@ public class FaceGameTests {
         helper.assertTrue(!level.setBlockAndUpdate(barrier.below(), Blocks.STONE.defaultBlockState()), "filler write should fail");
         helper.assertTrue(!level.destroyBlock(barrier.below(), false), "filler should not break");
         assertState(helper, barrier, edgeAir, "barrier");
-        assertState(helper, barrier.below(), CubeBlocks.FILLER.get().defaultBlockState(), "filler");
+        assertState(helper, barrier.below(), CubeBlocks.EDGE_FILLER.get().defaultBlockState(), "filler");
         BlockPos owned = barrier.above();
         helper.assertTrue(level.setBlockAndUpdate(owned, Blocks.STONE.defaultBlockState()), "owned write should work");
         level.setBlockAndUpdate(owned, Blocks.AIR.defaultBlockState());
@@ -161,7 +164,7 @@ public class FaceGameTests {
         helper.runAfterDelay(60, () -> {
             BlockState state = level.getBlockState(barrier);
             helper.assertTrue(state.is(CubeBlocks.EDGE_AIR.get()) && state.getFluidState().isEmpty(), "edge air took water: " + state);
-            helper.assertTrue(level.getBlockState(barrier.below()).is(CubeBlocks.FILLER.get()), "filler took water");
+            helper.assertTrue(CubeBlocks.isFiller(level.getBlockState(barrier.below())), "filler took water");
             helper.assertTrue(!level.getFluidState(source.west()).isEmpty(), "water should still spread on its own face");
             // Remove the source and let the rest drain (it runs down the barrier's staircase) before letting go.
             level.setBlockAndUpdate(source, Blocks.AIR.defaultBlockState());

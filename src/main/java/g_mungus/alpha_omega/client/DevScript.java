@@ -12,7 +12,7 @@ import net.neoforged.neoforge.common.NeoForge;
  * Development aid: scripted screenshots of a running client. {@code -Dalpha_omega.dev.script} holds steps
  * {@code tick:action} separated by {@code ;}, counted in client ticks after joining a world. An action is a command
  * ({@code /tp @s 0 100 0}), {@code shot <name>} (saved to {@code screenshots/<name>.png}), {@code hud on|off},
- * {@code forward on|off} (holds the walk key), {@code pos} (logs the player), {@code debug} (toggles F3) or {@code quit}. Used with {@code -PquickPlay=<world>}.
+ * {@code forward on|off} (holds the walk key), {@code jump on|off} (holds the jump key), {@code pos} (logs the player), {@code debug} (toggles F3) or {@code quit}. Used with {@code -PquickPlay=<world>}.
  */
 public final class DevScript {
 
@@ -56,6 +56,8 @@ public final class DevScript {
                 minecraft.options.hideGui = action.equals("hud off");
             } else if (action.equals("forward on") || action.equals("forward off")) {
                 minecraft.options.keyUp.setDown(action.equals("forward on"));
+            } else if (action.equals("jump on") || action.equals("jump off")) {
+                minecraft.options.keyJump.setDown(action.equals("jump on"));
             } else if (action.equals("pos")) {
                 var p = minecraft.player;
                 AlphaOmegaMod.LOGGER.info("Dev script: pos {} motion {} rot {}/{} forward {} input {} flying {}", p.position(), p.getDeltaMovement(),

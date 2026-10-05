@@ -225,13 +225,17 @@ public class CubeChunkGenerator extends NoiseBasedChunkGenerator {
         return new Densities(random, this.generatorSettings().value().noiseSettings());
     }
 
-    /** Puts each column's barrier cell in place and fills the rest of the column below it. */
+    /**
+     * Puts each column's barrier cell in place and fills the rest of the column below it: the band just under the
+     * barrier with edge filler, which collides like the neighbour's blocks there, and the rest with plain filler.
+     */
     private ChunkAccess carveFaces(ChunkAccess chunk, RandomState random) {
         CubeGeometry geometry = this.geometry(chunk);
         ChunkPos pos = chunk.getPos();
         CubeFace face = geometry.faceAtChunk(pos.x, pos.z);
         if (face == null) return chunk;
         BlockState filler = CubeBlocks.FILLER.get().defaultBlockState();
+        BlockState edgeFiller = CubeBlocks.EDGE_FILLER.get().defaultBlockState();
         Heightmap oceanFloor = chunk.getOrCreateHeightmapUnprimed(Heightmap.Types.OCEAN_FLOOR_WG);
         Heightmap surface = chunk.getOrCreateHeightmapUnprimed(Heightmap.Types.WORLD_SURFACE_WG);
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
@@ -242,13 +246,15 @@ public class CubeChunkGenerator extends NoiseBasedChunkGenerator {
                 int barrierY = geometry.barrierY(face, x, z);
                 this.blendTowardNeighbour(geometry, densities, chunk, face, x, barrierY, z, chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, dx, dz));
                 int fillTop = Math.min(barrierY, geometry.maxY);
+                int bandBottom = barrierY - CubeGeometry.BAND;
                 for (int y = geometry.minY; y < fillTop; y++) {
                     LevelChunkSection section = chunk.getSection(chunk.getSectionIndex(y));
-                    section.setBlockState(dx, y & 15, dz, filler, false);
+                    section.setBlockState(dx, y & 15, dz, y >= bandBottom ? edgeFiller : filler, false);
                 }
                 if (fillTop > geometry.minY) {
-                    oceanFloor.update(dx, fillTop - 1, dz, filler);
-                    surface.update(dx, fillTop - 1, dz, filler);
+                    BlockState top = fillTop - 1 >= bandBottom ? edgeFiller : filler;
+                    oceanFloor.update(dx, fillTop - 1, dz, top);
+                    surface.update(dx, fillTop - 1, dz, top);
                 }
                 if (barrierY >= geometry.minY && barrierY < geometry.maxY) {
                     cursor.set(x, barrierY, z);
