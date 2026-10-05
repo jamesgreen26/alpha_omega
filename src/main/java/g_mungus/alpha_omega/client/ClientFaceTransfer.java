@@ -33,7 +33,7 @@ public final class ClientFaceTransfer {
             return;
         }
         Entity root = player.getRootVehicle();
-        if ((root == player || root.isControlledByLocalInstance()) && !FaceTransfer.coolingDown(root)) {
+        if ((root == player || root.isControlledByLocalInstance()) && !FaceTransfer.coolingDown(root) && !FaceTransfer.carried(root)) {
             CubeFace face = geometry.faceAt(root.getX(), root.getZ());
             CubeFace to = face == null ? null : FaceTransfer.destination(geometry, face, root.getX(), root.getY(), root.getZ());
             if (to != null && FaceTransfer.roomToCross(geometry, root, face, to)) cross(geometry, player, root, face, to);
@@ -50,6 +50,22 @@ public final class ClientFaceTransfer {
     private static void cross(CubeGeometry geometry, LocalPlayer player, Entity root, CubeFace from, CubeFace to) {
         Vec3 claimed = root.position();
         float yRot = player.getYRot(), xRot = player.getXRot();
+        move(geometry, player, root, from, to);
+        PacketDistributor.sendToServer(new FaceTransferPayload(from.slot(), to.slot(), claimed.x, claimed.y, claimed.z, yRot, xRot));
+    }
+
+    /**
+     * What carries the local player crossed an edge (a sub-level it stands on): the player goes with it, as on foot,
+     * but without telling the server, which has moved its player with the carrier already.
+     */
+    public static void carriedAcross(LocalPlayer player, CubeFace from, CubeFace to) {
+        CubeGeometry geometry = Cube.of(player.level());
+        if (geometry == null || geometry.faceAt(player.getX(), player.getZ()) != from) return;
+        move(geometry, player, player, from, to);
+    }
+
+    /** Moves the local player (and the vehicle it drives) to the same cube point on the next face, and eases the camera. */
+    private static void move(CubeGeometry geometry, LocalPlayer player, Entity root, CubeFace from, CubeFace to) {
         Vec3 eyeBefore = player.getEyePosition();
         for (Entity entity : root.getSelfAndPassengers().toList()) {
             if (entity != root && entity != player) continue;
@@ -73,7 +89,6 @@ public final class ClientFaceTransfer {
                 player.xBob = player.xBobO = rotation[1];
             }
         }
-        PacketDistributor.sendToServer(new FaceTransferPayload(from.slot(), to.slot(), claimed.x, claimed.y, claimed.z, yRot, xRot));
         FaceCamera.start(geometry, from, to, eyeBefore, player.getEyePosition(), root);
         TransferStats.faceChanged();
         lastFace = to;

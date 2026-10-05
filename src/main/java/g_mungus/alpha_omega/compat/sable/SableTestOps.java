@@ -5,6 +5,7 @@ import dev.ryanhcode.sable.api.SubLevelAssemblyHelper;
 import dev.ryanhcode.sable.api.physics.handle.RigidBodyHandle;
 import dev.ryanhcode.sable.api.sublevel.SubLevelContainer;
 import dev.ryanhcode.sable.companion.math.BoundingBox3i;
+import dev.ryanhcode.sable.mixinterface.entity.entity_sublevel_collision.EntityMovementExtension;
 import dev.ryanhcode.sable.sublevel.ServerSubLevel;
 import dev.ryanhcode.sable.sublevel.SubLevel;
 import dev.ryanhcode.sable.sublevel.storage.SubLevelRemovalReason;
@@ -39,6 +40,17 @@ public final class SableTestOps {
     public static double[] world(ServerLevel level, BlockPos plot, BlockPos plotBlock) {
         Vec3 at = Sable.HELPER.getContaining(level, plot).logicalPose().transformPosition(Vec3.atCenterOf(plotBlock));
         return new double[] {at.x, at.y, at.z};
+    }
+
+    /**
+     * What a client does for its player standing on a sub-level: says it stands on the sub-level owning {@code plot},
+     * at {@code local} in the plot, which the server places by the sub-level's pose (as Sable does with its packets).
+     */
+    public static void standOn(ServerLevel level, BlockPos plot, Vec3 local, ServerPlayer player) {
+        SubLevel subLevel = Sable.HELPER.getContaining(level, plot);
+        ((EntityMovementExtension) player).sable$setTrackingSubLevel(subLevel);
+        Vec3 at = subLevel.logicalPose().transformPosition(local);
+        player.absMoveTo(at.x, at.y, at.z);
     }
 
     /** Whether the sub-level owning {@code plot} is tracked by (sent to) the player. */

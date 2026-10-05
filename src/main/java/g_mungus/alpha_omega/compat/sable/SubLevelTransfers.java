@@ -42,7 +42,7 @@ import org.joml.Vector3dc;
  * face's terrain in storage. Once its pose (the centre of mass) is past the diagonal it moves, like a projectile, to
  * the same cube point in the next face's storage: pose and last pose by {@code T}, orientation and velocities turned
  * with it, so it keeps its world-space orientation and momentum and only gravity changes direction. Entities standing
- * on it go with it. It crosses once the place it goes to is loaded; jointed sub-levels do not cross yet. Loaded only
+ * on it, players too, go with it (and do not cross on their own while on it). It crosses once the place it goes to is loaded; jointed sub-levels do not cross yet. Loaded only
  * when Sable is.
  */
 public final class SubLevelTransfers {
@@ -137,14 +137,14 @@ public final class SubLevelTransfers {
     }
 
     /**
-     * Entities in world space standing on (carried by) a sub-level. Not players: their clients send positions relative
-     * to the sub-level, and a player aboard a crossing sub-level is not handled yet (the client would have to move its
-     * player with the sub-level, as {@code ClientFaceTransfer} does for a crossing on foot).
+     * Entities in world space standing on (carried by) a sub-level. Players among them move here too, without a
+     * teleport: their clients move them along with the sub-level once they see it cross ({@code SableClientFrames}),
+     * and meanwhile send positions relative to it, which land on the new face either way.
      */
     private static List<Entity> riders(ServerLevel level, ServerSubLevel subLevel) {
         BoundingBox3dc bounds = subLevel.boundingBox();
         AABB box = new AABB(bounds.minX(), bounds.minY(), bounds.minZ(), bounds.maxX(), bounds.maxY(), bounds.maxZ()).inflate(2.0);
-        return level.getEntities((Entity) null, box, entity -> !(entity instanceof ServerPlayer) && !entity.isPassenger()
+        return level.getEntities((Entity) null, box, entity -> !entity.isPassenger()
             && entity instanceof EntityMovementExtension moving && moving.sable$getTrackingSubLevel() == subLevel);
     }
 

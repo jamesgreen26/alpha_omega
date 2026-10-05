@@ -43,7 +43,7 @@ public final class FaceTransfers {
 
     /** After a root entity ticks: move it (and its passengers) if it has crossed into another face. */
     public static void afterTick(ServerLevel level, Entity root) {
-        if (root.isRemoved() || root.isPassenger() || FaceTransfer.coolingDown(root)) return;
+        if (root.isRemoved() || root.isPassenger() || FaceTransfer.coolingDown(root) || FaceTransfer.carried(root)) return;
         CubeGeometry geometry = Cube.of(level);
         if (geometry == null) return;
         CubeFace face = geometry.faceAt(root.getX(), root.getZ());
@@ -56,9 +56,13 @@ public final class FaceTransfers {
         transfer(level, geometry, root, face, to, root.position(), null);
     }
 
-    /** Moves an entity and its passengers to another face where they are now, as if they had crossed themselves. */
+    /**
+     * Moves an entity and its passengers to another face where they are now, as if they had crossed themselves, with
+     * what carries them. A player moves without a teleport: its client moves it along with its carrier.
+     */
     public static void carry(ServerLevel level, CubeGeometry geometry, Entity root, CubeFace from, CubeFace to) {
-        transfer(level, geometry, root, from, to, root.position(), null);
+        float[] look = root instanceof ServerPlayer player ? new float[] {player.getYRot(), player.getXRot()} : null;
+        transfer(level, geometry, root, from, to, root.position(), look);
     }
 
     /**

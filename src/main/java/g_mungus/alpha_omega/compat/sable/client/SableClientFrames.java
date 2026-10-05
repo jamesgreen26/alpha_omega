@@ -1,8 +1,10 @@
 package g_mungus.alpha_omega.compat.sable.client;
 
+import dev.ryanhcode.sable.Sable;
 import dev.ryanhcode.sable.companion.math.Pose3d;
 import dev.ryanhcode.sable.network.client.SubLevelSnapshotInterpolator;
 import dev.ryanhcode.sable.sublevel.ClientSubLevel;
+import g_mungus.alpha_omega.client.ClientFaceTransfer;
 import g_mungus.alpha_omega.compat.sable.SableFrames;
 import g_mungus.alpha_omega.cube.Cube;
 import g_mungus.alpha_omega.cube.CubeFace;
@@ -10,6 +12,7 @@ import g_mungus.alpha_omega.cube.CubeGeometry;
 import g_mungus.alpha_omega.mixin.compat.sable.client.SubLevelSnapshotInterpolatorAccessor;
 import java.util.List;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -17,7 +20,8 @@ import net.minecraft.world.phys.Vec3;
  *
  * <p>When the server moves a sub-level to another face, its next pose snapshot arrives in the new face's storage.
  * The poses it interpolates and draws from (older snapshots, the running sample, the logical and last poses) are then
- * re-expressed in the new face's storage, so it carries on smoothly instead of sliding thousands of blocks.
+ * re-expressed in the new face's storage, so it carries on smoothly instead of sliding thousands of blocks; the local
+ * player standing on it goes with it.
  *
  * <p>One on a neighbouring face is drawn where it really is: its render pose is taken into the camera's face.
  */
@@ -49,12 +53,18 @@ public final class SableClientFrames {
                 moved = true;
             }
         }
+        CubeFace was = SableFrames.face(geometry, subLevel.logicalPose());
         for (Pose3d pose : new Pose3d[] {((SubLevelSnapshotInterpolatorAccessor) interpolator).alpha_omega$runningSnapshot(), subLevel.logicalPose(),
             (Pose3d) subLevel.lastPose()}) {
             CubeFace face = SableFrames.face(geometry, pose);
             if (face == null || face == now) continue;
             SableFrames.transform(geometry, face, now, pose);
             moved = true;
+        }
+        // The local player standing on it crosses with it, in the same tick, before it moves.
+        LocalPlayer player = Minecraft.getInstance().player;
+        if (was != null && was != now && player != null && Sable.HELPER.getTrackingSubLevel(player) == subLevel) {
+            ClientFaceTransfer.carriedAcross(player, was, now);
         }
         return moved;
     }

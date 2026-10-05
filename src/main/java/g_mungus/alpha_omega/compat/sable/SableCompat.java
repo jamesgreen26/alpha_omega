@@ -1,0 +1,16 @@
+package g_mungus.alpha_omega.compat.sable;
+
+import dev.ryanhcode.sable.Sable;
+import g_mungus.alpha_omega.transfer.FaceTransfer;
+
+/** Sable compatibility set up at mod construction; loaded only when Sable is. */
+public final class SableCompat {
+
+    private SableCompat() {
+    }
+
+    public static void init() {
+        // Whatever stands on a sub-level crosses with it ({@link SubLevelTransfers}), not on its own.
+        FaceTransfer.registerCarrier(entity -> Sable.HELPER.getTrackingSubLevel(entity) != null);
+    }
+}

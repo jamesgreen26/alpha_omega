@@ -222,4 +222,67 @@ public class SableGameTests {
             helper.assertTrue(verdict[0].isEmpty(), verdict[0]);
         });
     }
+
+    /**
+     * A player standing on a sub-level crosses with it, not on its own (design §8.1): standing at the front of a
+     * platform, well past the diagonal while the platform's centre is not, it stays; when the platform crosses, it
+     * crosses too, in the same tick, its look turned as on foot. The client is played by setting the player where the
+     * platform carries it each tick, as Sable's movement packets do.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 400)
+    public static void playersCrossWithIt(GameTestHelper helper) {
+        if (!sable(helper)) return;
+        ServerLevel level = helper.getLevel();
+        CubeGeometry geometry = Cube.of(level);
+        int height = 140;
+        int y = geometry.planeY + height;
+        // The platform runs along +x, its centre two blocks short of UP's diagonal with EAST; its front is past it.
+        BlockPos anchor = new BlockPos(geometry.centerX(CubeFace.UP) + geometry.radius + height - 2, y, geometry.centerZ() - 90);
+        double[] there = geometry.transform(CubeFace.UP, CubeFace.EAST, anchor.getX(), y, anchor.getZ());
+        Set<ChunkPos> forced = new HashSet<>();
+        for (BlockPos pos : new BlockPos[] {anchor.west(8), anchor, anchor.east(8), BlockPos.containing(there[0], there[1], there[2])}) {
+            if (forced.add(new ChunkPos(pos))) TestChunks.force(level, new ChunkPos(pos));
+        }
+        List<BlockPos> platform = new java.util.ArrayList<>();
+        for (int dx = -6; dx <= 6; dx++) platform.add(anchor.east(dx));
+        for (BlockPos pos : platform) level.setBlockAndUpdate(pos, Blocks.IRON_BLOCK.defaultBlockState());
+        BlockPos plot = SableTestOps.assemble(level, anchor, platform);
+        // On top of the front block.
+        net.minecraft.world.phys.Vec3 deck = new net.minecraft.world.phys.Vec3(plot.getX() + 6.5, plot.getY() + 1.0, plot.getZ() + 0.5);
+        ServerPlayer player = TestPlayers.mock(helper);
+        TestPlayers.receiveChunks(helper, player);
+        player.setNoGravity(true);
+        SableTestOps.standOn(level, plot, deck, player);
+        player.setYRot(30.0F);
+        player.setXRot(10.0F);
+        float[] turned = g_mungus.alpha_omega.transfer.FaceTransfer.rotateLook(g_mungus.alpha_omega.transfer.FaceTransfer.mode(player), CubeFace.UP, CubeFace.EAST, 30.0F, 10.0F);
+        int quiet = ((g_mungus.alpha_omega.transfer.TransferCooldown) player).alpha_omega$lastTransferTick();
+        String[] verdict = {null};
+        boolean[] wasPast = {false};
+        helper.onEachTick(() -> {
+            if (verdict[0] != null || !SableTestOps.exists(level, plot)) return;
+            double[] pose = SableTestOps.pose(level, plot);
+            CubeFace shipFace = geometry.faceAt(pose[0], pose[2]);
+            CubeFace playerFace = geometry.faceAt(player.getX(), player.getZ());
+            boolean crossedAlone = ((g_mungus.alpha_omega.transfer.TransferCooldown) player).alpha_omega$lastTransferTick() != quiet;
+            if (shipFace == CubeFace.UP) {
+                if (playerFace == CubeFace.UP && geometry.depthInto(CubeFace.UP, CubeFace.EAST, player.getX(), player.getY(), player.getZ()) > 3.0) wasPast[0] = true;
+                if (crossedAlone || playerFace != CubeFace.UP) verdict[0] = "the player crossed before its platform, at " + player.position();
+                else SableTestOps.standOn(level, plot, deck, player);
+                return;
+            }
+            if (playerFace != CubeFace.EAST) verdict[0] = "the platform crossed without the player: player at " + player.position();
+            else if (!wasPast[0]) verdict[0] = "the player was never well past the diagonal before the platform crossed";
+            else if (Math.abs(net.minecraft.util.Mth.wrapDegrees(player.getYRot() - turned[0])) > 0.01F || Math.abs(player.getXRot() - turned[1]) > 0.01F)
+                verdict[0] = "the player's look did not turn: " + player.getYRot() + "/" + player.getXRot() + ", expected " + turned[0] + "/" + turned[1];
+            else verdict[0] = "";
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(verdict[0] != null, "the platform has not crossed");
+            level.getServer().getPlayerList().remove(player);
+            SableTestOps.remove(level, plot);
+            TestChunks.release(level, forced);
+            helper.assertTrue(verdict[0].isEmpty(), verdict[0]);
+        });
+    }
 }

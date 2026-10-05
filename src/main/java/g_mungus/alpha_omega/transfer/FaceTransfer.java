@@ -2,6 +2,9 @@ package g_mungus.alpha_omega.transfer;
 
 import g_mungus.alpha_omega.cube.CubeFace;
 import g_mungus.alpha_omega.cube.CubeGeometry;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Predicate;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -47,6 +50,25 @@ public final class FaceTransfer {
      */
     public static Mode velocityMode(Entity entity) {
         return entity instanceof Player ? Mode.WORLD : mode(entity);
+    }
+
+    /** Tests for what carries an entity across edges itself, so the entity does not cross on its own. */
+    private static final List<Predicate<Entity>> CARRIERS = new CopyOnWriteArrayList<>();
+
+    /** Registers a test for entities carried by something that crosses edges itself (a Sable sub-level they stand on). */
+    public static void registerCarrier(Predicate<Entity> carried) {
+        CARRIERS.add(carried);
+    }
+
+    /**
+     * Whether an entity is carried by something that crosses edges itself: it crosses with that, at the same moment,
+     * rather than on its own when its own position passes the diagonal.
+     */
+    public static boolean carried(Entity entity) {
+        for (Predicate<Entity> carrier : CARRIERS) {
+            if (carrier.test(entity)) return true;
+        }
+        return false;
     }
 
     /** The face a position of {@code face}'s storage should transfer to, or null if it stays. */
