@@ -7,8 +7,8 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 
 /**
- * Skipping the night wakes everyone at the next morning of the face where most sleepers are, not vanilla's global
- * morning. The result still goes through NeoForge's sleep event.
+ * Skipping the night wakes everyone at the first daylight where the sleepers are ({@link LocalSky#morningAfterSleep}),
+ * not vanilla's global morning. The result still goes through NeoForge's sleep event.
  */
 @Mixin(ServerLevel.class)
 abstract class ServerLevelLocalTimeMixin {
