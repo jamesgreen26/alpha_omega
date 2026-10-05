@@ -24,8 +24,6 @@ abstract class ChunkMapRandomStateMixin {
     private RandomState alpha_omega$cubeRouter(NoiseGeneratorSettings settings, HolderGetter<NormalNoise.NoiseParameters> noises, long seed,
                                                Operation<RandomState> original, @Local(argsOnly = true) ServerLevel level,
                                                @Local(argsOnly = true) ChunkGenerator generator) {
-        RandomState state = original.call(settings, noises, seed);
-        if (generator instanceof CubeChunkGenerator cube) CubeNoise.apply(state, cube.geometry(level));
-        return state;
+        return original.call(generator instanceof CubeChunkGenerator cube ? CubeNoise.onCube(settings, cube.geometry(level)) : settings, noises, seed);
     }
 }

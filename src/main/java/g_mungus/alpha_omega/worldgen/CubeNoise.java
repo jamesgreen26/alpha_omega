@@ -4,18 +4,14 @@ import com.mojang.serialization.MapCodec;
 import g_mungus.alpha_omega.cube.CubeFace;
 import g_mungus.alpha_omega.cube.CubeGeometry;
 import g_mungus.alpha_omega.mixin.worldgen.NoiseAccessor;
-import g_mungus.alpha_omega.mixin.worldgen.RandomStateAccessor;
 import g_mungus.alpha_omega.mixin.worldgen.ShiftAAccessor;
 import g_mungus.alpha_omega.mixin.worldgen.ShiftBAccessor;
 import g_mungus.alpha_omega.mixin.worldgen.ShiftedNoiseAccessor;
 import java.util.HashMap;
 import java.util.Map;
 import net.minecraft.util.KeyDispatchDataCodec;
-import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.levelgen.DensityFunction;
-import net.minecraft.world.level.levelgen.DensityFunctions;
-import net.minecraft.world.level.levelgen.NoiseRouter;
-import net.minecraft.world.level.levelgen.RandomState;
+import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 
 /**
  * Flat world generation on a cube (design §4.2). Vanilla's flat noises (continents, erosion, ridges, climate,
@@ -29,24 +25,16 @@ public final class CubeNoise {
     private CubeNoise() {
     }
 
-    /** Rewrites a level's router (and the climate sampler biomes use) to sample flat noises on the cube. */
-    public static void apply(RandomState state, CubeGeometry geometry) {
-        Visitor visitor = new Visitor(geometry);
-        NoiseRouter router = state.router().mapAll(visitor);
-        Climate.Sampler old = state.sampler();
-        DensityFunction.Visitor unwrap = new DensityFunction.Visitor() {
-            private final Map<DensityFunction, DensityFunction> wrapped = new HashMap<>();
-
-            @Override
-            public DensityFunction apply(DensityFunction function) {
-                return this.wrapped.computeIfAbsent(function, f -> f instanceof DensityFunctions.HolderHolder holder ? holder.function().value()
-                    : f instanceof DensityFunctions.MarkerOrMarked marker ? marker.wrapped() : f);
-            }
-        };
-        ((RandomStateAccessor) (Object) state).alpha_omega$setRouter(router);
-        ((RandomStateAccessor) (Object) state).alpha_omega$setSampler(new Climate.Sampler(
-            router.temperature().mapAll(unwrap), router.vegetation().mapAll(unwrap), router.continents().mapAll(unwrap),
-            router.erosion().mapAll(unwrap), router.depth().mapAll(unwrap), router.ridges().mapAll(unwrap), old.spawnTarget()));
+    /**
+     * A level's settings with its router sampling flat noises on the cube. The router is rewritten before a
+     * {@link net.minecraft.world.level.levelgen.RandomState} is made from it, so the state wires the cube noises like
+     * any others, builds the climate sampler biomes use from them, and hands them to whatever compiles the router
+     * (C2ME's density function compiler calls them as they are).
+     */
+    public static NoiseGeneratorSettings onCube(NoiseGeneratorSettings settings, CubeGeometry geometry) {
+        return new NoiseGeneratorSettings(settings.noiseSettings(), settings.defaultBlock(), settings.defaultFluid(),
+            settings.noiseRouter().mapAll(new Visitor(geometry)), settings.surfaceRule(), settings.spawnTarget(), settings.seaLevel(),
+            settings.disableMobGeneration(), settings.aquifersEnabled(), settings.oreVeinsEnabled(), settings.useLegacyRandomSource());
     }
 
     /** Swaps each flat noise for its cube version. */
@@ -113,7 +101,7 @@ public final class CubeNoise {
 
         @Override
         public DensityFunction mapAll(Visitor visitor) {
-            return visitor.apply(this);
+            return visitor.apply(new Flat(this.geometry, visitor.visitNoise(this.noise), this.xzScale));
         }
 
         @Override
@@ -157,7 +145,8 @@ public final class CubeNoise {
 
         @Override
         public DensityFunction mapAll(Visitor visitor) {
-            return visitor.apply(new FlatShifted(this.geometry, this.shiftX.mapAll(visitor), this.shiftZ.mapAll(visitor), this.xzScale, this.noise));
+            return visitor.apply(new FlatShifted(this.geometry, this.shiftX.mapAll(visitor), this.shiftZ.mapAll(visitor), this.xzScale,
+                visitor.visitNoise(this.noise)));
         }
 
         @Override
@@ -206,7 +195,7 @@ public final class CubeNoise {
 
         @Override
         public DensityFunction mapAll(Visitor visitor) {
-            return visitor.apply(this);
+            return visitor.apply(new FlatShift(this.geometry, visitor.visitNoise(this.offsetNoise), this.turned));
         }
 
         @Override

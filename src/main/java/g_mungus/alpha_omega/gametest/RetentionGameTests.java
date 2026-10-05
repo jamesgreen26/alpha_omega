@@ -10,18 +10,24 @@ import g_mungus.alpha_omega.network.FaceTransferPayload;
 import g_mungus.alpha_omega.neighbour.NeighbourViews;
 import g_mungus.alpha_omega.transfer.FaceTransfer;
 import g_mungus.alpha_omega.transfer.FaceTransfers;
+import it.unimi.dsi.fastutil.longs.Long2IntMap;
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.level.ChunkHolder;
+import net.minecraft.server.level.ChunkLevel;
+import net.minecraft.server.level.FullChunkStatus;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.level.ChunkEvent;
 import net.neoforged.neoforge.event.level.ChunkWatchEvent;
@@ -38,6 +44,16 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 public class RetentionGameTests {
 
     private static final String TEMPLATE = "gametest/flat_7x4x7";
+    /**
+     * The crossing tests run on their own: other tests' players near the same edges load chunks in this player's view
+     * and leave again, and a chunk that stops ticking and starts again is sent again whoever caused it.
+     */
+    private static final String BATCH = "retention_crossing";
+    /**
+     * C2ME sends a chunk once it is loaded in full and again once its neighbours have their light (its chunk sending
+     * stage), so a re-send only counts there if the chunk fell below full loading since it was last sent.
+     */
+    private static final boolean C2ME = ModList.get().isLoaded("c2me");
     /** Ticks watched after the (last) crossing. */
     private static final int WATCH_TICKS = 100;
 
@@ -52,6 +68,8 @@ public class RetentionGameTests {
         final LongSet forgotten = new LongOpenHashSet();
         final LongSet resent = new LongOpenHashSet();
         final LongSet unloaded = new LongOpenHashSet();
+        /** Per chunk sent, the highest ticket level it has had since it was last sent (checked once a tick). */
+        final Long2IntMap highestSinceSent = new Long2IntOpenHashMap();
 
         Recorder(ServerPlayer player) {
             this.player = player;
@@ -67,13 +85,17 @@ public class RetentionGameTests {
         NeoForge.EVENT_BUS.addListener((ChunkWatchEvent.Watch event) -> {
             for (Recorder recorder : RECORDERS) {
                 if (recorder.player != event.getPlayer()) continue;
-                if (!recorder.sent.add(event.getPos().toLong()) && recorder.crossing) recorder.resent.add(event.getPos().toLong());
+                long chunk = event.getPos().toLong();
+                boolean again = !recorder.sent.add(chunk);
+                int highest = recorder.highestSinceSent.put(chunk, level(event.getLevel(), chunk));
+                if (again && recorder.crossing && (!C2ME || highest > ChunkLevel.byStatus(FullChunkStatus.FULL))) recorder.resent.add(chunk);
             }
         });
         NeoForge.EVENT_BUS.addListener((ChunkWatchEvent.UnWatch event) -> {
             for (Recorder recorder : RECORDERS) {
                 if (recorder.player != event.getPlayer()) continue;
                 recorder.sent.remove(event.getPos().toLong());
+                recorder.highestSinceSent.remove(event.getPos().toLong());
                 if (recorder.crossing) recorder.forgotten.add(event.getPos().toLong());
             }
         });
@@ -82,6 +104,12 @@ public class RetentionGameTests {
                 if (recorder.crossing && recorder.player.level() == event.getLevel()) recorder.unloaded.add(event.getChunk().getPos().toLong());
             }
         });
+    }
+
+    /** A chunk's ticket level, or past the highest for a chunk with no holder. */
+    private static int level(ServerLevel level, long chunk) {
+        ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(chunk);
+        return holder == null ? ChunkLevel.MAX_LEVEL + 1 : holder.getTicketLevel();
     }
 
     private static CubeGeometry geometry(GameTestHelper helper) {
@@ -172,6 +200,7 @@ public class RetentionGameTests {
         int[] unseen = {0};
         LongSet[] before = {null};
         helper.onEachTick(() -> {
+            recorder.highestSinceSent.replaceAll((chunk, highest) -> Math.max(highest, level(level, chunk)));
             switch (phase[0]) {
                 case 0 -> {
                     boolean ready = NeighbourViews.current(player).stream().anyMatch(v -> v.face() == to) && viewSent(player, recorder);
@@ -226,13 +255,13 @@ public class RetentionGameTests {
     }
 
     /** At ground level the old face stays in view almost unchanged: crossing forgets only what the geometry moves. */
-    @GameTest(template = TEMPLATE, timeoutTicks = 6000)
+    @GameTest(template = TEMPLATE, batch = BATCH, timeoutTicks = 6000)
     public static void crossingKeepsView(GameTestHelper helper) {
         cross(helper, CubeFace.UP, CubeFace.EAST, 4.0, -60.0, false);
     }
 
     /** High up, the old face's view jumps on crossing; crossing straight back must still find it all there. */
-    @GameTest(template = TEMPLATE, timeoutTicks = 6000)
+    @GameTest(template = TEMPLATE, batch = BATCH, timeoutTicks = 6000)
     public static void crossingBackKeepsView(GameTestHelper helper) {
         cross(helper, CubeFace.UP, CubeFace.SOUTH, 60.0, 50.0, true);
     }

@@ -75,7 +75,6 @@
     "worldgen.NoiseBasedChunkGeneratorAccessor",
     "worldgen.NoiseBasedChunkGeneratorMixin",
     "worldgen.ProtoChunkMixin",
-    "worldgen.RandomStateAccessor",
     "worldgen.ShiftAAccessor",
     "worldgen.ShiftBAccessor",
     "worldgen.ShiftedNoiseAccessor"
