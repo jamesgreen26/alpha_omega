@@ -61,7 +61,7 @@ public class AlphaOmegaMod {
             if (event.getLevel() instanceof ServerLevel level) NeighbourViews.tick(level);
         });
         NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> NeighbourViews.clear());
-        g_mungus.alpha_omega.band.BandEvents.register();
+        g_mungus.alpha_omega.band.BandEvents.register(modEventBus);
         if (net.neoforged.fml.ModList.get().isLoaded("sable")) g_mungus.alpha_omega.compat.sable.SableCompat.init();
         if (Boolean.getBoolean("alpha_omega.auditMixins")) {
             NeoForge.EVENT_BUS.addListener((ServerStartedEvent event) -> auditMixins());

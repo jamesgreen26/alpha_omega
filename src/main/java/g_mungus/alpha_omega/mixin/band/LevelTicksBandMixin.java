@@ -3,9 +3,10 @@ package g_mungus.alpha_omega.mixin.band;
 import g_mungus.alpha_omega.band.Band;
 import g_mungus.alpha_omega.band.BandCounters;
 import g_mungus.alpha_omega.band.BandTicks;
-import g_mungus.alpha_omega.orbifold.OrbifoldGeometry;
+import g_mungus.alpha_omega.band.CopyLinks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.ticks.LevelTicks;
 import net.minecraft.world.ticks.ScheduledTick;
 import org.jetbrains.annotations.Nullable;
@@ -38,12 +39,11 @@ abstract class LevelTicksBandMixin<T> implements BandTicks {
     @Inject(method = "schedule", at = @At("HEAD"), cancellable = true)
     private void alpha_omega$once(ScheduledTick<T> tick, CallbackInfo ci) {
         if (this.alpha_omega$level == null) return;
-        OrbifoldGeometry geometry = Band.geometry(this.alpha_omega$level);
-        if (geometry == null) return;
-        BlockPos pos = tick.pos();
-        if (!Band.isLinked(geometry, pos.getX(), pos.getZ())) return;
-        for (Band.Link link : Band.copies(geometry, pos)) {
-            if (this.hasScheduledTick(link.pos(), tick.type())) {
+        LevelChunk chunk = Band.linkedChunk(this.alpha_omega$level, tick.pos());
+        if (chunk == null) return;
+        for (CopyLinks.Link link : Band.links(chunk).links) {
+            if (link.chunk(this.alpha_omega$level) == null) continue;
+            if (this.hasScheduledTick(link.scratch(tick.pos()), tick.type())) {
                 BandCounters.scheduledTicksDeduped++;
                 ci.cancel();
                 return;
