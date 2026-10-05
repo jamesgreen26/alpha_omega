@@ -138,6 +138,8 @@ public class LocalTimeGameTests {
                 helper.assertTrue(darken == level.getSkyDarken(), "sky darkening at spawn " + darken + " is not vanilla's a tick later, at " + t);
             }
         }
+        java.util.List<String> lines = g_mungus.alpha_omega.sky.LocalTimeCommand.lines(level, net.minecraft.world.phys.Vec3.atBottomCenterOf(pos));
+        helper.assertTrue(lines.get(0).matches("Planet: 0\\.0\\d°[NS] 0\\.0\\d°[EW]; world north is 0\\.0° .*"), "/orbifold time at spawn: " + lines);
         release(helper, pos);
         helper.succeed();
     }
