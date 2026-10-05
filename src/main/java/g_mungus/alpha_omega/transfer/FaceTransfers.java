@@ -20,9 +20,10 @@ import net.minecraft.world.phys.Vec3;
  * Server side of crossing an edge (design §5). Every root entity is checked after it ticks; one that has crossed
  * moves, with its passengers, to the same cube point in the new face's storage.
  *
- * <p>Players cross on their own client, which tells the server ({@link FaceTransferPayload}); the server checks the
- * claim and applies the same transform without a teleport. Only a player the server finds well past the diagonal
- * (pushed there server-side, or a client that did not cross) is moved by the server, with a vanilla teleport.
+ * <p>Players cross on their own client, which keeps the cooldown itself and tells the server
+ * ({@link FaceTransferPayload}); the server checks the claim and applies the same transform without a teleport. Only
+ * a player the server finds well past the diagonal (pushed there server-side, or a client that did not cross) is
+ * moved by the server, with a vanilla teleport.
  */
 public final class FaceTransfers {
 
@@ -42,7 +43,7 @@ public final class FaceTransfers {
 
     /** After a root entity ticks: move it (and its passengers) if it has crossed into another face. */
     public static void afterTick(ServerLevel level, Entity root) {
-        if (root.isRemoved() || root.isPassenger()) return;
+        if (root.isRemoved() || root.isPassenger() || FaceTransfer.coolingDown(root)) return;
         CubeGeometry geometry = Cube.of(level);
         if (geometry == null) return;
         CubeFace face = geometry.faceAt(root.getX(), root.getZ());
@@ -62,6 +63,7 @@ public final class FaceTransfers {
      */
     static void transfer(ServerLevel level, CubeGeometry geometry, Entity root, CubeFace from, CubeFace to, Vec3 rootPos, float[] look) {
         for (Entity entity : root.getSelfAndPassengers().toList()) {
+            FaceTransfer.startCooldown(entity);
             Vec3 pos = entity == root ? rootPos : entity.position();
             double[] p = geometry.transform(from, to, pos.x, pos.y, pos.z);
             FaceTransfer.Mode mode = FaceTransfer.mode(entity);

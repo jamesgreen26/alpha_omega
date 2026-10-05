@@ -33,7 +33,7 @@ public final class ClientFaceTransfer {
             return;
         }
         Entity root = player.getRootVehicle();
-        if (root == player || root.isControlledByLocalInstance()) {
+        if ((root == player || root.isControlledByLocalInstance()) && !FaceTransfer.coolingDown(root)) {
             CubeFace face = geometry.faceAt(root.getX(), root.getZ());
             CubeFace to = face == null ? null : FaceTransfer.destination(geometry, face, root.getX(), root.getY(), root.getZ());
             if (to != null && FaceTransfer.roomToCross(geometry, root, face, to)) cross(geometry, player, root, face, to);
@@ -53,6 +53,7 @@ public final class ClientFaceTransfer {
         Vec3 eyeBefore = player.getEyePosition();
         for (Entity entity : root.getSelfAndPassengers().toList()) {
             if (entity != root && entity != player) continue;
+            FaceTransfer.startCooldown(entity);
             double[] p = geometry.transform(from, to, entity.getX(), entity.getY(), entity.getZ());
             FaceTransfer.Mode mode = FaceTransfer.mode(entity);
             Vec3 motion = entity.getDeltaMovement();

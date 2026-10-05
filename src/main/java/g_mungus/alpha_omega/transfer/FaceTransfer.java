@@ -12,7 +12,8 @@ import org.jetbrains.annotations.Nullable;
 /**
  * Crossing an edge (design §5), shared by server and client. Something transfers when its position lies past the
  * diagonal into another face's region by more than {@link #MARGIN}; it lands at the same cube point in that face's
- * storage. Coming back needs the same margin the other way, so walking along an edge does not flip-flop.
+ * storage. Coming back needs the same margin the other way, and an entity that has just crossed waits
+ * {@link #COOLDOWN_TICKS} before it may cross again, so walking along an edge does not flip-flop.
  */
 public final class FaceTransfer {
 
@@ -41,6 +42,19 @@ public final class FaceTransfer {
         if (owner == face) return null;
         if (owner.isNeighbour(face) && geometry.depthInto(face, owner, x, y, z) < MARGIN) return null;
         return owner;
+    }
+
+    /** Ticks after crossing before the same entity may cross again. */
+    public static final int COOLDOWN_TICKS = 10;
+
+    /** Whether an entity crossed too recently to cross again. */
+    public static boolean coolingDown(Entity entity) {
+        return entity.tickCount - ((TransferCooldown) entity).alpha_omega$lastTransferTick() < COOLDOWN_TICKS;
+    }
+
+    /** Notes that an entity has just crossed. */
+    public static void startCooldown(Entity entity) {
+        ((TransferCooldown) entity).alpha_omega$setLastTransferTick(entity.tickCount);
     }
 
     /** How far past the margin an upright entity may wait for room on the other side before crossing anyway. */

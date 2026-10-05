@@ -28,6 +28,7 @@
     "server.ChunkMapUnloadMixin",
     "server.ChunkTrackingViewMixin",
     "server.DistanceManagerAccessor",
+    "server.EntityTransferCooldownMixin",
     "server.GameTestServerMixin",
     "server.LevelMixin",
     "server.ServerLevelMixin",

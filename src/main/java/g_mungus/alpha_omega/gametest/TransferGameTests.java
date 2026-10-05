@@ -7,6 +7,7 @@ import g_mungus.alpha_omega.cube.CubeGeometry;
 import g_mungus.alpha_omega.network.FaceTransferPayload;
 import g_mungus.alpha_omega.transfer.FaceTransfer;
 import g_mungus.alpha_omega.transfer.FaceTransfers;
+import g_mungus.alpha_omega.transfer.TransferCooldown;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -193,6 +194,37 @@ public class TransferGameTests {
             crosses.discard();
             release(level, forced);
             helper.succeed();
+        });
+    }
+
+    /** An item put straight back past the diagonal after crossing waits out the cooldown, then crosses back at once. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    public static void crossingHasACooldown(GameTestHelper helper) {
+        CubeGeometry geometry = geometry(helper);
+        ServerLevel level = helper.getLevel();
+        CubeFace from = CubeFace.SOUTH, to = CubeFace.EAST;
+        Vec3 past = crossing(geometry, from, to, FaceTransfer.MARGIN + 0.2, -7.0);
+        Vec3 backAgain = transformed(geometry, from, to, crossing(geometry, from, to, -(FaceTransfer.MARGIN + 0.2), -7.0));
+        Set<ChunkPos> forced = load(level, past, backAgain);
+        ItemEntity item = floatingItem(level, past);
+        // The entity ticks at which it crossed, then crossed back.
+        int[] crossed = {Integer.MIN_VALUE, Integer.MIN_VALUE};
+        helper.onEachTick(() -> {
+            CubeFace face = geometry.faceAt(item.getX(), item.getZ());
+            int last = ((TransferCooldown) item).alpha_omega$lastTransferTick();
+            if (crossed[0] == Integer.MIN_VALUE && face == to) {
+                crossed[0] = last;
+                item.setPos(backAgain.x, backAgain.y, backAgain.z);
+            } else if (crossed[0] != Integer.MIN_VALUE && crossed[1] == Integer.MIN_VALUE && face == from) {
+                crossed[1] = last;
+            }
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(crossed[1] != Integer.MIN_VALUE, "the item never crossed back");
+            helper.assertTrue(crossed[1] - crossed[0] == FaceTransfer.COOLDOWN_TICKS,
+                "the item crossed back " + (crossed[1] - crossed[0]) + " ticks after crossing, expected " + FaceTransfer.COOLDOWN_TICKS);
+            item.discard();
+            release(level, forced);
         });
     }
 
