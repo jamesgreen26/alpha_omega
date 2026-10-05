@@ -16,6 +16,9 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
 import net.minecraft.client.renderer.culling.Frustum;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.block.state.BlockState;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -85,6 +88,11 @@ abstract class LevelRendererNeighbourMixin {
     @Inject(method = "setSectionDirty(IIIZ)V", at = @At("HEAD"), cancellable = true)
     private void alpha_omega$neighbourDirt(int x, int y, int z, boolean playerChanged, CallbackInfo ci) {
         if (this.level != null && NeighbourRenderer.setDirty(this.level, x, y, z, playerChanged)) ci.cancel();
+    }
+
+    @Inject(method = "blockChanged", at = @At("HEAD"))
+    private void alpha_omega$neighbourGround(BlockGetter getter, BlockPos pos, BlockState oldState, BlockState newState, int flags, CallbackInfo ci) {
+        if (this.level != null) NeighbourRenderer.blockChanged(this.level, pos);
     }
 
     @Inject(method = {"allChanged", "setLevel"}, at = @At("HEAD"))

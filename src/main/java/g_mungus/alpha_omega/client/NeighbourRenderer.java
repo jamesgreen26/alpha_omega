@@ -58,9 +58,10 @@ import org.joml.Quaternionf;
  * there are drawn with the same rotation.
  *
  * <p>Per frame this only walks what can be drawn: each area keeps, per column, whether it lies on its face and is
- * loaded, with its boxes seen from home; a column is worked out again only when the area moves, a chunk near it comes,
- * goes or changes, or the camera changes face. Columns are culled whole before their sections are. Sections buried
- * well below the ground around them are skipped while the camera is above ground. Areas are never freed while the
+ * loaded, with its boxes seen from home; a column is worked out again only when the area's move puts another chunk in
+ * its slot, a chunk near it comes or goes, a block near it changes, or the camera changes face. Columns are culled
+ * whole before their sections are. Sections buried well below the ground around them are skipped while the camera is
+ * above ground. Areas are never freed while the
  * world lasts: one a face no longer needs is handed to the next face that does, so crossing edges neither frees nor
  * allocates GPU buffers.
  */
@@ -91,12 +92,15 @@ public final class NeighbourRenderer {
         CubeFace builtFor;
         /** Per column slot ({@code x * size + z}, as the view area wraps chunk positions): null until worked out. */
         final Column[] columns;
+        /** Per column slot, the chunk it was worked out for: when the area moves, only slots whose chunk changed are redone. */
+        final long[] columnAt;
 
         Area(ViewArea view, CubeFace face) {
             this.view = view;
             this.face = face;
             this.size = view.getViewDistance() * 2 + 1;
             this.columns = new Column[this.size * this.size];
+            this.columnAt = new long[this.size * this.size];
         }
 
         void invalidate() {
@@ -229,9 +233,9 @@ public final class NeighbourRenderer {
             double[] virtual = cube.transform(home, face, cam.x, cam.y, cam.z);
             long placedAt = ChunkPos.asLong(Math.floorDiv(Mth.ceil(virtual[0]), 16), Math.floorDiv(Mth.ceil(virtual[2]), 16));
             if (placedAt != area.placedAt) {
+                // Sections that stay put keep their origins, so their columns stand; build redoes the slots that moved.
                 area.view.repositionCamera(virtual[0], virtual[2]);
                 area.placedAt = placedAt;
-                area.invalidate();
             }
             if (area.builtFor != home) {
                 area.builtFor = home;
@@ -302,7 +306,9 @@ public final class NeighbourRenderer {
                 SectionRenderDispatcher.RenderSection bottom = view.sections[z * height * size + x];
                 int chunkX = bottom.getOrigin().getX() >> 4, chunkZ = bottom.getOrigin().getZ() >> 4;
                 int slot = Math.floorMod(chunkX, size) * size + Math.floorMod(chunkZ, size);
-                if (area.columns[slot] != null) continue;
+                long at = ChunkPos.asLong(chunkX, chunkZ);
+                if (area.columns[slot] != null && area.columnAt[slot] == at) continue;
+                area.columnAt[slot] = at;
                 if (cube.faceAtChunk(chunkX, chunkZ) != area.face || !cube.inFootprint(chunkX, chunkZ)
                     || level.getChunkSource().getChunk(chunkX, chunkZ, ChunkStatus.FULL, false) == null) {
                     area.columns[slot] = NOTHING;
@@ -496,24 +502,33 @@ public final class NeighbourRenderer {
     /**
      * A section changed. Vanilla's area indexes sections modulo its size, so a section of another face would mark an
      * unrelated one of ours: sections of other faces go to their own area instead. Returns whether it was handled.
+     * Most of these are light changes (every section of an arriving chunk, with its neighbours), which move no ground:
+     * that is left to {@link #blockChanged}.
      */
     public static boolean setDirty(ClientLevel level, int sectionX, int sectionY, int sectionZ, boolean playerChanged) {
         CubeGeometry cube = Cube.of(level);
         if (cube == null || home == null) return false;
-        // Its ground may have changed: on the home face too, which becomes a neighbour once the camera crosses.
-        GROUND.remove(ChunkPos.asLong(sectionX, sectionZ));
         CubeFace face = cube.faceAtChunk(sectionX, sectionZ);
         if (face == home) return false;
         Area area = face == null ? null : AREAS.get(face);
         if (area != null) {
             BlockPos origin = new BlockPos(sectionX << 4, sectionY << 4, sectionZ << 4);
             SectionRenderDispatcher.RenderSection section = ((ViewAreaAccessor) area.view).alpha_omega$getRenderSectionAt(origin);
-            if (section != null && section.getOrigin().equals(origin)) {
-                section.setDirty(playerChanged);
-                area.invalidateAround(sectionX, sectionZ);
-            }
+            if (section != null && section.getOrigin().equals(origin)) section.setDirty(playerChanged);
         }
         return true;
+    }
+
+    /** A block changed: its chunk's ground may have moved, and with it the buried depth of the columns around it. */
+    public static void blockChanged(ClientLevel level, BlockPos pos) {
+        CubeGeometry cube = Cube.of(level);
+        if (cube == null) return;
+        int chunkX = pos.getX() >> 4, chunkZ = pos.getZ() >> 4;
+        // On the home face too, which becomes a neighbour once the camera crosses.
+        GROUND.remove(ChunkPos.asLong(chunkX, chunkZ));
+        CubeFace face = cube.faceAtChunk(chunkX, chunkZ);
+        Area area = face == null ? null : AREAS.get(face);
+        if (area != null) area.invalidateAround(chunkX, chunkZ);
     }
 
     /** A chunk arrived or was forgotten: the columns around it are worked out again. */
