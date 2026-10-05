@@ -15,6 +15,7 @@
     "client.FogRendererSkyMixin",
     "client.LevelRendererAccessor",
     "client.LevelRendererNeighbourMixin",
+    "client.LevelRendererPlayerEaseMixin",
     "client.LevelRendererSkyMixin",
     "client.LocalPlayerMixin",
     "client.ParticleAccessor",

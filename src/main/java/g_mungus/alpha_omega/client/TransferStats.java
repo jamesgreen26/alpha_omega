@@ -70,6 +70,6 @@ public final class TransferStats {
 
     private static void report() {
         AlphaOmegaMod.LOGGER.info("Transfer stats: received {} chunks ({} already held), forgot {}, visible sections in the first frames {}, "
-            + "sun height by tick {}", received, alreadyHeld, forgotten, visibleSections, sunHeights);
+            + "view eased over {} ticks, sun height by tick {}", received, alreadyHeld, forgotten, visibleSections, FaceCamera.duration(), sunHeights);
     }
 }

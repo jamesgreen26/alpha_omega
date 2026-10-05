@@ -9,8 +9,8 @@ import net.minecraft.world.phys.Vec3;
 
 /**
  * The local sun as the client sees it: at the camera, or at a given position. Just after the camera crosses an edge,
- * the new face's sun eases in from the old face's over the same second as the view ({@link FaceCamera}), so the
- * sky's brightness and colour do not jump from one face's time of day to the other's.
+ * the new face's sun eases in from the old face's as the view turns ({@link FaceCamera}), so the sky's brightness
+ * and colour do not jump from one face's time of day to the other's.
  */
 public final class ClientSky {
 

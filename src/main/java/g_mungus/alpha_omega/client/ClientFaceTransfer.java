@@ -25,7 +25,7 @@ public final class ClientFaceTransfer {
     }
 
     public static void afterTick(LocalPlayer player) {
-        FaceCamera.tick();
+        FaceCamera.tick(player.getRootVehicle());
         TransferStats.tick();
         CubeGeometry geometry = Cube.of(player.level());
         if (geometry == null) {
@@ -40,7 +40,7 @@ public final class ClientFaceTransfer {
         }
         CubeFace now = geometry.faceAt(player.getX(), player.getZ());
         if (lastFace != null && now != null && now != lastFace) {
-            FaceCamera.start(geometry, lastFace, now, lastEye, player.getEyePosition());
+            FaceCamera.start(geometry, lastFace, now, lastEye, player.getEyePosition(), player.getRootVehicle());
             TransferStats.faceChanged();
         }
         lastFace = now;
@@ -74,7 +74,7 @@ public final class ClientFaceTransfer {
             }
         }
         PacketDistributor.sendToServer(new FaceTransferPayload(from.slot(), to.slot(), claimed.x, claimed.y, claimed.z, yRot, xRot));
-        FaceCamera.start(geometry, from, to, eyeBefore, player.getEyePosition());
+        FaceCamera.start(geometry, from, to, eyeBefore, player.getEyePosition(), root);
         TransferStats.faceChanged();
         lastFace = to;
         lastEye = player.getEyePosition();
