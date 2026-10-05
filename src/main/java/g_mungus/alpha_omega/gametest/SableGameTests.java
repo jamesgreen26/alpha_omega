@@ -76,6 +76,48 @@ public class SableGameTests {
         helper.succeed();
     }
 
+    /**
+     * Gravity on a sub-level turns from the face's down at sea level to the cube's centre at the build limit: one
+     * released near the top, off the face's middle, falls toward the cube's centre; one released just above sea level
+     * falls straight down.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    public static void gravityRoundsOutWithHeight(GameTestHelper helper) {
+        if (!sable(helper)) return;
+        ServerLevel level = helper.getLevel();
+        CubeGeometry geometry = Cube.of(level);
+        int offset = 100;
+        BlockPos high = new BlockPos(geometry.centerX(CubeFace.UP) + offset, geometry.maxY - 6, geometry.centerZ() + 70);
+        BlockPos low = new BlockPos(geometry.centerX(CubeFace.UP) + offset, geometry.planeY + 40, geometry.centerZ() + 110);
+        Set<ChunkPos> forced = new HashSet<>();
+        for (BlockPos pos : new BlockPos[] {high, low}) {
+            if (forced.add(new ChunkPos(pos))) TestChunks.force(level, new ChunkPos(pos));
+        }
+        level.setBlockAndUpdate(high, Blocks.IRON_BLOCK.defaultBlockState());
+        level.setBlockAndUpdate(low, Blocks.IRON_BLOCK.defaultBlockState());
+        BlockPos highPlot = SableTestOps.assemble(level, high, List.of(high));
+        BlockPos lowPlot = SableTestOps.assemble(level, low, List.of(low));
+        helper.runAfterDelay(10, () -> {
+            double[] vHigh = SableTestOps.velocity(level, highPlot), vLow = SableTestOps.velocity(level, lowPlot);
+            double[] pHigh = SableTestOps.pose(level, highPlot), pLow = SableTestOps.pose(level, lowPlot);
+            SableTestOps.remove(level, highPlot);
+            SableTestOps.remove(level, lowPlot);
+            TestChunks.release(level, forced);
+            // Toward the cube's centre from where the high one is, in UP's storage axes (UP's are the cube's).
+            double[] c = geometry.toCube(CubeFace.UP, pHigh[0], pHigh[1], pHigh[2]);
+            double length = Math.sqrt(c[0] * c[0] + c[1] * c[1] + c[2] * c[2]);
+            double speed = Math.sqrt(vHigh[0] * vHigh[0] + vHigh[1] * vHigh[1] + vHigh[2] * vHigh[2]);
+            double toward = -(vHigh[0] * c[0] + vHigh[1] * c[1] + vHigh[2] * c[2]) / (length * speed);
+            helper.assertTrue(speed > 1.0 && toward > 0.995, "near the top it should fall toward the cube's centre: velocity "
+                + java.util.Arrays.toString(vHigh) + " at " + java.util.Arrays.toString(pHigh) + " (cosine " + toward + ")");
+            double lowSpeed = Math.sqrt(vLow[0] * vLow[0] + vLow[1] * vLow[1] + vLow[2] * vLow[2]);
+            double sideways = Math.sqrt(vLow[0] * vLow[0] + vLow[2] * vLow[2]) / lowSpeed;
+            helper.assertTrue(lowSpeed > 1.0 && vLow[1] < 0 && sideways < 0.2, "just above sea level it should fall nearly straight down: velocity "
+                + java.util.Arrays.toString(vLow) + " at " + java.util.Arrays.toString(pLow));
+            helper.succeed();
+        });
+    }
+
     /** A sub-level dropped over a face falls onto it and comes to rest. */
     @GameTest(template = TEMPLATE, timeoutTicks = 400)
     public static void fallsOntoTheFace(GameTestHelper helper) {

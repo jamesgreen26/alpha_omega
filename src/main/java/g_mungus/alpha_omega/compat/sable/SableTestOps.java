@@ -58,6 +58,12 @@ public final class SableTestOps {
         return ((ServerSubLevel) Sable.HELPER.getContaining(level, plot)).getTrackingPlayers().contains(player.getGameProfile().getId());
     }
 
+    /** The linear velocity (blocks per second) of the sub-level owning {@code plot}. */
+    public static double[] velocity(ServerLevel level, BlockPos plot) {
+        Vector3dc v = RigidBodyHandle.of((ServerSubLevel) Sable.HELPER.getContaining(level, plot)).getLinearVelocity();
+        return new double[] {v.x(), v.y(), v.z()};
+    }
+
     /** Adds velocity (blocks per second) to the sub-level owning {@code plot}. */
     public static void push(ServerLevel level, BlockPos plot, double vx, double vy, double vz) {
         ServerSubLevel subLevel = (ServerSubLevel) Sable.HELPER.getContaining(level, plot);
