@@ -40,7 +40,8 @@ public final class ClientFaceTransfer {
         }
         CubeFace now = geometry.faceAt(player.getX(), player.getZ());
         if (lastFace != null && now != null && now != lastFace) {
-            FaceCamera.start(geometry, lastFace, now, lastEye, player.getEyePosition(), player.getRootVehicle());
+            // Carried over by a sub-level, the player turns with it at once (see carriedAcross).
+            if (!FaceTransfer.carried(player)) FaceCamera.start(geometry, lastFace, now, lastEye, player.getEyePosition(), player.getRootVehicle());
             TransferStats.faceChanged();
         }
         lastFace = now;
@@ -50,7 +51,7 @@ public final class ClientFaceTransfer {
     private static void cross(CubeGeometry geometry, LocalPlayer player, Entity root, CubeFace from, CubeFace to) {
         Vec3 claimed = root.position();
         float yRot = player.getYRot(), xRot = player.getXRot();
-        move(geometry, player, root, from, to);
+        move(geometry, player, root, from, to, true);
         PacketDistributor.sendToServer(new FaceTransferPayload(from.slot(), to.slot(), claimed.x, claimed.y, claimed.z, yRot, xRot));
     }
 
@@ -58,18 +59,19 @@ public final class ClientFaceTransfer {
      * What carries the local player crossed an edge (a sub-level it stands on): the player goes with it, as on foot,
      * but without telling the server, which has moved its player with the carrier already. The carrier keeps its
      * world orientation, so what the player stood on is now a wall beside it, and the player, upright again, would be
-     * half inside it: it steps out by half its width, away from that surface.
+     * half inside it: it steps out by half its width, away from that surface. The camera does not ease over: the
+     * player turns with the sub-level, in one step.
      */
     public static void carriedAcross(LocalPlayer player, CubeFace from, CubeFace to) {
         CubeGeometry geometry = Cube.of(player.level());
         if (geometry == null || geometry.faceAt(player.getX(), player.getZ()) != from) return;
         // Away from the surface is up on the old face: step up there, which is sideways once across.
         player.setPos(player.getX(), player.getY() + player.getBbWidth() / 2.0 + 0.05, player.getZ());
-        move(geometry, player, player, from, to);
+        move(geometry, player, player, from, to, false);
     }
 
-    /** Moves the local player (and the vehicle it drives) to the same cube point on the next face, and eases the camera. */
-    private static void move(CubeGeometry geometry, LocalPlayer player, Entity root, CubeFace from, CubeFace to) {
+    /** Moves the local player (and the vehicle it drives) to the same cube point on the next face, easing the camera over or not. */
+    private static void move(CubeGeometry geometry, LocalPlayer player, Entity root, CubeFace from, CubeFace to, boolean ease) {
         Vec3 eyeBefore = player.getEyePosition();
         for (Entity entity : root.getSelfAndPassengers().toList()) {
             if (entity != root && entity != player) continue;
@@ -93,7 +95,8 @@ public final class ClientFaceTransfer {
                 player.xBob = player.xBobO = rotation[1];
             }
         }
-        FaceCamera.start(geometry, from, to, eyeBefore, player.getEyePosition(), root);
+        if (ease) FaceCamera.start(geometry, from, to, eyeBefore, player.getEyePosition(), root);
+        else FaceCamera.reset();
         TransferStats.faceChanged();
         lastFace = to;
         lastEye = player.getEyePosition();
