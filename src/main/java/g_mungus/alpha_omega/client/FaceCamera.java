@@ -4,21 +4,25 @@ import g_mungus.alpha_omega.cube.CubeFace;
 import g_mungus.alpha_omega.cube.CubeGeometry;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix3f;
 import org.joml.Quaternionf;
 
 /**
  * Eases the view over an edge (design §5.2). Crossing turns "down" by 90° at once and swings the eye about the feet;
  * the camera starts where the old view really was (the same world-space direction and point, seen in the new face's
- * storage) and settles into the player's new upright view over half a second.
+ * storage) and settles into the player's new upright view over a second. The sky's daytime eases from the old
+ * face's to the new one's alongside ({@code ClientSky}).
  */
 public final class FaceCamera {
 
-    private static final int DURATION = 10;
+    private static final int DURATION = 20;
 
     private static final Quaternionf offset = new Quaternionf();
     private static Vec3 shift = Vec3.ZERO;
     private static int ticksLeft;
+    private static CubeFace from;
+    private static CubeFace to;
 
     private FaceCamera() {
     }
@@ -31,6 +35,8 @@ public final class FaceCamera {
         world.mul(upright.transpose(new Matrix3f())).getNormalizedRotation(offset);
         double[] before = geometry.transform(from, to, eyeBefore.x, eyeBefore.y, eyeBefore.z);
         shift = new Vec3(before[0], before[1], before[2]).subtract(eyeAfter);
+        FaceCamera.from = from;
+        FaceCamera.to = to;
         ticksLeft = DURATION;
     }
 
@@ -50,6 +56,18 @@ public final class FaceCamera {
 
     public static void reset() {
         ticksLeft = 0;
+    }
+
+    /** The face the camera is easing away from, or null when it is not easing. */
+    @Nullable
+    public static CubeFace from() {
+        return ticksLeft > 0 ? from : null;
+    }
+
+    /** The face the camera is easing onto, or null when it is not easing. */
+    @Nullable
+    public static CubeFace to() {
+        return ticksLeft > 0 ? to : null;
     }
 
     /** How much of the old view is left, from 1 just after crossing to 0, smoothed. */

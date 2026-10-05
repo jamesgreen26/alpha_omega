@@ -108,6 +108,30 @@ public final class LocalSky {
             equivalentTimeOfDay(sun.rising(face, hourAngle), direction[1]));
     }
 
+    /**
+     * A sample part way between two: {@code weight} 1 is {@code from}, 0 is {@code to}. The sun's direction blends
+     * along the arc between the two (each in its own face's axes), the clock the short way round the day; the face is
+     * {@code to}'s. Used to ease the sky from one face's daytime to the next when crossing an edge.
+     */
+    public static Sample blend(Sample from, Sample to, double weight) {
+        if (weight <= 0.0) return to;
+        if (weight >= 1.0) return from;
+        double x = to.sunX + (from.sunX - to.sunX) * weight;
+        double y = to.sunY + (from.sunY - to.sunY) * weight;
+        double z = to.sunZ + (from.sunZ - to.sunZ) * weight;
+        double length = Math.sqrt(x * x + y * y + z * z);
+        if (length < 1e-6) return weight >= 0.5 ? from : to;
+        x /= length;
+        y /= length;
+        z /= length;
+        double ahead = from.clock - to.clock;
+        ahead -= 24000.0 * Math.floor(ahead / 24000.0 + 0.5);
+        double clock = to.clock + ahead * weight;
+        boolean rising = (weight >= 0.5 ? from : to).equivalentTimeOfDay > 0.5;
+        return new Sample(to.face, to.latitude + (from.latitude - to.latitude) * weight, to.timeZone + (from.timeZone - to.timeZone) * weight,
+            clock, timeOfDay(clock), x, y, z, equivalentTimeOfDay(rising, y));
+    }
+
     // ---- Level adapters ----
 
     /** Whether the local sky applies at all: the overworld, without fixed time. Elsewhere everything is vanilla. */
@@ -134,6 +158,11 @@ public final class LocalSky {
         if (!local(level)) return vanilla(level.getDayTime());
         CubeGeometry geometry = Cube.of(level);
         return sample(sun(geometry.settings.sunAxis()), face(level, x, z), level.getDayTime());
+    }
+
+    /** The sun of a given face of a cube world. */
+    public static Sample sample(Level level, CubeFace face) {
+        return sample(sun(Cube.of(level).settings.sunAxis()), face, level.getDayTime());
     }
 
     /** The rotation the sky renderer draws the sun, moon and stars with, for the face at a position. */

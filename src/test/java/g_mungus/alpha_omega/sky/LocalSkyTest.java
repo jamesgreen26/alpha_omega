@@ -174,4 +174,25 @@ class LocalSkyTest {
             }
         }
     }
+
+    /** Easing between two faces' suns: the ends are the samples themselves, and the way between is smooth. */
+    @Test
+    void blendEasesBetweenFaces() {
+        LocalSky.Sample from = LocalSky.sample(DIAGONAL, CubeFace.UP, 23000);
+        LocalSky.Sample to = LocalSky.sample(DIAGONAL, CubeFace.EAST, 23000);
+        assertEquals(to, LocalSky.blend(from, to, 0.0));
+        assertEquals(from, LocalSky.blend(from, to, 1.0));
+        LocalSky.Sample previous = to;
+        for (int i = 1; i <= 20; i++) {
+            LocalSky.Sample step = LocalSky.blend(from, to, i / 20.0);
+            assertEquals(i < 20 ? CubeFace.EAST : CubeFace.UP, step.face());
+            assertEquals(1.0, Math.sqrt(step.sunX() * step.sunX() + step.sunY() * step.sunY() + step.sunZ() * step.sunZ()), 1e-9);
+            double turn = Math.acos(Math.min(1.0, step.sunX() * previous.sunX() + step.sunY() * previous.sunY() + step.sunZ() * previous.sunZ()));
+            assertTrue(turn < Math.PI / 8, "the sun jumped " + Math.toDegrees(turn) + " degrees in one step");
+            // The clock goes the short way round: never more than half a day from either end.
+            double ahead = Math.abs(step.clock() - to.clock());
+            assertTrue(ahead <= 12000.0, "clock went the long way: " + step.clock() + " from " + to.clock());
+            previous = step;
+        }
+    }
 }

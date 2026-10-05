@@ -1,13 +1,17 @@
 package g_mungus.alpha_omega.client;
 
 import g_mungus.alpha_omega.AlphaOmegaMod;
+import g_mungus.alpha_omega.client.sky.ClientSky;
 import java.util.ArrayList;
 import java.util.List;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 
 /**
  * Development aid ({@code -Dalpha_omega.dev.transferStats}, Gradle {@code -PtransferStats}): what crossing an edge
  * costs the client. For two seconds after each change of face it counts chunks received (and of those, chunks it
- * already held), chunks forgotten, and how many sections vanilla had to draw in the first frames; then it logs them.
+ * already held), chunks forgotten, how many sections vanilla had to draw in the first frames and the sun's height
+ * over the first ticks; then it logs them.
  */
 public final class TransferStats {
 
@@ -20,6 +24,7 @@ public final class TransferStats {
     private static int alreadyHeld;
     private static int forgotten;
     private static final List<Integer> visibleSections = new ArrayList<>();
+    private static final List<String> sunHeights = new ArrayList<>();
 
     private TransferStats() {
     }
@@ -30,6 +35,16 @@ public final class TransferStats {
         ticksLeft = WINDOW_TICKS;
         received = alreadyHeld = forgotten = 0;
         visibleSections.clear();
+        sunHeights.clear();
+        sunHeight();
+    }
+
+    /** The sun's height over the camera's horizon, as the sky is drawn with it. */
+    private static void sunHeight() {
+        ClientLevel level = Minecraft.getInstance().level;
+        if (level != null && ClientSky.applies(level) && sunHeights.size() < 24) {
+            sunHeights.add(String.format("%.2f", ClientSky.atCamera(level).sunY()));
+        }
     }
 
     public static void chunkReceived(boolean held) {
@@ -48,11 +63,13 @@ public final class TransferStats {
     }
 
     public static void tick() {
-        if (ticksLeft > 0 && --ticksLeft == 0) report();
+        if (ticksLeft <= 0) return;
+        sunHeight();
+        if (--ticksLeft == 0) report();
     }
 
     private static void report() {
-        AlphaOmegaMod.LOGGER.info("Transfer stats: received {} chunks ({} already held), forgot {}, visible sections in the first frames {}",
-            received, alreadyHeld, forgotten, visibleSections);
+        AlphaOmegaMod.LOGGER.info("Transfer stats: received {} chunks ({} already held), forgot {}, visible sections in the first frames {}, "
+            + "sun height by tick {}", received, alreadyHeld, forgotten, visibleSections, sunHeights);
     }
 }

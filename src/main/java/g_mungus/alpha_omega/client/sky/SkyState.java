@@ -74,7 +74,7 @@ public final class SkyState {
         updatedAt = camera;
         updatedDayTime = level.getDayTime();
 
-        LocalSky.Sample sample = LocalSky.sample(level, camera.x, camera.z);
+        LocalSky.Sample sample = ClientSky.atCamera(level);
         sun[0] = sample.sunX();
         sun[1] = sample.sunY();
         sun[2] = sample.sunZ();
