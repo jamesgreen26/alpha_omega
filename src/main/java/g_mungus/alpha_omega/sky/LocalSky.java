@@ -1,6 +1,5 @@
 package g_mungus.alpha_omega.sky;
 
-import g_mungus.alpha_omega.wrap.Wrap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
@@ -160,19 +159,27 @@ public final class LocalSky {
     /** The sun at a position, or at the prime meridian on the equator (vanilla) when the local sky does not apply. */
     public static Sample sample(Level level, double x, double z) {
         if (!active(level)) return sample(level.getDayTime(), 0.0, 0.0);
-        int period = Wrap.of(level).period;
-        return sample(level.getDayTime(), longitude(x, period), latitude(z, period));
+        return sample(level.getDayTime(), longitude(level, x), latitude(level, z));
     }
 
     /** The local clock at a block x, rounded to whole ticks for clock-shaped consumers. */
     public static long localDayTime(Level level, double x) {
         if (!active(level)) return level.getDayTime();
-        return level.getDayTime() + Math.round(24000.0 * longitude(x, Wrap.of(level).period));
+        return level.getDayTime() + Math.round(24000.0 * longitude(level, x));
     }
 
-    /** Whether positions have their own sun: the local sky applies and the world wraps. */
+    // TODO(phase 3): a face lookup on the cube geometry. Until then every position is on the prime meridian.
+    public static double longitude(Level level, double x) {
+        return 0.0;
+    }
+
+    public static double latitude(Level level, double z) {
+        return 0.0;
+    }
+
+    /** Whether positions have their own sun: the local sky applies and the world is a cube. */
     public static boolean local(Level level) {
-        return active(level) && Wrap.of(level).enabled();
+        return false;
     }
 
     /**

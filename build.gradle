@@ -52,7 +52,7 @@ repositories {
     flatDir {
         dirs 'libs'
     }
-    // Optional compat targets (Xaero's maps), compiled against but never bundled.
+    // Optional compat targets (Sable, C2ME), compiled against but never bundled.
     exclusiveContent {
         forRepository {
             maven {
@@ -100,8 +100,6 @@ dependencies {
         }
     }
 
-    compileOnly("maven.modrinth:xaeros-minimap:Q1tuMQBB")
-    compileOnly("maven.modrinth:xaeros-world-map:9Ckiihkz")
     // Sable 2.0.6; its companion API ships only inside the Sable jar, so it is vendored in libs/.
     compileOnly("maven.modrinth:sable:fg9dTRz9")
     compileOnly(name: "sable-companion-common-1.21.1-1.6.0")

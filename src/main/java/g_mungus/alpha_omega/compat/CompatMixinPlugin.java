@@ -1,7 +1,5 @@
 package g_mungus.alpha_omega.compat;
 
-import com.bawnorton.mixinsquared.canceller.MixinCancellerRegistrar;
-import g_mungus.alpha_omega.compat.c2me.C2meMixinCanceller;
 import java.util.List;
 import java.util.Set;
 import net.neoforged.fml.loading.LoadingModList;
@@ -19,7 +17,6 @@ public final class CompatMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public void onLoad(String mixinPackage) {
-        if (isLoaded("c2me")) MixinCancellerRegistrar.register(new C2meMixinCanceller());
     }
 
     @Override
@@ -32,14 +29,7 @@ public final class CompatMixinPlugin implements IMixinConfigPlugin {
         if (!mixinClassName.startsWith(PACKAGE)) return false;
         String rest = mixinClassName.substring(PACKAGE.length());
         int dot = rest.indexOf('.');
-        return dot > 0 && isLoaded(compatModId(rest.substring(0, dot)));
-    }
-
-    private static String compatModId(String packageName) {
-        return switch (packageName) {
-            case "xaeromap" -> "xaeroworldmap";
-            default -> packageName;
-        };
+        return dot > 0 && isLoaded(rest.substring(0, dot));
     }
 
     static boolean isLoaded(String modId) {

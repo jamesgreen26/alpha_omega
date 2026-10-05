@@ -19,14 +19,13 @@ abstract class ServerLevelLocalTimeMixin {
     private long alpha_omega$localMorning(long vanillaTime) {
         ServerLevel level = (ServerLevel) (Object) this;
         if (!LocalSky.local(level)) return vanillaTime;
-        int period = g_mungus.alpha_omega.wrap.Wrap.of(level).period;
         double[] longitudes = level.players().stream().filter(ServerPlayer::isSleeping)
-            .mapToDouble(player -> LocalSky.longitude(player.getX(), period)).toArray();
+            .mapToDouble(player -> LocalSky.longitude(level, player.getX())).toArray();
         if (longitudes.length == 0) return vanillaTime;
         double longitude = LocalSky.meanLongitude(longitudes);
         if (Double.isNaN(longitude)) return vanillaTime;
         double latitude = level.players().stream().filter(ServerPlayer::isSleeping)
-            .mapToDouble(player -> LocalSky.latitude(player.getZ(), period)).average().orElse(0.0);
+            .mapToDouble(player -> LocalSky.latitude(level, player.getZ())).average().orElse(0.0);
         return level.getDayTime() + LocalSky.sleepTimeAddition(level.getDayTime(), longitude, latitude);
     }
 }

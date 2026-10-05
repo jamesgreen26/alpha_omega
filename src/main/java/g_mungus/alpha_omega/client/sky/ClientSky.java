@@ -11,7 +11,7 @@ public final class ClientSky {
     private ClientSky() {
     }
 
-    /** Whether the client's sky follows the local sun (the overworld of a wrapping world). */
+    /** Whether the client's sky follows the local sun (the overworld of a cube world). */
     public static boolean applies(Level level) {
         return level != null && LocalSky.local(level);
     }
