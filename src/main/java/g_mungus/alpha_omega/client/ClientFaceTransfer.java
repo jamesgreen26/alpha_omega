@@ -57,7 +57,7 @@ public final class ClientFaceTransfer {
             double[] p = geometry.transform(from, to, entity.getX(), entity.getY(), entity.getZ());
             FaceTransfer.Mode mode = FaceTransfer.mode(entity);
             Vec3 motion = entity.getDeltaMovement();
-            double[] v = FaceTransfer.rotate(mode, from, to, motion.x, motion.y, motion.z);
+            double[] v = FaceTransfer.rotate(FaceTransfer.velocityMode(entity), from, to, motion.x, motion.y, motion.z);
             float[] rotation = FaceTransfer.rotateLook(mode, from, to, entity.getYRot(), entity.getXRot());
             entity.setPos(p[0], p[1], p[2]);
             entity.setYRot(rotation[0]);

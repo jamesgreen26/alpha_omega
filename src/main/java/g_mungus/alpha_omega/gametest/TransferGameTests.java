@@ -280,7 +280,10 @@ public class TransferGameTests {
         });
     }
 
-    /** A client's claim to have crossed is applied when it fits the server's view, and refused when it does not. */
+    /**
+     * A client's claim to have crossed is applied when it fits the server's view, and refused when it does not. The
+     * player lands looking upright and keeps its momentum in world space.
+     */
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void playerClaimsAreChecked(GameTestHelper helper) {
         CubeGeometry geometry = geometry(helper);
@@ -298,8 +301,13 @@ public class TransferGameTests {
         FaceTransfers.handleClaim(player, new FaceTransferPayload(from.slot(), to.slot(), start.x + 50, start.y, start.z, 30.0F, 10.0F));
         helper.assertTrue(player.position().distanceTo(start) < 1e-6, "a claim far from the player moved it");
 
+        // Heading for the edge at 0.3 blocks a tick: momentum is kept in world space, so it carries the player up off WEST.
+        double[] toward = from.toward(to);
+        player.setDeltaMovement(toward[0] * 0.3, toward[1] * 0.3, toward[2] * 0.3);
         FaceTransfers.handleClaim(player, new FaceTransferPayload(from.slot(), to.slot(), start.x, start.y, start.z, 30.0F, 10.0F));
         helper.assertTrue(player.position().distanceTo(expected) < 1e-6, "player at " + player.position() + ", expected " + expected);
+        helper.assertTrue(player.getDeltaMovement().distanceTo(new Vec3(0.0, 0.3, 0.0)) < 1e-6,
+            "the player's momentum toward the edge should carry it up off the next face: " + player.getDeltaMovement());
         helper.assertTrue(player.getLastSectionPos().equals(SectionPos.of(player)), "the player's chunk tracking did not follow it");
         float[] look = FaceTransfer.rotateLook(FaceTransfer.Mode.UPRIGHT, from, to, 30.0F, 10.0F);
         helper.assertTrue(Math.abs(player.getYRot() - look[0]) < 1e-3 && Math.abs(player.getXRot() - look[1]) < 1e-3, "player look not carried over upright");

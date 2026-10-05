@@ -5,6 +5,7 @@ import g_mungus.alpha_omega.cube.CubeGeometry;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.vehicle.VehicleEntity;
 import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.Nullable;
@@ -25,14 +26,27 @@ public final class FaceTransfer {
 
     /** How velocity and orientation cross. */
     public enum Mode {
-        /** Turned with the unfold: walking off an edge carries on along the next face. Players, mobs, vehicles. */
+        /**
+         * Turned with the unfold: walking off an edge carries on along the next face. The orientation of players, mobs
+         * and vehicles, and the velocity of mobs and vehicles.
+         */
         UPRIGHT,
-        /** Kept in world space: momentum is real, only gravity changes direction. Items, projectiles, the rest. */
+        /** Kept in world space: momentum is real, only gravity changes direction. Players' velocity; items, projectiles, the rest. */
         WORLD
     }
 
+    /** How an entity's orientation (look, hitbox) crosses. */
     public static Mode mode(Entity entity) {
         return entity instanceof LivingEntity || entity instanceof VehicleEntity ? Mode.UPRIGHT : Mode.WORLD;
+    }
+
+    /**
+     * How an entity's velocity crosses. Players keep their momentum in world space, so speed toward an edge carries
+     * them up off the next face and its gravity brings them round, a brief orbit; they still land upright. Other
+     * upright things turn their velocity with their orientation.
+     */
+    public static Mode velocityMode(Entity entity) {
+        return entity instanceof Player ? Mode.WORLD : mode(entity);
     }
 
     /** The face a position of {@code face}'s storage should transfer to, or null if it stays. */

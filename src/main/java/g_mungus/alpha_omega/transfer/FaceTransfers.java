@@ -68,7 +68,7 @@ public final class FaceTransfers {
             double[] p = geometry.transform(from, to, pos.x, pos.y, pos.z);
             FaceTransfer.Mode mode = FaceTransfer.mode(entity);
             Vec3 motion = entity.getDeltaMovement();
-            double[] v = FaceTransfer.rotate(mode, from, to, motion.x, motion.y, motion.z);
+            double[] v = FaceTransfer.rotate(FaceTransfer.velocityMode(entity), from, to, motion.x, motion.y, motion.z);
             float[] rotation = entity instanceof ServerPlayer && look != null
                 ? FaceTransfer.rotateLook(mode, from, to, look[0], look[1])
                 : FaceTransfer.rotateLook(mode, from, to, entity.getYRot(), entity.getXRot());
