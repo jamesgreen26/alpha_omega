@@ -12,22 +12,29 @@ import net.minecraft.util.StringRepresentable;
 
 /**
  * A cube world's shape, chosen when the world is created and kept in its overworld generator (so in
- * {@code level.dat}). {@code faceChunks} is the width of a face in chunks; the sun turns about {@code sunAxis}.
+ * {@code level.dat}). {@code faceChunks} is the width of a face in chunks; the sun turns about {@code sunAxis};
+ * {@code horizontalScale} shrinks terrain and biomes sideways by that factor (1 is vanilla's size).
  */
-public record CubeSettings(int faceChunks, SunAxis sunAxis) {
+public record CubeSettings(int faceChunks, SunAxis sunAxis, double horizontalScale) {
 
     public static final int MIN_FACE_CHUNKS = 2;
     public static final int MAX_FACE_CHUNKS = 256;
-    public static final CubeSettings DEFAULT = new CubeSettings(16, SunAxis.DIAGONAL);
+    public static final double MIN_SCALE = 0.25;
+    public static final double MAX_SCALE = 16.0;
+    public static final CubeSettings DEFAULT = new CubeSettings(16, SunAxis.DIAGONAL, 1.0);
 
     public static final StreamCodec<ByteBuf, CubeSettings> STREAM_CODEC = StreamCodec.composite(
         ByteBufCodecs.VAR_INT, CubeSettings::faceChunks,
         ByteBufCodecs.idMapper(i -> SunAxis.values()[i], SunAxis::ordinal), CubeSettings::sunAxis,
+        ByteBufCodecs.DOUBLE, CubeSettings::horizontalScale,
         CubeSettings::new);
 
     public CubeSettings {
         if (faceChunks < MIN_FACE_CHUNKS || faceChunks > MAX_FACE_CHUNKS) {
             throw new IllegalArgumentException("Face width must be " + MIN_FACE_CHUNKS + " to " + MAX_FACE_CHUNKS + " chunks: " + faceChunks);
+        }
+        if (!(horizontalScale >= MIN_SCALE && horizontalScale <= MAX_SCALE)) {
+            throw new IllegalArgumentException("Horizontal scale must be " + MIN_SCALE + " to " + MAX_SCALE + ": " + horizontalScale);
         }
     }
 
@@ -38,19 +45,24 @@ public record CubeSettings(int faceChunks, SunAxis sunAxis) {
     public static MapCodec<CubeSettings> fieldsCodec(Supplier<CubeSettings> defaults) {
         return RecordCodecBuilder.mapCodec(instance -> instance.group(
             Codec.intRange(MIN_FACE_CHUNKS, MAX_FACE_CHUNKS).optionalFieldOf("face_chunks").forGetter(s -> Optional.of(s.faceChunks)),
-            SunAxis.CODEC.optionalFieldOf("sun_axis").forGetter(s -> Optional.of(s.sunAxis))
-        ).apply(instance, (faceChunks, sunAxis) -> {
+            SunAxis.CODEC.optionalFieldOf("sun_axis").forGetter(s -> Optional.of(s.sunAxis)),
+            Codec.doubleRange(MIN_SCALE, MAX_SCALE).optionalFieldOf("horizontal_scale").forGetter(s -> Optional.of(s.horizontalScale))
+        ).apply(instance, (faceChunks, sunAxis, scale) -> {
             CubeSettings fallback = defaults.get();
-            return new CubeSettings(faceChunks.orElse(fallback.faceChunks), sunAxis.orElse(fallback.sunAxis));
+            return new CubeSettings(faceChunks.orElse(fallback.faceChunks), sunAxis.orElse(fallback.sunAxis), scale.orElse(fallback.horizontalScale));
         }));
     }
 
     public CubeSettings withFaceChunks(int faceChunks) {
-        return new CubeSettings(faceChunks, this.sunAxis);
+        return new CubeSettings(faceChunks, this.sunAxis, this.horizontalScale);
     }
 
     public CubeSettings withSunAxis(SunAxis sunAxis) {
-        return new CubeSettings(this.faceChunks, sunAxis);
+        return new CubeSettings(this.faceChunks, sunAxis, this.horizontalScale);
+    }
+
+    public CubeSettings withHorizontalScale(double horizontalScale) {
+        return new CubeSettings(this.faceChunks, this.sunAxis, horizontalScale);
     }
 
     /** The axis the sun turns about, in cube space. */

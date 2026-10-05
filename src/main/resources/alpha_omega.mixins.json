@@ -58,7 +58,13 @@
     "server.time.StrollThroughVillageGoalLocalTimeMixin",
     "server.time.TurtleEggBlockLocalTimeMixin",
     "server.time.VillagerLocalTimeMixin",
-    "worldgen.ChunkGeneratorMixin"
+    "worldgen.ChunkGeneratorMixin",
+    "worldgen.ChunkMapRandomStateMixin",
+    "worldgen.NoiseAccessor",
+    "worldgen.RandomStateAccessor",
+    "worldgen.ShiftAAccessor",
+    "worldgen.ShiftBAccessor",
+    "worldgen.ShiftedNoiseAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

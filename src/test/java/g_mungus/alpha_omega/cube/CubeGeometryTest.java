@@ -13,9 +13,9 @@ import org.junit.jupiter.api.Test;
 class CubeGeometryTest {
 
     /** Small enough to check every cell: R = 16, cube centre at y = -16, build height -24..40. */
-    private static final CubeGeometry SMALL = new CubeGeometry(new CubeSettings(2, CubeSettings.SunAxis.DIAGONAL), 0, -24, 40);
+    private static final CubeGeometry SMALL = new CubeGeometry(new CubeSettings(2, CubeSettings.SunAxis.DIAGONAL, 1.0), 0, -24, 40);
     private static final CubeGeometry DEFAULT = new CubeGeometry(CubeSettings.DEFAULT, 63, -64, 320);
-    private static final CubeGeometry ODD = new CubeGeometry(new CubeSettings(5, CubeSettings.SunAxis.POLAR), 63, -64, 320);
+    private static final CubeGeometry ODD = new CubeGeometry(new CubeSettings(5, CubeSettings.SunAxis.POLAR, 2.0), 63, -64, 320);
 
     @Test
     void facesAreProperRotationsWithTheirNormalInTheMiddle() {
@@ -127,6 +127,51 @@ class CubeGeometryTest {
                 }
             }
         }
+    }
+
+    /** A barrier cell names its partner, and the partner's copy of the cell names this face back. */
+    @Test
+    void barrierPartnersAreMutual() {
+        for (CubeFace face : CubeFace.values()) {
+            for (int x = SMALL.centerX(face) - SMALL.footprint; x < SMALL.centerX(face) + SMALL.footprint; x++) {
+                for (int z = SMALL.centerZ() - SMALL.footprint; z < SMALL.centerZ() + SMALL.footprint; z++) {
+                    int y = SMALL.barrierY(face, x, z);
+                    if (y < SMALL.minY || y >= SMALL.maxY) continue;
+                    CubeFace partner = SMALL.barrierPartner(face, x, y, z);
+                    if (partner == null) continue;
+                    assertTrue(face.isNeighbour(partner));
+                    int[] there = SMALL.transformBlock(face, partner, x, y, z);
+                    assertEquals(face, SMALL.barrierPartner(partner, there[0], there[1], there[2]));
+                    if (y + 1 < SMALL.maxY) assertNull(SMALL.barrierPartner(face, x, y + 1, z), "owned cells have no partner");
+                }
+            }
+        }
+    }
+
+    /** Above the face plane, both faces sample flat noise at the same point on the diagonal: they meet at the ridge. */
+    @Test
+    void surfacePointsMeetOnTheDiagonalAboveGround() {
+        Random random = new Random(11);
+        for (CubeFace from : CubeFace.values()) {
+            for (CubeFace to : CubeFace.values()) {
+                if (!from.isNeighbour(to)) continue;
+                for (int i = 0; i < 100; i++) {
+                    double h = random.nextDouble() * 200;
+                    double lateral = (random.nextDouble() * 2 - 1) * DEFAULT.radius;
+                    double[] toward = from.toward(to);
+                    double along = DEFAULT.radius + h;
+                    double x = DEFAULT.centerX(from) + toward[0] * along + toward[2] * lateral;
+                    double z = DEFAULT.centerZ() + toward[2] * along + toward[0] * lateral;
+                    double y = DEFAULT.planeY + h;
+                    double[] there = DEFAULT.transform(from, to, x, y, z);
+                    assertArrayEquals(DEFAULT.surfacePoint(x, z), DEFAULT.surfacePoint(there[0], there[2]), 1e-9);
+                }
+            }
+        }
+        // On a face, the surface point is the face's own flat square.
+        double[] s = DEFAULT.surfacePoint(DEFAULT.centerX(CubeFace.UP) + 10, DEFAULT.centerZ() - 20);
+        assertArrayEquals(new double[] {10, DEFAULT.radius, -20}, s, 1e-12);
+        assertNull(DEFAULT.surfacePoint(DEFAULT.centerX(CubeFace.UP), DEFAULT.centerZ() + 8 * DEFAULT.spacingChunks + 1));
     }
 
     @Test

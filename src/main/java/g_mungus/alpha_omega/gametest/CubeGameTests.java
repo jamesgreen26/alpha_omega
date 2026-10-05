@@ -41,10 +41,10 @@ public class CubeGameTests {
     public static void settingsSurviveSaving(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         CubeChunkGenerator generator = new CubeChunkGenerator(level.getChunkSource().getGenerator().getBiomeSource(),
-            ((CubeChunkGenerator) level.getChunkSource().getGenerator()).generatorSettings(), new CubeSettings(7, CubeSettings.SunAxis.POLAR));
+            ((CubeChunkGenerator) level.getChunkSource().getGenerator()).generatorSettings(), new CubeSettings(7, CubeSettings.SunAxis.POLAR, 3.0));
         RegistryOps<com.google.gson.JsonElement> ops = level.registryAccess().createSerializationContext(JsonOps.INSTANCE);
         var json = ChunkGenerator.CODEC.encodeStart(ops, generator).getOrThrow();
-        helper.assertTrue(json.toString().contains("\"face_chunks\":7"), "settings are written explicitly: " + json);
+        helper.assertTrue(json.toString().contains("\"face_chunks\":7") && json.toString().contains("\"horizontal_scale\":3.0"), "settings are written explicitly: " + json);
         ChunkGenerator decoded = ChunkGenerator.CODEC.parse(ops, json).getOrThrow();
         helper.assertTrue(decoded instanceof CubeChunkGenerator cube && cube.cube().equals(generator.cube()), "settings round trip");
         helper.succeed();

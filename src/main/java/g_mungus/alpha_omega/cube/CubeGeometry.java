@@ -134,6 +134,27 @@ public final class CubeGeometry {
         return owner(c[0], c[1], c[2]);
     }
 
+    /**
+     * The other face a barrier cell of {@code face}'s storage is shared with, or null where three faces meet there
+     * (along the lines from the cube's centre through its corners) or the cell is not on {@code face}'s barrier.
+     */
+    @Nullable
+    public CubeFace barrierPartner(CubeFace face, int x, int y, int z) {
+        long[] c = this.cubeCell2(face, x, y, z);
+        long own = Math.abs(c[face.axis]);
+        CubeFace partner = null;
+        for (int axis = 0; axis < 3; axis++) {
+            if (axis == face.axis) continue;
+            if (Math.abs(c[axis]) == own) {
+                if (partner != null) return null;
+                partner = CubeFace.byNormal(axis, c[axis] > 0 ? 1 : -1);
+            } else if (Math.abs(c[axis]) > own) {
+                return null;
+            }
+        }
+        return c[face.axis] * face.sign > 0 ? partner : null;
+    }
+
     public boolean isOwned(CubeFace face, int x, int y, int z) {
         return this.cellOwner(face, x, y, z) == face.slot();
     }
@@ -182,6 +203,20 @@ public final class CubeGeometry {
     public double depthInto(CubeFace face, CubeFace other, double x, double y, double z) {
         double[] c = this.toCube(face, x, y, z);
         return (c[other.axis] * other.sign - c[face.axis] * face.sign) / Math.sqrt(2.0);
+    }
+
+    /**
+     * Where "flat" world generation samples a column (design §4.2): the point on the cube's surface above it, its
+     * face coordinates clamped to the face's square. On a face this is a flat slice; over an edge it bends; in the
+     * overhang the edge's column carries on outward, so ground on both sides meets at the ridge. Null between faces.
+     */
+    @Nullable
+    public double[] surfacePoint(double x, double z) {
+        CubeFace face = this.faceAt(x, z);
+        if (face == null) return null;
+        double u = Math.max(-this.radius, Math.min(this.radius, x - this.centerX(face)));
+        double v = Math.max(-this.radius, Math.min(this.radius, z - this.centerZ));
+        return face.toCube(u, this.radius, v);
     }
 
     // ---- Transforms ----

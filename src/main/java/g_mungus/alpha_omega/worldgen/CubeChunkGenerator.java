@@ -29,6 +29,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.levelgen.DensityFunction;
 import net.minecraft.world.level.levelgen.GenerationStep;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
@@ -110,7 +111,7 @@ public class CubeChunkGenerator extends NoiseBasedChunkGenerator {
     @Override
     public CompletableFuture<ChunkAccess> fillFromNoise(Blender blender, RandomState random, StructureManager structures, ChunkAccess chunk) {
         if (!this.inFootprint(chunk)) return CompletableFuture.completedFuture(chunk);
-        return super.fillFromNoise(blender, random, structures, chunk).thenApply(this::carveFaces);
+        return super.fillFromNoise(blender, random, structures, chunk).thenApply(filled -> this.carveFaces(filled, random));
     }
 
     @Override
@@ -129,8 +130,13 @@ public class CubeChunkGenerator extends NoiseBasedChunkGenerator {
         if (this.inFootprint(chunk)) super.applyBiomeDecoration(level, chunk, structures);
     }
 
+    /** Barrier cells this far below the face plane are always bedrock: deep in the rock, nothing to match. */
+    private static final int DEEP = 24;
+    /** Barrier cells above this height are always edge air: no terrain reaches them. */
+    private static final int SKY = 300;
+
     /** Puts each column's barrier cell in place and fills the rest of the column below it. */
-    private ChunkAccess carveFaces(ChunkAccess chunk) {
+    private ChunkAccess carveFaces(ChunkAccess chunk, RandomState random) {
         CubeGeometry geometry = this.geometry(chunk);
         ChunkPos pos = chunk.getPos();
         CubeFace face = geometry.faceAtChunk(pos.x, pos.z);
@@ -154,7 +160,7 @@ public class CubeChunkGenerator extends NoiseBasedChunkGenerator {
                 }
                 if (barrierY >= geometry.minY && barrierY < geometry.maxY) {
                     cursor.set(x, barrierY, z);
-                    BlockState barrier = barrierFor(chunk.getBlockState(cursor));
+                    BlockState barrier = this.barrier(geometry, random, face, x, barrierY, z, chunk.getBlockState(cursor));
                     chunk.getSection(chunk.getSectionIndex(barrierY)).setBlockState(dx, barrierY & 15, dz, barrier, false);
                     oceanFloor.update(dx, barrierY, dz, barrier);
                     surface.update(dx, barrierY, dz, barrier);
@@ -164,13 +170,25 @@ public class CubeChunkGenerator extends NoiseBasedChunkGenerator {
         return chunk;
     }
 
-    /** Bedrock where the terrain is solid, edge air where it is open, waterlogged where it is water. */
-    static BlockState barrierFor(BlockState terrain) {
-        if (terrain.getFluidState().is(FluidTags.WATER)) {
-            return CubeBlocks.EDGE_AIR.get().defaultBlockState().setValue(EdgeAirBlock.WATERLOGGED, true);
-        }
-        if (terrain.isAir() || !terrain.getFluidState().isEmpty()) return CubeBlocks.EDGE_AIR.get().defaultBlockState();
-        return Blocks.BEDROCK.defaultBlockState();
+    /**
+     * What a barrier cell becomes. Both faces store it, so both must decide alike: it is solid (bedrock) where the
+     * mean of the two faces' terrain densities there is, and open (edge air) elsewhere. Each face evaluates the same
+     * two densities, so they always agree. Edge air is waterlogged where this face has water there.
+     */
+    private BlockState barrier(CubeGeometry geometry, RandomState random, CubeFace face, int x, int y, int z, BlockState terrain) {
+        if (y < geometry.planeY - DEEP) return Blocks.BEDROCK.defaultBlockState();
+        BlockState open = CubeBlocks.EDGE_AIR.get().defaultBlockState()
+            .setValue(EdgeAirBlock.WATERLOGGED, terrain.getFluidState().is(FluidTags.WATER));
+        if (y > SKY) return open;
+        CubeFace partner = geometry.barrierPartner(face, x, y, z);
+        if (partner == null) return Blocks.BEDROCK.defaultBlockState();
+        int[] there = geometry.transformBlock(face, partner, x, y, z);
+        double density = 0.5 * density(random, x, y, z) + 0.5 * density(random, there[0], there[1], there[2]);
+        return density > 0.0 ? Blocks.BEDROCK.defaultBlockState() : open;
+    }
+
+    private static double density(RandomState random, int x, int y, int z) {
+        return random.router().finalDensity().compute(new DensityFunction.SinglePointContext(x, y, z));
     }
 
     @Override

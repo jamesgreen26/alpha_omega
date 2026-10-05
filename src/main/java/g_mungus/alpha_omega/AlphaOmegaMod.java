@@ -10,6 +10,7 @@ import g_mungus.alpha_omega.gametest.CubeGameTests;
 import g_mungus.alpha_omega.gametest.FaceGameTests;
 import g_mungus.alpha_omega.gametest.LocalTimeGameTests;
 import g_mungus.alpha_omega.gametest.NeighbourGameTests;
+import g_mungus.alpha_omega.gametest.TerrainGameTests;
 import g_mungus.alpha_omega.gametest.TransferGameTests;
 import g_mungus.alpha_omega.gametest.ModLoadGameTests;
 import g_mungus.alpha_omega.network.CubeConfigurationTask;
@@ -119,5 +120,6 @@ public class AlphaOmegaMod {
         event.register(LocalTimeGameTests.class);
         event.register(TransferGameTests.class);
         event.register(NeighbourGameTests.class);
+        event.register(TerrainGameTests.class);
     }
 }

@@ -45,6 +45,7 @@ public final class CubePresetScreen extends Screen {
         LinearLayout rows = this.layout.addToContents(LinearLayout.vertical().spacing(8));
         rows.defaultCellSetting().alignHorizontallyCenter();
         rows.addChild(new FaceSlider(this.settings.faceChunks()));
+        rows.addChild(new ScaleSlider(this.settings.horizontalScale()));
         rows.addChild(CycleButton.<CubeSettings.SunAxis>builder(axis -> Component.translatable("alpha_omega.cube.sun_axis." + axis.getSerializedName()))
             .withValues(CubeSettings.SunAxis.values())
             .withInitialValue(this.settings.sunAxis())
@@ -76,6 +77,32 @@ public final class CubePresetScreen extends Screen {
             if (!(dimensions.overworld() instanceof CubeChunkGenerator old)) return dimensions;
             return dimensions.replaceOverworldGenerator(registries, new CubeChunkGenerator(old.getBiomeSource(), old.generatorSettings(), chosen));
         });
+    }
+
+    /** Terrain scale, in steps of a quarter from 0.25 to 4 (the config allows up to 16). */
+    private final class ScaleSlider extends AbstractSliderButton {
+
+        private static final double MIN = 0.25;
+        private static final double MAX = 4.0;
+
+        ScaleSlider(double scale) {
+            super(0, 0, 210, 20, Component.empty(), Mth.clamp((scale - MIN) / (MAX - MIN), 0.0, 1.0));
+            this.updateMessage();
+        }
+
+        private double scale() {
+            return Math.round((MIN + this.value * (MAX - MIN)) * 4.0) / 4.0;
+        }
+
+        @Override
+        protected void updateMessage() {
+            this.setMessage(Component.translatable("alpha_omega.cube.horizontal_scale", String.format(java.util.Locale.ROOT, "%.2f", this.scale())));
+        }
+
+        @Override
+        protected void applyValue() {
+            CubePresetScreen.this.settings = CubePresetScreen.this.settings.withHorizontalScale(this.scale());
+        }
     }
 
     private final class FaceSlider extends AbstractSliderButton {

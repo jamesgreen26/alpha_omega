@@ -9,6 +9,7 @@ public final class AlphaOmegaConfig {
     public static final ModConfigSpec SPEC;
     public static final ModConfigSpec.IntValue FACE_CHUNKS;
     public static final ModConfigSpec.EnumValue<CubeSettings.SunAxis> SUN_AXIS;
+    public static final ModConfigSpec.DoubleValue HORIZONTAL_SCALE;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -17,6 +18,8 @@ public final class AlphaOmegaConfig {
             .defineInRange("faceChunks", CubeSettings.DEFAULT.faceChunks(), CubeSettings.MIN_FACE_CHUNKS, CubeSettings.MAX_FACE_CHUNKS);
         SUN_AXIS = builder.comment("The axis the sun turns about: DIAGONAL (every face has days) or POLAR (two faces in twilight).")
             .defineEnum("sunAxis", CubeSettings.DEFAULT.sunAxis());
+        HORIZONTAL_SCALE = builder.comment("How much smaller terrain and biomes are sideways than vanilla's (1 is vanilla's size).")
+            .defineInRange("horizontalScale", CubeSettings.DEFAULT.horizontalScale(), CubeSettings.MIN_SCALE, CubeSettings.MAX_SCALE);
         SPEC = builder.build();
     }
 
@@ -25,6 +28,6 @@ public final class AlphaOmegaConfig {
 
     public static CubeSettings defaults() {
         if (!SPEC.isLoaded()) return CubeSettings.DEFAULT;
-        return new CubeSettings(FACE_CHUNKS.get(), SUN_AXIS.get());
+        return new CubeSettings(FACE_CHUNKS.get(), SUN_AXIS.get(), HORIZONTAL_SCALE.get());
     }
 }
