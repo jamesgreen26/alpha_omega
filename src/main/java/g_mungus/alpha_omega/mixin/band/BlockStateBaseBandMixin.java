@@ -30,7 +30,7 @@ abstract class BlockStateBaseBandMixin {
 
     @Inject(method = "handleNeighborChanged", at = @At("HEAD"), cancellable = true)
     private void alpha_omega$ownedNeighbourUpdate(Level level, BlockPos pos, Block block, BlockPos from, boolean moving, CallbackInfo ci) {
-        if (level.isClientSide) return;
+        if (level.isClientSide || Band.mode == Band.Mode.NONE) return;
         OrbifoldGeometry geometry = Band.geometry(level);
         if (geometry == null) return;
         Band.Link owner = Band.owner(level, geometry, pos);

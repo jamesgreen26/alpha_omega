@@ -60,7 +60,7 @@ abstract class LevelBandMixin implements BandLevel {
     private void alpha_omega$ownedShapeUpdate(Direction direction, BlockState neighbour, BlockPos pos, BlockPos neighbourPos, int flags, int recursionLeft,
         CallbackInfo ci) {
         OrbifoldGeometry geometry = this.alpha_omega$geometry();
-        if (geometry == null) return;
+        if (geometry == null || Band.mode == Band.Mode.NONE) return;
         Level self = (Level) (Object) this;
         Band.Link owner = Band.owner(self, geometry, pos);
         if (owner == null) return;
@@ -83,7 +83,7 @@ abstract class LevelBandMixin implements BandLevel {
     private void alpha_omega$ownedNeighbourChange(BlockState state, LevelReader level, BlockPos pos, BlockPos neighbour, Operation<Void> original) {
         Level self = (Level) (Object) this;
         OrbifoldGeometry geometry = this.alpha_omega$geometry();
-        Band.Link owner = geometry == null ? null : Band.owner(self, geometry, pos);
+        Band.Link owner = geometry == null || Band.mode == Band.Mode.NONE ? null : Band.owner(self, geometry, pos);
         if (owner == null) {
             original.call(state, level, pos, neighbour);
             return;

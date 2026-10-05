@@ -199,7 +199,8 @@ public class BandGameTests {
                 this.helper.assertTrue(this.copyDisagreements.isEmpty(), what + " across " + this.seam.name() + ": copies disagree: " + this.copyDisagreements);
                 this.helper.assertTrue(check.clean(), what + " across " + this.seam.name() + ": " + check);
                 this.helper.assertTrue(BandCounters.ranAtNonOwnerTotal() == 0,
-                    what + " across " + this.seam.name() + ": reactions ran at a non-owner: " + BandCounters.ranAtNonOwner + " " + BandCounters.ranAtNonOwnerWhere);
+                    what + " across " + this.seam.name() + ": reactions ran at a non-owner: " + BandCounters.ranAtNonOwner
+                    + " (first at " + (BandCounters.ranAtNonOwnerWhere.isEmpty() ? "?" : BandCounters.ranAtNonOwnerWhere.get(0).split(" via ")[0]) + "; stacks in the log)");
                 this.helper.assertTrue(BandCounters.mirrorsMissed == 0, "mirrored writes missed: " + BandCounters.mirrorsMissed);
             } finally {
                 this.release();
@@ -273,6 +274,12 @@ public class BandGameTests {
     @GameTest(template = TEMPLATE, batch = "band_dust_skip_east", timeoutTicks = 200, required = false)
     public static void dustLineSkipRuleEast(GameTestHelper helper) {
         dustLine(helper, "east", 7, Band.Mode.SKIP);
+    }
+
+    /** No ownership at all (every copy reacts): checks that the detectors see reactions at non-owners. Expected to fail. */
+    @GameTest(template = TEMPLATE, batch = "band_dust_none_east", timeoutTicks = 200, required = false)
+    public static void dustLineNoRuleEast(GameTestHelper helper) {
+        dustLine(helper, "east", 8, Band.Mode.NONE);
     }
 
     // ---- 2. Repeaters ----

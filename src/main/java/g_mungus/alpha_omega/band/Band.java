@@ -33,7 +33,12 @@ public final class Band {
          * them), and mirrored writes send no updates of their own, only packets. Every update is delivered exactly once,
          * at the owner, in vanilla's order.
          */
-        FORWARD
+        FORWARD,
+        /**
+         * No ownership of neighbour or shape updates: every copy reacts. Only to show that the detectors see a reaction
+         * at a non-owner when the gates are off.
+         */
+        NONE
     }
 
     public static volatile Mode mode = Mode.FORWARD;
