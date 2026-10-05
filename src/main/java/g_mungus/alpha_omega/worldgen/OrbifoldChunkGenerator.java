@@ -57,8 +57,11 @@ public class OrbifoldChunkGenerator extends NoiseBasedChunkGenerator {
         OrbifoldSettings.fieldsCodec(AlphaOmegaConfig::defaults).forGetter(OrbifoldChunkGenerator::orbifold)
     ).apply(instance, OrbifoldChunkGenerator::new));
 
-    /** Structures keep this many blocks clear of every seam. */
-    public static final int STRUCTURE_MARGIN = 8;
+    /**
+     * Structures keep this many blocks clear of every seam: the reach of their terrain adaptation (the beardifier's
+     * 12 blocks), plus 4, so a structure never shapes terrain across a seam that the other side does not see.
+     */
+    public static final int STRUCTURE_MARGIN = 16;
 
     /** Structure starts turned away for reaching past the tile, for tests and debugging. */
     public static final AtomicInteger REJECTED_STRUCTURES = new AtomicInteger();

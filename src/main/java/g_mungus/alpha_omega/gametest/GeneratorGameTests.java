@@ -8,6 +8,7 @@ import g_mungus.alpha_omega.worldgen.OrbifoldSpawn;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
@@ -15,8 +16,11 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.chunk.ProtoChunk;
+import net.minecraft.world.level.chunk.UpgradeData;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.levelgen.blending.Blender;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
 import net.neoforged.neoforge.gametest.GameTestHolder;
@@ -47,6 +51,21 @@ public class GeneratorGameTests {
             if (!section.hasOnlyAir()) return false;
         }
         return true;
+    }
+
+    /** Up to eight non-air blocks of a chunk, for messages. */
+    private static String blocks(ChunkAccess chunk) {
+        List<String> found = new ArrayList<>();
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        for (int y = chunk.getMinBuildHeight(); y < chunk.getMaxBuildHeight() && found.size() < 8; y++) {
+            for (int dx = 0; dx < 16 && found.size() < 8; dx++) {
+                for (int dz = 0; dz < 16 && found.size() < 8; dz++) {
+                    pos.set(chunk.getPos().getMinBlockX() + dx, y, chunk.getPos().getMinBlockZ() + dz);
+                    if (!chunk.getBlockState(pos).isAir()) found.add(pos.toShortString() + " " + chunk.getBlockState(pos));
+                }
+            }
+        }
+        return found.toString();
     }
 
     /** The first band chunk past each seam, beside a tile chunk: {name, band chunk, tile chunk}. */
@@ -87,7 +106,8 @@ public class GeneratorGameTests {
 
     /**
      * Band and skirt chunks are generated empty, waiting for phase 4 to fill them; the tile chunk beside each has
-     * terrain. Checked at the features step, before a chunk is promoted (and so before any fill).
+     * terrain. Checked on a scratch chunk through the generator's noise fill, and on the level's chunk at the features
+     * step, before it is promoted (and so before any fill), unless another test already has it in play.
      */
     @GameTest(template = TEMPLATE, timeoutTicks = 1200)
     public static void bandChunksGenerateEmpty(GameTestHelper helper) {
@@ -99,13 +119,24 @@ public class GeneratorGameTests {
             ChunkPos band = (ChunkPos) entry[1], tile = (ChunkPos) entry[2];
             helper.assertTrue(generator.awaitsFill(band), name + ": " + band + " should await a fill, is " + generator.region(band));
             helper.assertTrue(generator.region(tile) == OrbifoldChunkGenerator.Region.TILE && !generator.awaitsFill(tile), name + ": " + tile + " should be tile");
+            // The generator itself, on a scratch chunk: whatever the level has done to the real one since.
+            ChunkAccess scratch = new ProtoChunk(band, UpgradeData.EMPTY, level, level.registryAccess().registryOrThrow(Registries.BIOME), null);
+            generator.fillFromNoise(Blender.empty(), level.getChunkSource().randomState(), level.structureManager(), scratch).join();
+            helper.assertTrue(allAir(scratch), name + ": the noise fill of band chunk " + band + " has blocks: " + blocks(scratch));
+            // The level's chunk through every generation step, unless another test has already loaded it into play:
+            // a full band chunk is gameplay's (fluids from the tile flow into it until phase 4 fills it).
             ChunkAccess chunk = level.getChunkSource().getChunk(band.x, band.z, ChunkStatus.FEATURES, true);
-            helper.assertTrue(allAir(chunk), name + ": band chunk " + band + " has blocks after generation");
-            for (Heightmap.Types type : new Heightmap.Types[] {Heightmap.Types.WORLD_SURFACE_WG, Heightmap.Types.OCEAN_FLOOR_WG}) {
-                for (int dx = 0; dx < 16; dx += 5) {
-                    for (int dz = 0; dz < 16; dz += 5) {
-                        int height = chunk.getHeight(type, dx, dz);
-                        helper.assertTrue(height < level.getMinBuildHeight(), name + ": band chunk " + band + " " + type + " at " + dx + "," + dz + " is " + height);
+            if (chunk.getPersistedStatus() == ChunkStatus.FULL) {
+                AlphaOmegaMod.LOGGER.info("Band chunk {} has already been in play; checked its generation on a scratch chunk only", band);
+            } else {
+                helper.assertTrue(allAir(chunk), name + ": band chunk " + band + " (" + chunk.getPersistedStatus() + ") has blocks after generation: "
+                    + blocks(chunk));
+                for (Heightmap.Types type : new Heightmap.Types[] {Heightmap.Types.WORLD_SURFACE_WG, Heightmap.Types.OCEAN_FLOOR_WG}) {
+                    for (int dx = 0; dx < 16; dx += 5) {
+                        for (int dz = 0; dz < 16; dz += 5) {
+                            int height = chunk.getHeight(type, dx, dz);
+                            helper.assertTrue(height < level.getMinBuildHeight(), name + ": band chunk " + band + " " + type + " at " + dx + "," + dz + " is " + height);
+                        }
                     }
                 }
             }
@@ -158,6 +189,7 @@ public class GeneratorGameTests {
         OrbifoldGeometry g = geometry(helper);
         OrbifoldChunkGenerator generator = generator(helper);
         int m = OrbifoldChunkGenerator.STRUCTURE_MARGIN, y0 = 0, y1 = 80;
+        helper.assertTrue(m >= 12 + 4, "the margin " + m + " should cover the beardifier's 12 blocks of terrain adaptation, plus 4");
         int x0 = g.minX + m, x1 = g.maxX - m - 1, z0 = g.northRow + m, z1 = g.southRow - m - 1;
         helper.assertTrue(generator.fitsInTile(new BoundingBox(x0, y0, z0, x1, y1, z1)), "the tile less the margin should fit");
         helper.assertTrue(!generator.fitsInTile(new BoundingBox(x0 - 1, y0, 0, x0 + 20, y1, 20)), "a box within the margin of the west seam fits");
