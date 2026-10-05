@@ -24,7 +24,11 @@ public final class OrbifoldCommand {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("orbifold")
-            .then(Commands.literal("info").executes(OrbifoldCommand::info)));
+            .then(Commands.literal("info").executes(OrbifoldCommand::info))
+            .then(Commands.literal("scan").executes(OrbifoldCommand::scan))
+            .then(Commands.literal("check").executes(context -> check(context, 4))
+                .then(Commands.argument("radius", com.mojang.brigadier.arguments.IntegerArgumentType.integer(0, 32))
+                    .executes(context -> check(context, com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(context, "radius"))))));
     }
 
     private static int info(CommandContext<CommandSourceStack> context) {
@@ -36,6 +40,20 @@ public final class OrbifoldCommand {
         }
         for (String line : lines(geometry, source.getPosition())) source.sendSuccess(() -> Component.literal(line), false);
         return 1;
+    }
+
+    /** {@code /orbifold scan}: the band spike's counters. */
+    private static int scan(CommandContext<CommandSourceStack> context) {
+        for (String line : g_mungus.alpha_omega.band.BandCounters.lines()) context.getSource().sendSuccess(() -> Component.literal(line), false);
+        return 1;
+    }
+
+    /** {@code /orbifold check [radius]}: compares loaded band chunks round the caller with their sources. */
+    private static int check(CommandContext<CommandSourceStack> context, int radius) {
+        CommandSourceStack source = context.getSource();
+        var result = g_mungus.alpha_omega.band.BandCheck.check(source.getLevel(), new net.minecraft.world.level.ChunkPos(BlockPos.containing(source.getPosition())), radius);
+        source.sendSuccess(() -> Component.literal(result.toString()), false);
+        return result.clean() ? 1 : 0;
     }
 
     /** What {@code /orbifold info} says at a position. */

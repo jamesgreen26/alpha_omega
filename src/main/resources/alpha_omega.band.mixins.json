@@ -1,0 +1,24 @@
+{
+  "required": true,
+  "package": "g_mungus.alpha_omega.mixin.band",
+  "compatibilityLevel": "JAVA_21",
+  "minVersion": "0.8",
+  "mixins": [
+    "BlockPlacementShapeMixin",
+    "BlockStateBaseBandMixin",
+    "BoundTickingBlockEntityDetectorMixin",
+    "ChunkAccessAccessor",
+    "DiodeBlockDetectorMixin",
+    "LevelBandMixin",
+    "LevelChunkBandMixin",
+    "LevelTicksBandMixin",
+    "PistonBaseBlockDetectorMixin",
+    "RedStoneWireBlockDetectorMixin",
+    "RedstoneLampBlockDetectorMixin",
+    "RedstoneTorchBlockDetectorMixin",
+    "ServerLevelBandMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
