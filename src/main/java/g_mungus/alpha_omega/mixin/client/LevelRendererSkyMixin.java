@@ -17,6 +17,7 @@ import net.minecraft.client.renderer.DimensionSpecialEffects;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.world.level.material.FogType;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.spongepowered.asm.mixin.Mixin;
@@ -24,8 +25,8 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 
 /**
- * The sky turns about the local celestial pole: vanilla's {@code XP(timeOfDay·360°)} becomes {@code Rz(-φ)·Rx(H)}, so
- * the sun, moon and stars (all drawn in that frame) rise and set at an angle that depends on latitude. The sunrise
+ * The sky turns about the face's celestial pole: vanilla's {@code XP(timeOfDay·360°)} becomes the face's celestial
+ * rotation ({@code CubeSun}), so the sun, moon and stars (all drawn in that frame) rise and set at the face's angle. The sunrise
  * glow points at the sun's azimuth instead of due east or west, unless the atmosphere is on: it draws its own.
  *
  * <p>With the atmosphere on (and the camera in air), the flat-coloured sky dome is replaced by the atmosphere drawn per
@@ -48,8 +49,8 @@ abstract class LevelRendererSkyMixin {
         at = @At(value = "INVOKE", target = "Lcom/mojang/math/Axis;rotationDegrees(F)Lorg/joml/Quaternionf;", ordinal = 4))
     private Quaternionf alpha_omega$celestialRotation(Quaternionf rotation) {
         if (!ClientSky.applies(this.level)) return rotation;
-        LocalSky.Sample sun = ClientSky.atCamera(this.level);
-        return LocalSky.celestialRotation(sun.timeOfDay(), sun.latitude());
+        Vec3 camera = Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+        return LocalSky.celestialRotation(this.level, camera.x, camera.z);
     }
 
     /** The sunrise colour only depends on the sun's height. */

@@ -8,6 +8,7 @@ import g_mungus.alpha_omega.config.AlphaOmegaConfig;
 import g_mungus.alpha_omega.cube.Cube;
 import g_mungus.alpha_omega.gametest.CubeGameTests;
 import g_mungus.alpha_omega.gametest.FaceGameTests;
+import g_mungus.alpha_omega.gametest.LocalTimeGameTests;
 import g_mungus.alpha_omega.gametest.ModLoadGameTests;
 import g_mungus.alpha_omega.network.CubeConfigurationTask;
 import g_mungus.alpha_omega.network.CubePayload;
@@ -100,5 +101,6 @@ public class AlphaOmegaMod {
         event.register(ModLoadGameTests.class);
         event.register(CubeGameTests.class);
         event.register(FaceGameTests.class);
+        event.register(LocalTimeGameTests.class);
     }
 }

@@ -58,6 +58,10 @@ public class FaceGameTests {
         int z = geometry.centerZ() + 3 + 32 * lane;
         BlockPos pos = new BlockPos(x, geometry.barrierY(CubeFace.UP, x, z), z);
         ChunkPos chunk = new ChunkPos(pos);
+        // Generate the neighbourhood now: gametest ticks run back to back, faster than chunks generate around a ticket.
+        for (int dx = -3; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) helper.getLevel().getChunk(chunk.x + dx, chunk.z + dz);
+        }
         helper.getLevel().setChunkForced(chunk.x, chunk.z, true);
         helper.getLevel().setChunkForced(chunk.x - 1, chunk.z, true);
         return pos;

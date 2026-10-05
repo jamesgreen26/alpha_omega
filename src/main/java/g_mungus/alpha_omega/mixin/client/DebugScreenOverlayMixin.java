@@ -34,11 +34,10 @@ abstract class DebugScreenOverlayMixin {
         LocalSky.Sample sun = LocalSky.sample(camera.level(), camera.getX(), camera.getZ());
         long ticks = Math.floorMod((long) Math.floor(sun.clock()), 24000L);
         long minutes = (ticks + 6000L) % 24000L * 60L / 1000L;
-        double latitude = Math.toDegrees(sun.latitude());
-        double longitude = 360.0 * sun.longitude();
-        String line = String.format(Locale.ROOT, "Sun: %02d:%02d day %d, %.1f°%s %.1f°%s, alt %.1f° az %.0f°", minutes / 60, minutes % 60,
-            sun.day(), Math.abs(latitude), latitude >= 0 ? "N" : "S", Math.abs(longitude), longitude >= 0 ? "E" : "W",
-            Math.toDegrees(sun.altitude()), Math.toDegrees(sun.azimuth()));
+        String where = sun.face() == null ? "" : String.format(Locale.ROOT, " on %s (lat %.1f°, %+.1f h)",
+            sun.face(), Math.toDegrees(sun.latitude()), -24.0 * sun.timeZone());
+        String line = String.format(Locale.ROOT, "Sun: %02d:%02d day %d%s, alt %.1f° az %.0f°", minutes / 60, minutes % 60,
+            sun.day(), where, Math.toDegrees(sun.altitude()), Math.toDegrees(sun.azimuth()));
         List<String> result = new ArrayList<>(lines);
         int at = 0;
         for (int i = 0; i < result.size(); i++) {

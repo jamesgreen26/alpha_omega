@@ -1,20 +1,25 @@
 package g_mungus.alpha_omega.sky;
 
+import g_mungus.alpha_omega.cube.Cube;
+import g_mungus.alpha_omega.cube.CubeFace;
+import g_mungus.alpha_omega.cube.CubeGeometry;
+import g_mungus.alpha_omega.cube.CubeSettings;
+import java.util.EnumMap;
+import java.util.Map;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
+import org.jetbrains.annotations.Nullable;
 import org.joml.Quaternionf;
 
 /**
- * The sun as seen from a point on the torus. X is longitude: local solar time runs ahead to the east, one full day
- * per lap. Z is latitude, a triangle wave: the equator at z = 0, the north pole a quarter lap toward -Z, the equator
- * again half a lap away and the south pole at three quarters. There are no seasons (declination 0).
+ * The sun as seen from a position: over a cube world's overworld, the sun of the face below ({@link CubeSun}); elsewhere
+ * vanilla's. Gameplay that depends on daylight asks here instead of the global clock (design §7).
  *
- * <p>Everything is periodic in the world size, so any image of a position gives the same sky. At the equator, and
- * whenever the world does not wrap, every value equals vanilla's.
- *
- * <p>Two kinds of "time" come out of this. The local clock ({@link Sample#clock}) is the day time shifted by the time
- * zone, for consumers that read the clock (schedules, the clock item). The equivalent time of day
+ * <p>Two kinds of "time" come out of this. The local clock ({@link Sample#clock}) is the day time shifted by the face's
+ * time zone, for consumers that read the clock (schedules, the clock item). The equivalent time of day
  * ({@link Sample#equivalentTimeOfDay}) is the vanilla time of day that would put the sun at the same height, for
  * consumers that only use {@code cos(2π·timeOfDay)} (sky darkening, star brightness, sky colours).
  */
@@ -23,12 +28,21 @@ public final class LocalSky {
     /** Sun height above which a clear sky counts as day ({@code skyDarken < 4}). */
     public static final double DAY_SUN_HEIGHT = (7.0 / 11.0 - 0.5) / 2.0;
 
+    private static final Map<CubeSettings.SunAxis, CubeSun> SUNS = new EnumMap<>(CubeSettings.SunAxis.class);
+
+    static {
+        for (CubeSettings.SunAxis axis : CubeSettings.SunAxis.values()) SUNS.put(axis, new CubeSun(axis));
+    }
+
     private LocalSky() {
     }
 
-    /** The sun at one position: local time, coordinates on the planet and the sun's direction in world axes. */
-    public record Sample(double longitude, double latitude, double clock, double timeOfDay, double sunX, double sunY,
-                         double sunZ, double equivalentTimeOfDay) {
+    /**
+     * The sun at one position. {@code face} is null where vanilla's sun applies. Latitude is in radians and the time
+     * zone in turns behind UP; the sun's direction is in the face's (storage) axes.
+     */
+    public record Sample(@Nullable CubeFace face, double latitude, double timeZone, double clock, double timeOfDay,
+                         double sunX, double sunY, double sunZ, double equivalentTimeOfDay) {
 
         /** Day number of the local clock. */
         public long day() {
@@ -40,35 +54,18 @@ public final class LocalSky {
             return Math.asin(Math.max(-1.0, Math.min(1.0, this.sunY)));
         }
 
-        /** Sun azimuth as a compass bearing (north 0, east π/2), in radians in [0, 2π). */
+        /** Sun azimuth as a compass bearing (north −Z 0, east +X π/2), in radians in [0, 2π). */
         public double azimuth() {
             double azimuth = Math.atan2(this.sunX, -this.sunZ);
             return azimuth < 0.0 ? azimuth + 2.0 * Math.PI : azimuth;
         }
     }
 
+    public static CubeSun sun(CubeSettings.SunAxis axis) {
+        return SUNS.get(axis);
+    }
+
     // ---- Pure math ----
-
-    /** Longitude in turns, in [-0.5, 0.5); 0 at x = 0, the date line half a lap away. */
-    public static double longitude(double x, int period) {
-        if (period <= 0) return 0.0;
-        double turns = x / period + 0.5;
-        return turns - Math.floor(turns) - 0.5;
-    }
-
-    /** Latitude in radians, in [-π/2, π/2]: a triangle wave of z with the north pole a quarter lap toward -Z. */
-    public static double latitude(double z, int period) {
-        if (period <= 0) return 0.0;
-        double turns = -z / period;
-        double u = turns - Math.floor(turns);
-        double wave = u <= 0.25 ? 4.0 * u : u <= 0.75 ? 2.0 - 4.0 * u : 4.0 * u - 4.0;
-        return wave * (Math.PI / 2.0);
-    }
-
-    /** The local clock: global day time plus the time zone offset, one full day per lap of longitude. */
-    public static double localClock(double dayTime, double longitude) {
-        return dayTime + 24000.0 * longitude;
-    }
 
     /** Vanilla's eased time of day ({@code DimensionType.timeOfDay}) for a (fractional) clock value. */
     public static double timeOfDay(double clock) {
@@ -79,22 +76,12 @@ public final class LocalSky {
     }
 
     /**
-     * The sun's direction in world axes (east +X, up +Y, north -Z) for a time of day and latitude. Vanilla's sky
-     * rotates by {@code Ry(-90°)·Rx(2π·timeOfDay)}; here the rotation becomes {@code Ry(-90°)·Rz(-φ)·Rx(H)}.
+     * The vanilla time of day that would put the sun at height {@code sunY}: {@code acos(sunY)/2π} after noon,
+     * mirrored before it.
      */
-    public static double[] sunDirection(double timeOfDay, double latitude) {
-        double hourAngle = 2.0 * Math.PI * timeOfDay;
-        double cosH = Math.cos(hourAngle);
-        return new double[] {-Math.sin(hourAngle), Math.cos(latitude) * cosH, Math.sin(latitude) * cosH};
-    }
-
-    /**
-     * The vanilla time of day that would put the sun at height {@code sunY}: {@code acos(sunY)/2π} in the afternoon,
-     * mirrored in the morning (sun in the east). Equals the time of day itself at the equator.
-     */
-    public static double equivalentTimeOfDay(double sunX, double sunY) {
+    public static double equivalentTimeOfDay(boolean rising, double sunY) {
         double half = Math.acos(Math.max(-1.0, Math.min(1.0, sunY))) / (2.0 * Math.PI);
-        return sunX > 0.0 ? 1.0 - half : half;
+        return rising ? 1.0 - half : half;
     }
 
     /** Vanilla's {@code Level.updateSkyBrightness} with the sun height in place of {@code cos(2π·timeOfDay)}. */
@@ -105,86 +92,65 @@ public final class LocalSky {
         return (int) ((1.0 - d2 * d0 * d1) * 11.0);
     }
 
-    /** The full sample at a longitude and latitude for a global day time. */
-    public static Sample sample(double dayTime, double longitude, double latitude) {
-        double clock = localClock(dayTime, longitude);
-        double timeOfDay = timeOfDay(clock);
-        double[] sun = sunDirection(timeOfDay, latitude);
-        return new Sample(longitude, latitude, clock, timeOfDay, sun[0], sun[1], sun[2], equivalentTimeOfDay(sun[0], sun[1]));
+    /** Vanilla's sun for a global day time: on the equator at the prime meridian. */
+    public static Sample vanilla(double dayTime) {
+        double timeOfDay = timeOfDay(dayTime);
+        double hourAngle = 2.0 * Math.PI * timeOfDay;
+        return new Sample(null, 0.0, 0.0, dayTime, timeOfDay, -Math.sin(hourAngle), Math.cos(hourAngle), 0.0, timeOfDay);
     }
 
-    /** The rotation that replaces vanilla's {@code XP(timeOfDay·360°)} in the sky renderer: {@code Rz(-φ)·Rx(H)}. */
-    public static Quaternionf celestialRotation(double timeOfDay, double latitude) {
-        return new Quaternionf().rotateZ((float) -latitude).rotateX((float) (2.0 * Math.PI * timeOfDay));
-    }
-
-    /** Circular mean of longitudes (in turns), or NaN when they cancel out. */
-    public static double meanLongitude(double[] longitudes) {
-        double sin = 0.0;
-        double cos = 0.0;
-        for (double longitude : longitudes) {
-            sin += Math.sin(2.0 * Math.PI * longitude);
-            cos += Math.cos(2.0 * Math.PI * longitude);
-        }
-        if (Math.hypot(sin, cos) < 1e-6 * Math.max(1, longitudes.length)) return Double.NaN;
-        return Math.atan2(sin, cos) / (2.0 * Math.PI);
-    }
-
-    /**
-     * Ticks to add to the global day time when sleepers at this longitude and latitude skip the night: to the next
-     * local clock 0 (vanilla's morning), or later that morning if the sun is not yet high enough there to count as
-     * day, or local noon if it never is (near the poles). In (0, 24000].
-     */
-    public static long sleepTimeAddition(long dayTime, double longitude, double latitude) {
-        long offset = Math.round(24000.0 * longitude);
-        long local = dayTime + offset;
-        // In the evening, wake at the coming local 0; after it (still dark at high latitudes), wait for daylight.
-        long toMorning = Math.floorMod(local, 24000L) >= 12000L ? Math.floorMod(-local, 24000L) : 0L;
-        long toNoonToday = Math.floorMod(6000L - (local + toMorning), 24000L);
-        for (long add = toMorning; add <= toMorning + toNoonToday; add += 10L) {
-            double[] sun = sunDirection(timeOfDay(local + add), latitude);
-            if (sun[1] > DAY_SUN_HEIGHT) return add == 0L ? 24000L : add;
-        }
-        long toNoon = Math.floorMod(6000L - local, 24000L);
-        return toNoon == 0L ? 24000L : toNoon;
+    /** A face's sun for a global day time. */
+    public static Sample sample(CubeSun sun, CubeFace face, double dayTime) {
+        double hourAngle = CubeSun.hourAngle(dayTime);
+        double[] direction = sun.direction(face, hourAngle);
+        double clock = sun.localClock(face, dayTime);
+        return new Sample(face, sun.latitude(face), sun.timeZone(face), clock, timeOfDay(clock), direction[0], direction[1], direction[2],
+            equivalentTimeOfDay(sun.rising(face, hourAngle), direction[1]));
     }
 
     // ---- Level adapters ----
 
-    /** Whether the local sky applies: the overworld, without fixed time. Elsewhere everything is vanilla. */
+    /** Whether the local sky applies at all: the overworld, without fixed time. Elsewhere everything is vanilla. */
     public static boolean active(Level level) {
         return level.dimension() == Level.OVERWORLD && !level.dimensionType().hasFixedTime();
     }
 
-    /** The sun at a position, or at the prime meridian on the equator (vanilla) when the local sky does not apply. */
-    public static Sample sample(Level level, double x, double z) {
-        if (!active(level)) return sample(level.getDayTime(), 0.0, 0.0);
-        return sample(level.getDayTime(), longitude(level, x), latitude(level, z));
-    }
-
-    /** The local clock at a block x, rounded to whole ticks for clock-shaped consumers. */
-    public static long localDayTime(Level level, double x) {
-        if (!active(level)) return level.getDayTime();
-        return level.getDayTime() + Math.round(24000.0 * longitude(level, x));
-    }
-
-    // TODO(phase 3): a face lookup on the cube geometry. Until then every position is on the prime meridian.
-    public static double longitude(Level level, double x) {
-        return 0.0;
-    }
-
-    public static double latitude(Level level, double z) {
-        return 0.0;
-    }
-
     /** Whether positions have their own sun: the local sky applies and the world is a cube. */
     public static boolean local(Level level) {
-        return false;
+        return active(level) && Cube.of(level) != null;
+    }
+
+    /** The face whose sun shines at a storage position; UP between faces. Null outside a cube world. */
+    @Nullable
+    public static CubeFace face(Level level, double x, double z) {
+        CubeGeometry geometry = Cube.of(level);
+        if (geometry == null) return null;
+        CubeFace face = geometry.faceAt(x, z);
+        return face == null ? CubeFace.UP : face;
+    }
+
+    /** The sun at a position, or vanilla's when the local sky does not apply. */
+    public static Sample sample(Level level, double x, double z) {
+        if (!local(level)) return vanilla(level.getDayTime());
+        CubeGeometry geometry = Cube.of(level);
+        return sample(sun(geometry.settings.sunAxis()), face(level, x, z), level.getDayTime());
+    }
+
+    /** The rotation the sky renderer draws the sun, moon and stars with, for the face at a position. */
+    public static Quaternionf celestialRotation(Level level, double x, double z) {
+        CubeGeometry geometry = Cube.of(level);
+        return sun(geometry.settings.sunAxis()).celestialRotation(face(level, x, z), CubeSun.hourAngle(level.getDayTime()));
+    }
+
+    /** The local clock at a position, rounded to whole ticks for clock-shaped consumers. */
+    public static long localDayTime(Level level, double x, double z) {
+        if (!local(level)) return level.getDayTime();
+        return Math.round(sample(level, x, z).clock());
     }
 
     /**
      * Sky darkening at a position, as {@code Level.getSkyDarken()} would be if the whole world shared its sun.
-     * Vanilla's own value when the world does not wrap, so gameplay there is exactly vanilla.
+     * Vanilla's own value outside a cube world, so gameplay there is exactly vanilla.
      */
     public static int skyDarken(Level level, double x, double z) {
         if (!local(level)) return level.getSkyDarken();
@@ -225,6 +191,25 @@ public final class LocalSky {
 
     /** The local clock at an entity's position, for clock-shaped consumers such as villager schedules. */
     public static long localDayTime(Entity entity) {
-        return localDayTime(entity.level(), entity.getX());
+        return localDayTime(entity.level(), entity.getX(), entity.getZ());
+    }
+
+    /**
+     * Where skipping the night lands: the next morning on the face where most sleepers are (ties to the lowest slot),
+     * as a global day time. Null if nobody is sleeping or the local sky does not apply.
+     */
+    @Nullable
+    public static Long morningAfterSleep(ServerLevel level) {
+        if (!local(level)) return null;
+        int[] sleepers = new int[6];
+        for (ServerPlayer player : level.players()) {
+            if (player.isSleeping()) sleepers[face(level, player.getX(), player.getZ()).slot()]++;
+        }
+        int best = 0;
+        for (int slot = 1; slot < 6; slot++) {
+            if (sleepers[slot] > sleepers[best]) best = slot;
+        }
+        if (sleepers[best] == 0) return null;
+        return sun(Cube.of(level).settings.sunAxis()).nextMorning(CubeFace.bySlot(best), level.getDayTime());
     }
 }
