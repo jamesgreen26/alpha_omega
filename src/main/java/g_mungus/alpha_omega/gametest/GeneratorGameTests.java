@@ -90,7 +90,7 @@ public class GeneratorGameTests {
         ServerLevel level = helper.getLevel();
         int[] bounds = g.footprintChunks();
         List<ChunkPos> outside = List.of(new ChunkPos(bounds[2] + 1, g.spawnZ >> 4), new ChunkPos(bounds[0] - 1, g.spawnZ >> 4),
-            new ChunkPos(0, bounds[1] - 1), new ChunkPos(0, bounds[3] + 1), new ChunkPos(bounds[2] + 3, bounds[3] + 3));
+            new ChunkPos(40, bounds[1] - 1), new ChunkPos(0, bounds[3] + 1), new ChunkPos(bounds[2] + 3, bounds[3] + 3));
         for (ChunkPos pos : outside) {
             helper.assertTrue(!g.inFootprintChunk(pos.x, pos.z) && generator(helper).region(pos) == OrbifoldChunkGenerator.Region.VOID,
                 pos + " should be outside the footprint");
@@ -102,6 +102,36 @@ public class GeneratorGameTests {
                 + level.getBrightness(LightLayer.SKY, middle));
         }
         helper.succeed();
+    }
+
+    /**
+     * A void chunk lit, saved and unloaded, then its skirt neighbour filled while it is away, is still sky lit when it
+     * loads again ({@code ChunkLightMixin}; before, the fill left it dark below the skirt's terrain).
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 800)
+    public static void voidStaysLitBesideAFilledSkirt(GameTestHelper helper) {
+        OrbifoldGeometry g = geometry(helper);
+        ServerLevel level = helper.getLevel();
+        int[] bounds = g.footprintChunks();
+        // Past the north skirt at N, where the fill first left the void dark.
+        ChunkPos skirt = new ChunkPos(0, bounds[1]), voidChunk = new ChunkPos(skirt.x, bounds[1] - 1);
+        helper.assertTrue(generator(helper).region(skirt) == OrbifoldChunkGenerator.Region.SKIRT, skirt + " should be skirt");
+        BlockPos middle = voidChunk.getMiddleBlockPosition(0);
+        level.getChunk(voidChunk.x, voidChunk.z);
+        helper.runAfterDelay(200, () -> {
+            helper.assertTrue(level.getChunkSource().getChunkNow(voidChunk.x, voidChunk.z) == null, "the void chunk should have unloaded");
+            helper.assertTrue(!allAir(level.getChunk(skirt.x, skirt.z)), "the skirt chunk should be filled from its source");
+            helper.runAfterDelay(200, () -> {
+                level.getChunk(voidChunk.x, voidChunk.z);
+                List<String> dark = new ArrayList<>();
+                for (int y = level.getMinBuildHeight(); y < level.getMaxBuildHeight(); y += 16) {
+                    int light = level.getBrightness(LightLayer.SKY, middle.atY(y));
+                    if (light != 15) dark.add(y + ": " + light);
+                }
+                helper.assertTrue(dark.isEmpty(), "void chunk " + voidChunk + " reloaded dark: " + dark);
+                helper.succeed();
+            });
+        });
     }
 
     /**

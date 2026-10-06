@@ -123,6 +123,22 @@ public class OrbifoldChunkGenerator extends NoiseBasedChunkGenerator {
         return region == Region.BAND || region == Region.SKIRT;
     }
 
+    /**
+     * Whether a chunk's light is recomputed whenever it is loaded, even if it was saved as lit: true for any chunk next
+     * to (or itself) a band or skirt chunk ({@code ChunkLightMixin}). When a band fill makes a section non-empty, the
+     * light engine gives the sections around it data layers, and for a neighbouring column whose light is off (a chunk
+     * saved and unloaded) those layers start dark. Vanilla only reloads such a chunk's saved light, never its sources,
+     * so the dark layers would stay: open sky reading 0 beside a filled band or skirt.
+     */
+    public boolean relightsOnLoad(ChunkPos pos) {
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if (this.awaitsFill(new ChunkPos(pos.x + dx, pos.z + dz))) return true;
+            }
+        }
+        return false;
+    }
+
     // ---- Structures ----
 
     /** Whether a structure with this bounding box may generate: wholly inside the tile, {@link #STRUCTURE_MARGIN} clear of every seam. */

@@ -7,6 +7,7 @@
     "BiomeManagerMixin",
     "CarverSeedMixin",
     "ChunkGeneratorMixin",
+    "ChunkLightMixin",
     "ChunkMapRandomStateMixin",
     "NoiseBasedAquiferMixin",
     "NoiseChunkMixin",
