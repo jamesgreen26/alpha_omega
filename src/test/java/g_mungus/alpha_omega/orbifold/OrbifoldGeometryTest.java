@@ -24,11 +24,25 @@ class OrbifoldGeometryTest {
 
     private static final OrbifoldGeometry DEFAULT = new OrbifoldGeometry(OrbifoldSize.NORMAL, 4);
 
-    /** Every size, with the default band, and the smallest and largest bands at the two smallest sizes. */
+    /**
+     * Every size, with the default band, and the smallest and largest bands at the two smallest sizes; and every size's
+     * Nether (1:8) with the default band, and the smallest Nether with its deepest and shallowest bands.
+     */
     private static List<OrbifoldGeometry> all() {
-        return List.of(new OrbifoldGeometry(OrbifoldSize.SMALL, 4), new OrbifoldGeometry(OrbifoldSize.MEDIUM, 4), DEFAULT,
+        List<OrbifoldGeometry> all = new ArrayList<>(List.of(new OrbifoldGeometry(OrbifoldSize.SMALL, 4), new OrbifoldGeometry(OrbifoldSize.MEDIUM, 4), DEFAULT,
             new OrbifoldGeometry(OrbifoldSize.LARGE, 4), new OrbifoldGeometry(OrbifoldSize.MEDIUM, 2), new OrbifoldGeometry(OrbifoldSize.MEDIUM, 16),
-            new OrbifoldGeometry(OrbifoldSize.SMALL, 2), new OrbifoldGeometry(OrbifoldSize.SMALL, 16));
+            new OrbifoldGeometry(OrbifoldSize.SMALL, 2), new OrbifoldGeometry(OrbifoldSize.SMALL, 16)));
+        all.addAll(nether());
+        return all;
+    }
+
+    /** Every size's Nether with the default band, and the smallest Nether's shallowest and deepest bands. */
+    static List<OrbifoldGeometry> nether() {
+        List<OrbifoldGeometry> nether = new ArrayList<>();
+        for (OrbifoldSize size : OrbifoldSize.PRESETS) nether.add(new OrbifoldGeometry(size, 4, OrbifoldGeometry.NETHER_SCALE));
+        nether.add(new OrbifoldGeometry(OrbifoldSize.SMALL, 2, OrbifoldGeometry.NETHER_SCALE));
+        nether.add(new OrbifoldGeometry(OrbifoldSize.SMALL, 5, OrbifoldGeometry.NETHER_SCALE));
+        return nether;
     }
 
     /** Calls {@code action} on every cell of the footprint outside the tile (band and skirt). */
@@ -47,7 +61,7 @@ class OrbifoldGeometryTest {
         for (int x = g.minX; x < g.maxX; x++) {
             boolean edgeColumn = x < g.minX + g.reach || x >= g.maxX - g.reach;
             for (int z = g.northRow; z < g.southRow; z++) {
-                if (!edgeColumn && z == g.northRow + g.reach) z = g.southRow - g.reach;
+                if (!edgeColumn && z == g.northRow + g.reach) z = Math.max(z, g.southRow - g.reach);
                 action.applyAsInt(x, z);
             }
         }
@@ -69,10 +83,50 @@ class OrbifoldGeometryTest {
         for (OrbifoldGeometry g : all()) {
             assertTrue(g.isTile(g.spawnX, g.spawnZ));
             for (OrbifoldGeometry.ConePoint cone : g.conePoints()) {
-                assertEquals(0, cone.x() % 128, cone.name());
-                assertEquals(0, cone.z() % 128, cone.name());
+                assertEquals(0, cone.x() % (128 / g.scale), cone.name());
+                assertEquals(0, cone.z() % (128 / g.scale), cone.name());
             }
         }
+    }
+
+    /**
+     * The Nether is every preset at 1:8 (wrapping plan §4): at k = 4 a 1920 × 1664 lattice with fold rows at −656 and
+     * 176, cone points at x = 0, ±960 and ±480. Everything is chunk-aligned and the band keeps its depth in chunks.
+     */
+    @Test
+    void theNetherIsEveryPresetAtOneEighth() {
+        OrbifoldGeometry normal = DEFAULT.scaled(OrbifoldGeometry.NETHER_SCALE);
+        assertEquals(List.of(1920, 1664, -656, 176, -960, 960), List.of(normal.a, normal.b, normal.northRow, normal.southRow, normal.minX, normal.maxX));
+        assertEquals(List.of(new OrbifoldGeometry.ConePoint("N", 0, -656), new OrbifoldGeometry.ConePoint("F", 960, -656),
+            new OrbifoldGeometry.ConePoint("E", 480, 176), new OrbifoldGeometry.ConePoint("W", -480, 176)), normal.conePoints());
+        assertEquals(List.of(64, 32, 80), List.of(normal.band, normal.claim, normal.reach));
+        OrbifoldGeometry small = new OrbifoldGeometry(OrbifoldSize.SMALL, 4, 8);
+        assertEquals(List.of(448, 384, -144, 48), List.of(small.a, small.b, small.northRow, small.southRow));
+        assertEquals(List.of(960, 832, -320, 96), List.of(new OrbifoldGeometry(OrbifoldSize.MEDIUM, 4, 8).a, new OrbifoldGeometry(OrbifoldSize.MEDIUM, 4, 8).b,
+            new OrbifoldGeometry(OrbifoldSize.MEDIUM, 4, 8).northRow, new OrbifoldGeometry(OrbifoldSize.MEDIUM, 4, 8).southRow));
+        OrbifoldGeometry large = new OrbifoldGeometry(OrbifoldSize.LARGE, 4, 8);
+        assertEquals(List.of(3840, 3328, -1296, 368), List.of(large.a, large.b, large.northRow, large.southRow));
+        for (OrbifoldGeometry g : nether()) {
+            OrbifoldGeometry overworld = new OrbifoldGeometry(g.size, g.bandChunks);
+            assertEquals(List.of(overworld.a, overworld.b, overworld.northRow, overworld.southRow),
+                List.of(8 * g.a, 8 * g.b, 8 * g.northRow, 8 * g.southRow), g.toString());
+            for (Motion m : elementsNearTheTile(g)) assertTrue(m.chunkAligned(), g + " " + m);
+            for (OrbifoldGeometry.ConePoint cone : g.conePoints()) {
+                assertEquals(8 * cone.x(), overworld.conePoints().stream().filter(c -> c.name().equals(cone.name())).findFirst().orElseThrow().x());
+                assertEquals(0, cone.x() % 16, g + " " + cone);
+                assertEquals(0, cone.z() % 16, g + " " + cone);
+            }
+            assertTrue(g.isTile(g.spawnX, g.spawnZ));
+            assertTrue(g.isScaled());
+        }
+        // The band is kept in chunks where the tile has room (half the tile's height for the band and skirt), and the
+        // settings fall back to the deepest band that fits: the small Nether's tile is 12 chunks tall.
+        assertEquals(4, new OrbifoldSettings(OrbifoldSize.SMALL, 4, 8).geometry().bandChunks);
+        assertEquals(5, new OrbifoldSettings(OrbifoldSize.SMALL, 16, 8).geometry().bandChunks);
+        assertEquals(12, new OrbifoldSettings(OrbifoldSize.MEDIUM, 16, 8).geometry().bandChunks);
+        assertEquals(16, new OrbifoldSettings(OrbifoldSize.LARGE, 16, 8).geometry().bandChunks);
+        assertEquals(16, new OrbifoldSettings(OrbifoldSize.SMALL, 16).geometry().bandChunks);
+        assertFalse(OrbifoldGeometry.fitsBand(OrbifoldSize.SMALL, 6, 8));
     }
 
     /** The presets: the k sizes are 3840·k × 3328·k, ids and size factors look them up, and the default is k = 4. */
@@ -318,7 +372,8 @@ class OrbifoldGeometryTest {
             assertEquals(fromBand[0], fromTile[0], "every band and skirt cell is one copy of one tile cell");
             assertEquals(3, most[0], "near a corner or cone point a cell has three copies");
             int cx = g.minX + g.reach + 5, cz = g.northRow + g.reach + 5;
-            assertTrue(g.copies(cx, cz).isEmpty() && g.copies(0, (g.northRow + g.southRow) / 2).isEmpty(), "inner cells have none");
+            // (Unless the tile is barely twice the reach, as the smallest Nether with its deepest band.)
+            if (g.b / 2 > 2 * g.reach + 10) assertTrue(g.copies(cx, cz).isEmpty() && g.copies(0, (g.northRow + g.southRow) / 2).isEmpty(), "inner cells have none");
         }
     }
 
@@ -366,7 +421,7 @@ class OrbifoldGeometryTest {
             for (int cx = bounds[0]; cx <= bounds[2]; cx++) {
                 boolean edgeColumn = cx < (g.minX + g.reach >> 4) + 1 || cx > (g.maxX - g.reach >> 4) - 1;
                 for (int cz = bounds[1]; cz <= bounds[3]; cz++) {
-                    if (!edgeColumn && cz == (g.northRow + g.reach >> 4) + 1) cz = (g.southRow - g.reach >> 4) - 1;
+                    if (!edgeColumn && cz == (g.northRow + g.reach >> 4) + 1) cz = Math.max(cz, (g.southRow - g.reach >> 4) - 1);
                     Motion frame = g.frameChunk(cx, cz);
                     OrbifoldGeometry.Cell source = g.canonChunk(cx, cz);
                     assertTrue(g.isTileChunk(source.x(), source.z()));

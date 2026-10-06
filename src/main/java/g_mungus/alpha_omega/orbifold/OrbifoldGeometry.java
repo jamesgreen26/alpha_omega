@@ -49,9 +49,17 @@ public final class OrbifoldGeometry {
     public record Cell(int x, int z, Motion frame) {
     }
 
-    /** The preset this geometry is: its lattice, north fold row and spawn. */
+    /** The Nether's scale: its geometry is the overworld's divided by this ({@code alpha-omega-best-wrapping-plan.md} §4). */
+    public static final int NETHER_SCALE = 8;
+
+    /** The preset this geometry is: its lattice, north fold row and spawn (all divided by {@link #scale}). */
     public final OrbifoldSize size;
     public final int bandChunks;
+    /**
+     * 1 for the overworld; {@link #NETHER_SCALE} for the Nether, whose lattice, fold rows and spawn are the preset's
+     * divided by it. The band keeps its depth in chunks.
+     */
+    public final int scale;
     /** Lattice: {@code L1 = (a, 0)}, {@code L2 = (a/2, b)}. */
     public final int a;
     public final int b;
@@ -84,28 +92,64 @@ public final class OrbifoldGeometry {
     private final List<Motion> frames;
 
     public OrbifoldGeometry(OrbifoldSize size, int bandChunks) {
+        this(size, bandChunks, 1);
+    }
+
+    /**
+     * The preset divided by {@code scale}. Every element of {@code Γ} must still map chunks to whole chunks: {@code a}
+     * a multiple of 64 (cone points at {@code ±a/4}), {@code b/2} and the north row multiples of 16. The tile must also
+     * be at least twice as tall and wide as the footprint's reach, so every band cell's source is one fold or lap away and
+     * no tile cell is a copy's source past both fold rows at once ({@link #fitsBand}).
+     */
+    public OrbifoldGeometry(OrbifoldSize size, int bandChunks, int scale) {
         if (bandChunks < MIN_BAND_CHUNKS || bandChunks > MAX_BAND_CHUNKS) {
             throw new IllegalArgumentException("Band must be " + MIN_BAND_CHUNKS + " to " + MAX_BAND_CHUNKS + " chunks: " + bandChunks);
         }
+        if (scale < 1 || size.a() % scale != 0 || size.b() % scale != 0 || size.northRow() % scale != 0) {
+            throw new IllegalArgumentException("Scale " + scale + " does not divide " + size);
+        }
         this.size = size;
         this.bandChunks = bandChunks;
-        this.a = size.a();
-        this.b = size.b();
+        this.scale = scale;
+        this.a = size.a() / scale;
+        this.b = size.b() / scale;
+        if (this.a % 64 != 0 || (this.b / 2) % 16 != 0 || (size.northRow() / scale) % 16 != 0) {
+            throw new IllegalArgumentException(size + " at 1:" + scale + " is not chunk-aligned");
+        }
         this.minX = -this.a / 2;
         this.maxX = this.a / 2;
-        this.northRow = size.northRow();
-        this.southRow = size.northRow() + this.b / 2;
+        this.northRow = size.northRow() / scale;
+        this.southRow = this.northRow + this.b / 2;
         this.band = 16 * bandChunks;
         this.claim = this.band - INTERACTION_RADIUS;
         this.reach = this.band + SKIRT;
-        this.spawnX = size.spawnX();
-        this.spawnZ = size.spawnZ();
+        if (this.reach > this.b / 4 || this.reach > this.a / 4) {
+            throw new IllegalArgumentException(size + " at 1:" + scale + " is too small for a " + bandChunks + "-chunk band");
+        }
+        this.spawnX = Math.floorDiv(size.spawnX(), scale);
+        this.spawnZ = Math.floorDiv(size.spawnZ(), scale);
         this.east = Motion.translation(this.a, 0);
         this.west = Motion.translation(-this.a, 0);
         this.northFold = Motion.halfTurn(0, 2 * this.northRow);
         this.southFold = Motion.halfTurn(this.a / 2, 2 * this.southRow);
         this.frames = List.of(this.east, this.west, this.northFold, this.southFold,
             this.northFold.then(this.east), this.northFold.then(this.west), this.southFold.then(this.east), this.southFold.then(this.west));
+    }
+
+    /** Whether a preset at a scale has room for a band of this many chunks (see the constructor). */
+    public static boolean fitsBand(OrbifoldSize size, int bandChunks, int scale) {
+        int reach = 16 * bandChunks + SKIRT;
+        return reach <= size.b() / scale / 4 && reach <= size.a() / scale / 4;
+    }
+
+    /** The same preset and band at another scale: {@code scaled(NETHER_SCALE)} is the Nether's geometry. */
+    public OrbifoldGeometry scaled(int scale) {
+        return scale == this.scale ? this : new OrbifoldGeometry(this.size, this.bandChunks, scale);
+    }
+
+    /** Whether this is a scaled (Nether) geometry. */
+    public boolean isScaled() {
+        return this.scale != 1;
     }
 
     /** The generators near the tile: {@code T+}, {@code T−}, {@code R_N}, {@code R_S}. */
@@ -273,7 +317,7 @@ public final class OrbifoldGeometry {
 
     @Override
     public String toString() {
-        return String.format(java.util.Locale.ROOT, "orbifold %s: tile x %d..%d, z %d..%d (%d x %d), band %d, claim %d, skirt %d",
-            this.size, this.minX, this.maxX, this.northRow, this.southRow, this.a, this.b / 2, this.band, this.claim, SKIRT);
+        return String.format(java.util.Locale.ROOT, "orbifold %s%s: tile x %d..%d, z %d..%d (%d x %d), band %d, claim %d, skirt %d",
+            this.size, this.scale == 1 ? "" : " at 1:" + this.scale, this.minX, this.maxX, this.northRow, this.southRow, this.a, this.b / 2, this.band, this.claim, SKIRT);
     }
 }
