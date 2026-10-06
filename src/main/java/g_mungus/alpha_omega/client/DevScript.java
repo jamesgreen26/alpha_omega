@@ -12,8 +12,11 @@ import net.neoforged.neoforge.common.NeoForge;
  * Development aid: scripted screenshots of a running client. {@code -Dalpha_omega.dev.script} holds steps
  * {@code tick:action} separated by {@code ;}, counted in client ticks after joining a world. An action is a command
  * ({@code /tp @s 0 100 0}), {@code shot <name>} (saved to {@code screenshots/<name>.png}), {@code hud on|off},
- * {@code forward on|off} (holds the walk key), {@code jump on|off} (holds the jump key),
- * {@code camera first|back|front} (the point of view), {@code pos} (logs the player), {@code debug} (toggles F3) or {@code quit}. Used with {@code -PquickPlay=<world>}. {@code @file} reads the steps from a file instead (one or more per line).
+ * {@code forward on|off} (holds the walk key), {@code jump on|off} (holds the jump key), {@code fly} (starts flying, in creative),
+ * {@code camera first|back|front} (the point of view), {@code pos} (logs the player), {@code debug} (toggles F3),
+ * {@code crossshots <name>} (screenshots of the frames just before the next crossing, {@code <name>_pre<n>}, and of the
+ * first five after it, {@code <name>_post<n>}; a crossing is vanilla's area swapping, so a teleport by an element
+ * counts) or {@code quit}. Used with {@code -PquickPlay=<world>}. {@code @file} reads the steps from a file instead (one or more per line).
  */
 public final class DevScript {
 
@@ -44,6 +47,50 @@ public final class DevScript {
             STEPS.add(new Step(Integer.parseInt(part.substring(0, colon).trim()), part.substring(colon + 1).trim()));
         }
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> tick());
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.RenderFrameEvent.Post event) -> frame());
+    }
+
+    /** What {@code crossshots} is waiting for: its name, frames captured before and after the crossing. */
+    @org.jetbrains.annotations.Nullable
+    private static String crossName;
+    private static int pre;
+    private static int post = -1;
+    private static final int PRE_FRAMES = 6;
+    private static final int POST_FRAMES = 5;
+
+    /** The client crossed (vanilla's area swapped): the next frames are captured. */
+    public static void crossed() {
+        if (crossName != null && post < 0) post = 0;
+    }
+
+    /** After each frame: captures it if {@code crossshots} wants it. */
+    private static void frame() {
+        String name = crossName;
+        Minecraft minecraft = Minecraft.getInstance();
+        if (name == null || minecraft.player == null || minecraft.level == null) return;
+        if (post >= 0) {
+            post++;
+            grab(minecraft, name + "_post" + post);
+            if (post >= POST_FRAMES) {
+                crossName = null;
+                post = -1;
+            }
+            return;
+        }
+        // Just short of the crossing depth: keep the last few frames before it (later ones overwrite).
+        g_mungus.alpha_omega.orbifold.OrbifoldGeometry geometry = g_mungus.alpha_omega.orbifold.Orbifold.of(minecraft.level);
+        if (geometry == null) return;
+        var root = minecraft.player.getRootVehicle();
+        double depth = geometry.seamDepth(root.getX(), root.getZ());
+        if (depth > g_mungus.alpha_omega.transfer.FrameTransfer.playerDepth(geometry) - 1.0) {
+            grab(minecraft, name + "_pre" + (pre % PRE_FRAMES + 1));
+            pre++;
+        }
+    }
+
+    private static void grab(Minecraft minecraft, String name) {
+        Screenshot.grab(minecraft.gameDirectory, name + ".png", minecraft.getMainRenderTarget(),
+            message -> AlphaOmegaMod.LOGGER.info("Dev script: {}", message.getString()));
     }
 
     private static void tick() {
@@ -78,6 +125,13 @@ public final class DevScript {
                 var p = minecraft.player;
                 AlphaOmegaMod.LOGGER.info("Dev script: pos {} motion {} rot {}/{} forward {} input {} flying {}", p.position(), p.getDeltaMovement(),
                     p.getYRot(), p.getXRot(), minecraft.options.keyUp.isDown(), p.input.forwardImpulse, p.getAbilities().flying);
+            } else if (action.equals("fly")) {
+                minecraft.player.getAbilities().flying = true;
+                minecraft.player.onUpdateAbilities();
+            } else if (action.startsWith("crossshots ")) {
+                crossName = action.substring(11).trim();
+                pre = 0;
+                post = -1;
             } else if (action.equals("debug")) {
                 minecraft.getDebugOverlay().toggleOverlay();
             } else if (action.equals("quit")) {

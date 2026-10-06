@@ -25,6 +25,8 @@ neoForge {
             if (project.hasProperty('devScript')) systemProperty 'alpha_omega.dev.script', project.property('devScript')
             // -PtransferStats logs what each crossing of an edge costs the client (see client.TransferStats).
             if (project.hasProperty('transferStats')) systemProperty 'alpha_omega.dev.transferStats', 'true'
+            // -PnoHandover swaps areas on a crossing without the hand-over, to compare (see client.ImageRenderer).
+            if (project.hasProperty('noHandover')) systemProperty 'alpha_omega.dev.noHandover', 'true'
             // -PbandDetectors counts reactions that reach a non-owner band copy (see band.BandCounters).
             if (project.hasProperty('bandDetectors')) systemProperty 'alpha_omega.band.detectors', 'true'
         }
