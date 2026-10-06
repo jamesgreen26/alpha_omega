@@ -182,14 +182,14 @@ public class ImageGameTests {
     public static void mobPastTheSeamIsSent(GameTestHelper helper) {
         OrbifoldGeometry g = geometry(helper);
         // The zombie stands at the tile's west edge: 14 blocks east of a player just inside the east seam.
-        sentAcross(helper, new Vec3(g.maxX - 8.5, 0, 600.5), new Vec3(g.minX + 6.5, 0, 603.5));
+        sentAcross(helper, new Vec3(g.maxX - 8.5, 0, TestPlaces.at(g, 600.5, g.northRow + 1216.5)), new Vec3(g.minX + 6.5, 0, TestPlaces.at(g, 603.5, g.northRow + 1219.5)));
     }
 
     @GameTest(template = TEMPLATE, timeoutTicks = 3000)
     public static void mobInTheFarBandIsSent(GameTestHelper helper) {
         OrbifoldGeometry g = geometry(helper);
         // The zombie is stored in the east band, so it is physically just inside the west seam, next to the player.
-        sentAcross(helper, new Vec3(g.minX + 8.5, 0, 900.5), new Vec3(g.maxX + 12.5, 0, 902.5));
+        sentAcross(helper, new Vec3(g.minX + 8.5, 0, TestPlaces.at(g, 900.5, g.northRow + 1376.5)), new Vec3(g.maxX + 12.5, 0, TestPlaces.at(g, 902.5, g.northRow + 1378.5)));
     }
 
     @GameTest(template = TEMPLATE, timeoutTicks = 3000)
@@ -249,7 +249,7 @@ public class ImageGameTests {
     @GameTest(template = TEMPLATE, timeoutTicks = 1200)
     public static void walkingAlongTheEastSeamKeepsView(GameTestHelper helper) {
         OrbifoldGeometry g = geometry(helper);
-        walk(helper, new Vec3(g.maxX - 10.5, 0, -1500.5), 0.0, 1.0, 320, false, Integer.MAX_VALUE);
+        walk(helper, new Vec3(g.maxX - 10.5, 0, TestPlaces.at(g, -1500.5, g.northRow + 692.5)), 0.0, 1.0, 320, false, Integer.MAX_VALUE);
     }
 
     @GameTest(template = TEMPLATE, timeoutTicks = 1200)
@@ -278,7 +278,7 @@ public class ImageGameTests {
         ServerLevel level = helper.getLevel();
         int view = Math.min(VIEW, ((ChunkMapAccessor) level.getChunkSource().chunkMap).alpha_omega$serverViewDistance());
         double start = g.maxX - (view + 1) * 16 - g.band + 24.5;
-        double z = -2100.5;
+        double z = TestPlaces.at(g, -2100.5, g.northRow + 592.5);
         ServerPlayer player = player(helper, start, z);
         int steps = 56;
         int[] tick = {-40};

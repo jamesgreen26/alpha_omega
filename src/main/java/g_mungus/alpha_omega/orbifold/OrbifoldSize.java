@@ -10,7 +10,7 @@ import java.util.Optional;
  * <p>The fold row and spawn are data, derived once as the wrapping plan derived them: walking south from {@code N}
  * along the meridian {@code x = 0}, spawn is where {@link g_mungus.alpha_omega.sky.HexOrbifoldProjection} reaches the
  * equator (0° 0°, heading 0), {@code 0.390913·b} blocks from {@code N}; the north row is minus that distance rounded to
- * a multiple of 128, and spawn is the row plus the distance, rounded to a block. {@code OrbifoldSizeTest} re-derives
+ * a multiple of 128, and spawn is the row plus the distance, rounded to a block. {@code HexOrbifoldProjectionTest} re-derives
  * every preset.
  *
  * <p>Every element of {@code Γ} maps chunks to whole chunks, in the overworld and in the Nether at 1:8: so every cone
