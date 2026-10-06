@@ -11,9 +11,8 @@ import org.jetbrains.annotations.Nullable;
  * Which copy of a cell owns it (RS §3.1): the copy where its reactions run and its block entity lives. The tile copy
  * owns by default; a claim moves a cell to a band copy, recorded as a flip bit in both chunks ({@link BandData}).
  *
- * <p>Claims (RS §3.3) are rules on top of this: phase 4 has one, {@link #claim} when a block entity is set at a copy
- * (it owns the cell while the block entity exists) and {@link #release} when it is removed. Phase 8 adds placement
- * claims by calling the same two methods.
+ * <p>Claims (RS §3.3) are rules on top of this, in {@link Claims}: placements claim ({@link #claim}), removals return
+ * the cell to its nominal owner ({@link #toNominal}), and a block entity set at a non-owner copy claims its cell.
  */
 public final class Ownership {
 
@@ -120,6 +119,37 @@ public final class Ownership {
         }
         chunk.setUnsaved(true);
         if (changed) BandCounters.claims++;
+    }
+
+    /**
+     * The cell goes back to its nominal owner, the tile copy, whichever copy {@code chunk} is: every loaded copy's bit is
+     * cleared (a clear bit is nominal in every chunk), and the stamps bumped.
+     */
+    public static void toNominal(Level level, LevelChunk chunk, BlockPos pos) {
+        CopyLinks links = Band.links(chunk);
+        if (links.isEmpty()) return;
+        int section = section(chunk, pos);
+        BandData data = ((BandChunk) chunk).alpha_omega$data(false);
+        boolean changed = data != null && data.setFlip(section, BandData.cell(pos.getX(), pos.getY(), pos.getZ()), false);
+        for (CopyLinks.Link link : links.links) {
+            LevelChunk copy = link.chunk(level);
+            BandData other = copy == null ? null : ((BandChunk) copy).alpha_omega$data(false);
+            if (other == null) continue;
+            BlockPos at = link.scratch(pos);
+            changed |= other.setFlip(section, BandData.cell(at.getX(), at.getY(), at.getZ()), false);
+        }
+        if (!changed) return;
+        data = ((BandChunk) chunk).alpha_omega$data(true);
+        long self = chunk.getPos().toLong();
+        for (CopyLinks.Link link : links.links) {
+            data.bump(link.key);
+            LevelChunk copy = link.chunk(level);
+            if (copy == null) continue;
+            ((BandChunk) copy).alpha_omega$data(true).bump(self);
+            copy.setUnsaved(true);
+        }
+        chunk.setUnsaved(true);
+        BandCounters.releases++;
     }
 
     /** {@code chunk}'s copy of {@code pos} gives the cell back to its nominal owner, the tile copy. */

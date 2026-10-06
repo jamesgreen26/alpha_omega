@@ -13,6 +13,7 @@ import g_mungus.alpha_omega.band.BandCounters;
 import g_mungus.alpha_omega.band.BandData;
 import g_mungus.alpha_omega.band.BandFill;
 import g_mungus.alpha_omega.band.BandWrites;
+import g_mungus.alpha_omega.band.Claims;
 import g_mungus.alpha_omega.band.CopyLinks;
 import g_mungus.alpha_omega.band.Ownership;
 import g_mungus.alpha_omega.orbifold.OrbifoldGeometry;
@@ -43,8 +44,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * <li>a changed section cell is mirrored into every loaded copy, before {@code onRemove}/{@code onPlace};</li>
  * <li>a mirrored write runs no {@code onPlace}/{@code onRemove}, creates and removes no block entity (it only updates
  * one already there), and so leaves the owner's block entity for the write's own {@code onRemove} to see;</li>
- * <li>a write at a copy that does not own its cell leaves the owner's block entity alone, and creates one only if the
- * owner has none: the block entity created there claims the cell;</li>
+ * <li>claims ({@link Claims}): a placement claims the cell for the writing copy before anything else happens, and a
+ * removal returns it to its nominal owner after the write;</li>
+ * <li>a write at a copy that does not own its cell leaves the owner's block entity alone, and creates one at the owner
+ * if the owner has none; a block entity set explicitly at a non-owner copy claims the cell;</li>
  * <li>block entity lookups and removals at a non-owner copy go to the owner; no ticker is registered at one;</li>
  * <li>the band fill runs as the chunk joins its level.</li>
  * </ul>
@@ -147,6 +150,7 @@ abstract class LevelChunkBandMixin implements BandChunk {
         @Local(argsOnly = true) BlockPos pos, @Local(argsOnly = true) boolean moving) {
         BlockState old = original.call(section, x, y, z, state);
         if (old != state && !this.level.isClientSide && this.alpha_omega$linked()) {
+            if (this.loaded && !BandWrites.mirroring()) Claims.beforeEffects(this.level, (LevelChunk) (Object) this, pos, old, state);
             BandWrites.mirror(this.level, (LevelChunk) (Object) this, pos, state, moving);
         }
         return old;
@@ -183,19 +187,42 @@ abstract class LevelChunkBandMixin implements BandChunk {
         return entity;
     }
 
-    /** Block entities are created by the original write only, and not where the owner already has one. */
+    /**
+     * Block entities are created by the original write only, at the owner (claims have been made by now), and not where
+     * the owner already has one. At a non-owner copy, the owner gets the new block entity; it is fresh, so it holds
+     * nothing in this copy's frame. If the owner's chunk is not loaded, it is created here and claims the cell.
+     */
     @WrapOperation(method = "setBlockState", at = @At(value = "INVOKE",
         target = "Lnet/minecraft/world/level/block/EntityBlock;newBlockEntity(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Lnet/minecraft/world/level/block/entity/BlockEntity;"))
     private BlockEntity alpha_omega$createOnlyWhereWritten(EntityBlock block, BlockPos pos, BlockState state, Operation<BlockEntity> original,
         @Share("foreign") LocalBooleanRef foreign) {
         if (BandWrites.mirroring() || foreign.get()) return null;
+        LevelChunk self = (LevelChunk) (Object) this;
+        if (this.loaded && !this.level.isClientSide && this.alpha_omega$linked() && !Ownership.isOwner(self, pos)) {
+            CopyLinks.Link owner = Ownership.owner(this.level, self, pos);
+            LevelChunk chunk = owner == null ? null : owner.chunk(this.level);
+            if (chunk != null) {
+                BlockPos at = owner.map(pos);
+                BlockState there = chunk.getBlockState(at);
+                if (there.getBlock() instanceof EntityBlock entityBlock && !chunk.getBlockEntities().containsKey(at)) {
+                    BlockEntity entity = original.call(entityBlock, at, there);
+                    if (entity != null) {
+                        chunk.addAndRegisterBlockEntity(entity);
+                        BandCounters.blockEntitiesAtOwner++;
+                    }
+                }
+                return null;
+            }
+        }
         return original.call(block, pos, state);
     }
 
     @Inject(method = "setBlockState", at = @At("RETURN"))
     private void alpha_omega$afterWrite(BlockPos pos, BlockState state, boolean moving, CallbackInfoReturnable<BlockState> cir) {
-        if (cir.getReturnValue() != null && !this.level.isClientSide && this.alpha_omega$linked()) {
+        BlockState old = cir.getReturnValue();
+        if (old != null && !this.level.isClientSide && this.alpha_omega$linked()) {
             BandWrites.afterWrite(this.level, (LevelChunk) (Object) this, pos);
+            if (this.loaded && !BandWrites.mirroring()) Claims.afterWrite(this.level, (LevelChunk) (Object) this, pos, old, state);
         }
     }
 
@@ -217,8 +244,8 @@ abstract class LevelChunkBandMixin implements BandChunk {
         if (this.level.isClientSide || !this.alpha_omega$linked()) return;
         LevelChunk self = (LevelChunk) (Object) this;
         if (self.getBlockEntities().containsKey(pos)) {
-            // Our own: removing it gives up the cell (if it was a claim).
-            if (this.loaded && !BandWrites.mirroring()) Ownership.release(this.level, self, pos);
+            // Our own: past the claim zone, removing it gives up the cell (a block entity claim).
+            if (this.loaded && !BandWrites.mirroring()) Claims.blockEntityRemoved(this.level, self, pos);
             return;
         }
         if (Ownership.isOwner(self, pos)) return;
@@ -230,13 +257,19 @@ abstract class LevelChunkBandMixin implements BandChunk {
         if (chunk != null && chunk.getBlockEntities().containsKey(at)) chunk.removeBlockEntity(at);
     }
 
-    /** A block entity set at a copy claims the cell while it exists (RS §3.5, "Block entities created explicitly"). */
+    /**
+     * A block entity set at a non-owner copy claims the cell (RS §3.5, "Block entities created explicitly"): block
+     * entities only ever sit at owners, and one set explicitly holds positions in this copy's frame.
+     */
     @Inject(method = "setBlockEntity", at = @At("TAIL"))
     private void alpha_omega$claim(BlockEntity entity, CallbackInfo ci) {
         if (!this.loaded || this.level.isClientSide || BandWrites.mirroring() || !this.alpha_omega$linked()) return;
         LevelChunk self = (LevelChunk) (Object) this;
         if (self.getBlockEntities().get(entity.getBlockPos()) != entity) return;
-        if (!Ownership.isOwner(self, entity.getBlockPos())) Ownership.claim(this.level, self, entity.getBlockPos());
+        if (!Ownership.isOwner(self, entity.getBlockPos())) {
+            BandCounters.blockEntityClaims++;
+            Ownership.claim(this.level, self, entity.getBlockPos());
+        }
     }
 
     @Inject(method = "updateBlockEntityTicker", at = @At("HEAD"), cancellable = true)

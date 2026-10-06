@@ -594,11 +594,13 @@ public class BandGameTests {
                         + run.seamState(u, 0, dy) + "; reference " + run.referenceState(u, 0, dy));
                 }
             }
-            // POIs: the band cells' at their owners, none at the band copies.
+            // POIs: the band cells' at their owners only. The portal was lit from the tile side, so its band cells are
+            // claimed by the band copy (RS §3.3).
             for (int dy = 1; dy <= 3; dy++) {
-                BlockPos band = run.seam.at(0, 0, dy), owner = run.seam.other(band);
-                run.check(poiRecorded(run.level, owner), "no portal POI at the owner " + owner.toShortString());
-                run.check(!poiRecorded(run.level, band), "a portal POI at the band copy " + band.toShortString());
+                BlockPos band = run.seam.at(0, 0, dy), other = run.seam.other(band);
+                run.check(Ownership.isOwner(run.level, band), "the portal's band cell " + band.toShortString() + " was not claimed by the band copy");
+                run.check(poiRecorded(run.level, band), "no portal POI at the owner " + band.toShortString());
+                run.check(!poiRecorded(run.level, other), "a portal POI at the non-owner copy " + other.toShortString());
             }
             int i = 0;
             for (Site site : List.of(run.seam, run.reference)) {
@@ -813,12 +815,12 @@ public class BandGameTests {
     }
 
     /**
-     * Save, corrupt, reload: a band chunk and its source hold a stone (owned by the source) and a chest with items placed
-     * at the band copy (a claim: the band copy owns it). Before they unload and save, one chunk is made to look as if it
+     * Save, corrupt, reload: a band chunk and its source hold a stone and a chest with items, both placed at the band
+     * copy (claims: the band copy owns them). Before they unload and save, one chunk is made to look as if it
      * had been saved earlier, before a crash: its stamp is set behind the other's and its copy is stale. With the source
      * newer, the band copy of the stone is a diamond block; with the band newer, the source has lost its mask bit and its
-     * copy of the chest. After reloading, the newer chunk's masks must win, every non-owner cell must be refreshed from
-     * its owner, and the chest must keep its items.
+     * copy of the chest. After reloading, the newer chunk's masks must win, every cell must take the newer chunk's
+     * content (a non-owner from its owner; an owner from a newer source), and the chest must keep its items.
      */
     private static void recovery(GameTestHelper helper, Seam seam, int lane, boolean bandNewer) {
         ServerLevel level = helper.getLevel();

@@ -39,6 +39,16 @@ public final class BandCounters {
     // Ownership
     public static long claims;
     public static long releases;
+    /** Placements in a claim zone, those that claimed a band cell, and those that took a cell back for the tile copy. */
+    public static long placements;
+    public static long placementClaims;
+    public static long placementReturns;
+    /** Placements at a band copy beyond {@code C}: the owner is unchanged. */
+    public static long placementsBeyondClaim;
+    /** Block entities a write at a non-owner copy would have created there, created at the owner instead. */
+    public static long blockEntitiesAtOwner;
+    /** Block entities set explicitly at a non-owner copy, which claimed the cell. */
+    public static long blockEntityClaims;
     public static long staleBlockEntitiesRemoved;
     public static long ownershipUnresolved;
     // Promotion
@@ -73,6 +83,7 @@ public final class BandCounters {
         neighbourForwarded = shapeForwarded = comparatorForwarded = forwardsDropped = poiRedirected = capabilityRedirects = blockEntityRedirects = replicasSent = 0;
         randomTicksSkipped = precipitationSkipped = tickersSkipped = scheduledTicksDeduped = poiScanSkipped = 0;
         claims = releases = staleBlockEntitiesRemoved = ownershipUnresolved = 0;
+        placements = placementClaims = placementReturns = placementsBeyondClaim = blockEntitiesAtOwner = blockEntityClaims = 0;
         gateWaits = gateHeld = gateFills = gateFallbacks = lateFills = liveRefreshes = cellsFilled = lightChecks = fillNanos = stampMismatches = 0;
         pairedTicketsAdded = placementShapes = 0;
         gateViolations.clear();
@@ -118,6 +129,33 @@ public final class BandCounters {
         return String.join(" < ", frames);
     }
 
+    /** Claims held in the loaded band chunks: cells owned by a band copy, and of those, how many beyond {@code C}. */
+    public static String claimedCells(net.minecraft.server.level.ServerLevel level) {
+        g_mungus.alpha_omega.orbifold.OrbifoldGeometry geometry = Band.geometry(level);
+        if (geometry == null) return "Claimed cells: not an orbifold";
+        long cells = 0, beyond = 0;
+        int chunks = 0;
+        for (net.minecraft.server.level.ChunkHolder holder : ((g_mungus.alpha_omega.mixin.server.ChunkMapAccessor) level.getChunkSource().chunkMap).alpha_omega$visibleChunks()) {
+            net.minecraft.world.level.chunk.LevelChunk chunk = holder.getTickingChunk();
+            if (chunk == null) chunk = level.getChunkSource().getChunkNow(holder.getPos().x, holder.getPos().z);
+            if (chunk == null || !Band.links(chunk).band) continue;
+            BandData data = ((BandChunk) chunk).alpha_omega$data(false);
+            if (data == null || data.flipCount() == 0) continue;
+            chunks++;
+            cells += data.flipCount();
+            for (int i = 0; i < data.sections(); i++) {
+                if (!data.hasFlips(i)) continue;
+                int baseY = chunk.getSectionYFromSectionIndex(i) << 4;
+                for (int cell = 0; cell < 4096; cell++) {
+                    if (!data.flip(i, cell)) continue;
+                    BlockPos at = new BlockPos(chunk.getPos().getMinBlockX() + (cell & 15), baseY + (cell >> 8), chunk.getPos().getMinBlockZ() + (cell >> 4 & 15));
+                    if (!Claims.inClaimZone(geometry, chunk, at)) beyond++;
+                }
+            }
+        }
+        return String.format(Locale.ROOT, "Claimed cells in loaded band chunks: %d in %d chunks (%d beyond C, held by block entities)", cells, chunks, beyond);
+    }
+
     public static List<String> lines() {
         List<String> lines = new ArrayList<>();
         lines.add(String.format(Locale.ROOT, "Writes: mirrored %d (missed %d), packets for copies %d", mirroredWrites, mirrorsMissed, copyPackets));
@@ -127,6 +165,8 @@ public final class BandCounters {
             randomTicksSkipped, precipitationSkipped, tickersSkipped, poiScanSkipped, scheduledTicksDeduped));
         lines.add(String.format(Locale.ROOT, "Ownership: claims %d, releases %d, stale block entities removed %d, unresolved %d",
             claims, releases, staleBlockEntitiesRemoved, ownershipUnresolved));
+        lines.add(String.format(Locale.ROOT, "Claims: placements %d (claimed for a band copy %d, taken back for the tile %d), beyond C %d; block entities created at the owner %d, claims by block entity %d",
+            placements, placementClaims, placementReturns, placementsBeyondClaim, blockEntitiesAtOwner, blockEntityClaims));
         lines.add(String.format(Locale.ROOT, "Promotion: gate waits %d (held %d), fills %d (%.1f ms total), fallbacks %d, late fills %d, live refreshes %d; cells filled %d, light checks %d; stamp mismatches %d; paired tickets added %d",
             gateWaits, gateHeld, gateFills, fillNanos / 1e6, gateFallbacks, lateFills, liveRefreshes, cellsFilled, lightChecks, stampMismatches, pairedTicketsAdded));
         lines.add("Gate violations: " + gateViolationTotal() + " " + gateViolations);
