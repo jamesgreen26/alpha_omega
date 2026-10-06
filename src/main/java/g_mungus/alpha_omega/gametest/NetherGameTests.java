@@ -642,6 +642,9 @@ public class NetherGameTests {
                 && Math.abs(c.getY() - home.y) < 3.0);
             helper.assertTrue(inPortal, site.name + ": back at " + back.pos() + " (canonical " + home + "), not in the portal at " + corner.toShortString());
             report.add(String.format(Locale.ROOT, "%s: overworld %s (band copy %s) -> Nether %s -> overworld %s", site.name, at, bandPig.position(), arrival, back.pos()));
+            // Both levels' band copies around the portals hold what their sources hold.
+            BandCheck.Result atNether = BandCheck.check(nether, new ChunkPos(netherCorner), 3), atHome = BandCheck.check(overworld, new ChunkPos(corner), 3);
+            helper.assertTrue(atNether.clean() && atHome.clean(), site.name + ": copies differ: Nether " + atNether + "; overworld " + atHome);
             TestChunks.release(overworld, forced);
             TestChunks.release(nether, netherForced);
         }
@@ -690,6 +693,8 @@ public class NetherGameTests {
             && Math.abs(c.getY() - home.y) < 3.0);
         helper.assertTrue(inPortal, "back at " + back.pos() + " (canonical " + home + "), not in the Nether portal at " + corner.toShortString());
         AlphaOmegaMod.LOGGER.info("Nether portal in the band: Nether {} (band copy {}) -> overworld {} -> Nether {}", at, bandPig.position(), arrival, back.pos());
+        BandCheck.Result atNether = BandCheck.check(nether, new ChunkPos(corner), 3), atBand = BandCheck.check(nether, new ChunkPos(bandCorner), 3);
+        helper.assertTrue(atNether.clean() && atBand.clean(), "Nether copies differ: " + atNether + "; " + atBand);
         TestChunks.release(nether, forced);
         TestChunks.release(overworld, overworldForced);
         helper.succeed();

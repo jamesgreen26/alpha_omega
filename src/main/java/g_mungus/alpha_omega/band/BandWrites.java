@@ -56,7 +56,7 @@ public final class BandWrites {
             data.bump(link.key);
             LevelChunk copy = link.chunk(level);
             if (copy == null || !Band.filled(copy)) {
-                BandCounters.mirrorsMissed++;
+                BandCounters.mirrorMissed(level);
                 continue;
             }
             ((BandChunk) copy).alpha_omega$data(true).bump(self);

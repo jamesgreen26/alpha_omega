@@ -229,7 +229,8 @@ public class BandGameTests {
             this.check(!Band.DETECTORS || BandCounters.ranAtNonOwnerTotal() == 0, where + ": reactions ran at a non-owner: " + BandCounters.ranAtNonOwner
                 + " (first at " + (BandCounters.ranAtNonOwnerWhere.isEmpty() ? "?" : BandCounters.ranAtNonOwnerWhere.get(0).split(" via ")[0]) + "; stacks in the log)");
             this.check(BandCounters.gateViolationTotal() == 0, where + ": promotion gate breached: " + BandCounters.gateViolations);
-            this.check(BandCounters.mirrorsMissed == 0, where + ": mirrored writes missed: " + BandCounters.mirrorsMissed);
+            // In this level: a pig through a portal makes the Nether's exit, whose writes may miss copies not loaded there.
+            this.check(BandCounters.mirrorsMissedIn(this.level) == 0, where + ": mirrored writes missed: " + BandCounters.mirrorsMissedIn);
             this.release();
             this.helper.succeed();
         }

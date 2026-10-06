@@ -19,6 +19,8 @@ public final class BandCounters {
     public static long mirroredWrites;
     /** A write whose copy's chunk was not loaded (or not filled): the copy is refreshed when it next loads. */
     public static long mirrorsMissed;
+    /** {@link #mirrorsMissed} by level (the overworld and the Nether each have a band). */
+    public static final Map<String, Long> mirrorsMissedIn = new java.util.concurrent.ConcurrentHashMap<>();
     public static long copyPackets;
     // Forwarding
     public static long neighbourForwarded;
@@ -78,8 +80,20 @@ public final class BandCounters {
     private BandCounters() {
     }
 
+    /** A write at {@code level} whose copy was not loaded. */
+    public static void mirrorMissed(net.minecraft.world.level.Level level) {
+        mirrorsMissed++;
+        mirrorsMissedIn.merge(level.dimension().location().toString(), 1L, Long::sum);
+    }
+
+    /** {@link #mirrorsMissed} in one level. */
+    public static long mirrorsMissedIn(net.minecraft.world.level.Level level) {
+        return mirrorsMissedIn.getOrDefault(level.dimension().location().toString(), 0L);
+    }
+
     public static void reset() {
         mirroredWrites = mirrorsMissed = copyPackets = 0;
+        mirrorsMissedIn.clear();
         neighbourForwarded = shapeForwarded = comparatorForwarded = forwardsDropped = poiRedirected = capabilityRedirects = blockEntityRedirects = replicasSent = 0;
         randomTicksSkipped = precipitationSkipped = tickersSkipped = scheduledTicksDeduped = poiScanSkipped = 0;
         claims = releases = staleBlockEntitiesRemoved = ownershipUnresolved = 0;
