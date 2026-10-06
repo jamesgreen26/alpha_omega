@@ -22,7 +22,8 @@ import g_mungus.alpha_omega.orbifold.OrbifoldSize;
  * {@code x = −1000} (default 3000), clear of the north lanes and image walks. Bridge sites on the north fold are at
  * {@code x = 400} and up at every size (copies at {@code −401} and down), and on the south fold at {@code x = 300} and up
  * (default 2500). Claim sites on the north fold are at {@code x = −700} and down (default −2000; sources at {@code 699} and
- * up), and on the south fold at {@code x = 700} and up (default 1000).
+ * up), and on the south fold at {@code x = 700} and up (default 1000). Polish sites ({@code PolishGameTests}) are on the
+ * north fold at {@code x = 200..311} at every size (copies at {@code −312..−200}), and at the four cone points.
  */
 final class TestPlaces {
 

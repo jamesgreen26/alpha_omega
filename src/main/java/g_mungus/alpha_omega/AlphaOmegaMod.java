@@ -135,7 +135,8 @@ public class AlphaOmegaMod {
         GameTestFilter.register(java.util.List.of(ModLoadGameTests.class, OrbifoldGameTests.class, GeneratorGameTests.class, TerrainGameTests.class, SableGameTests.class, g_mungus.alpha_omega.gametest.LocalTimeGameTests.class,
             g_mungus.alpha_omega.gametest.ImageGameTests.class, g_mungus.alpha_omega.gametest.BandGameTests.class,
             g_mungus.alpha_omega.gametest.TransferGameTests.class, g_mungus.alpha_omega.gametest.RetentionGameTests.class,
-            g_mungus.alpha_omega.gametest.BridgeGameTests.class, g_mungus.alpha_omega.gametest.ClaimGameTests.class), event::register);
+            g_mungus.alpha_omega.gametest.BridgeGameTests.class, g_mungus.alpha_omega.gametest.ClaimGameTests.class,
+            g_mungus.alpha_omega.gametest.PolishGameTests.class), event::register);
     }
 
 }
