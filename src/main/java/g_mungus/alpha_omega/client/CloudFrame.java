@@ -23,6 +23,8 @@ import g_mungus.alpha_omega.orbifold.Motion;
 public final class CloudFrame {
 
     private static Motion current = Motion.IDENTITY;
+    /** Development aid ({@code -PvanillaClouds}): never update, so clouds are placed from storage as in vanilla. */
+    private static final boolean VANILLA = Boolean.getBoolean("alpha_omega.dev.vanillaClouds");
 
     private CloudFrame() {
     }
@@ -39,7 +41,7 @@ public final class CloudFrame {
 
     /** The local player was moved by {@code g} (a frame transfer): keep every cloud over the same ground. */
     public static void transferred(Motion g) {
-        current = afterTransfer(current, g);
+        if (!VANILLA) current = afterTransfer(current, g);
     }
 
     /** {@code m ∘ g⁻¹}: the map after a transfer by {@code g}. */
