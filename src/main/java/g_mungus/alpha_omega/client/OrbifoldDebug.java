@@ -22,6 +22,14 @@ public final class OrbifoldDebug {
     }
 
     public static List<String> lines(OrbifoldGeometry geometry, double x, double y, double z, float yaw) {
+        return lines(geometry, x, y, z, yaw, true);
+    }
+
+    /**
+     * The {@code Orbifold:} line, and the {@code Planet:} line where {@code withPlanet} (the level has a local sky: the
+     * overworld; the Nether's geometry has no projection).
+     */
+    public static List<String> lines(OrbifoldGeometry geometry, double x, double y, double z, float yaw, boolean withPlanet) {
         int bx = (int) Math.floor(x), bz = (int) Math.floor(z);
         String region = geometry.isTile(bx, bz) ? "tile" : geometry.isBand(bx, bz) ? "band" : geometry.isSkirt(bx, bz) ? "skirt" : "outside";
         double depth = geometry.seamDepth(x, z);
@@ -29,6 +37,7 @@ public final class OrbifoldDebug {
         Motion frame = geometry.frame(x, z);
         String orbifold = String.format(Locale.ROOT, "Orbifold: %s, frame %s, %s; canon %.1f %.1f %.1f", region, frame, seam,
             frame.pointX(x), y, frame.pointZ(z));
+        if (!withPlanet) return List.of(orbifold);
         PlanetProjection.Position position = PlanetProjection.of(geometry).project(x, z);
         double latitude = Math.toDegrees(position.latitude());
         double longitude = 360.0 * position.longitude();

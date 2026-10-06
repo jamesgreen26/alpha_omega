@@ -446,9 +446,19 @@ public class NetherGameTests {
 
     // ---- Transfers ----
 
-    /** An item and a mob flying out past {@code H} in the Nether, across the east seam and the north fold, cross into the tile. */
+    /** Frame transfer events seen, for {@link #netherThingsCrossSeams}. */
+    private static final List<g_mungus.alpha_omega.api.FrameTransferEvent> EVENTS = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private static final java.util.concurrent.atomic.AtomicBoolean LISTENING = new java.util.concurrent.atomic.AtomicBoolean();
+
+    /**
+     * An item and a mob flying out past {@code H} in the Nether, across the east seam and the north fold, cross into the
+     * tile, and each crossing posts its {@code FrameTransferEvent} in the Nether.
+     */
     @GameTest(template = TEMPLATE, timeoutTicks = 600)
     public static void netherThingsCrossSeams(GameTestHelper helper) {
+        if (LISTENING.compareAndSet(false, true)) {
+            net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener((g_mungus.alpha_omega.api.FrameTransferEvent event) -> EVENTS.add(event));
+        }
         ServerLevel level = nether(helper);
         OrbifoldGeometry g = geometry(helper, level);
         double d = g.band - 0.3, zMid = (g.northRow + g.southRow) / 2.0 + 0.5, xNorth = -g.a / 8.0 + 0.5;
@@ -505,6 +515,8 @@ public class NetherGameTests {
                 Vec3 landed = Transform.of(c.expected).position(starts.get(i));
                 helper.assertTrue(g.isTile((int) Math.floor(entity.getX()), (int) Math.floor(entity.getZ())) && entity.position().distanceTo(landed) < 16.0,
                     what + " should have crossed by " + c.expected + " to near " + landed + ", but is at " + entity.position());
+                helper.assertTrue(EVENTS.stream().anyMatch(e -> e.entity() == entity && e.level() == level && e.motion().equals(c.expected)),
+                    what + ": no frame transfer event in the Nether");
                 if (entity instanceof ZombifiedPiglin) {
                     float expectedYaw = c.expected.yaw(yaws.get(i));
                     helper.assertTrue(Math.abs(Math.IEEEremainder(entity.getYRot() - expectedYaw, 360.0)) < 1e-3,

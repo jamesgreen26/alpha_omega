@@ -48,7 +48,8 @@ abstract class DebugScreenOverlayMixin {
         for (int i = 0; i < result.size(); i++) {
             if (result.get(i).startsWith("XYZ: ") || result.get(i).startsWith("Sun: ")) at = i + 1;
         }
-        result.addAll(at, g_mungus.alpha_omega.client.OrbifoldDebug.lines(geometry, camera.getX(), camera.getY(), camera.getZ(), camera.getYRot()));
+        result.addAll(at, g_mungus.alpha_omega.client.OrbifoldDebug.lines(geometry, camera.getX(), camera.getY(), camera.getZ(), camera.getYRot(),
+            LocalSky.local(camera.level())));
         return result;
     }
 

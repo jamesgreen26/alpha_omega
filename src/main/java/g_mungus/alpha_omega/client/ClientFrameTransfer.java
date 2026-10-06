@@ -53,9 +53,13 @@ public final class ClientFrameTransfer {
         seen = 0;
     }
 
-    /** Another level (a portal, a respawn): pending claims were in the old one; the counts carry on, as the server's do. */
+    /**
+     * Another level (a portal, a respawn): pending claims were in the old one; the counts carry on, as the server's do.
+     * Clouds start from storage again: the transfers that turned them were in the old level (the Nether has none).
+     */
     public static void levelChanged() {
         PENDING.clear();
+        CloudFrame.reset();
     }
 
     public static void afterTick(LocalPlayer player) {
