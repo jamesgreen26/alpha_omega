@@ -6,9 +6,9 @@ import g_mungus.alpha_omega.orbifold.Orbifold;
 import g_mungus.alpha_omega.worldgen.OrbifoldChunkGenerator;
 import net.minecraft.network.protocol.game.ClientboundSetChunkCacheRadiusPacket;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 
@@ -41,10 +41,15 @@ public final class NetherView {
         player.connection.send(new ClientboundSetChunkCacheRadiusPacket(viewDistance(player.serverLevel())));
     }
 
-    /** After the server's view distance changed (sent to everyone): players in a limited level are told their own. */
-    public static void syncLimited(MinecraftServer server) {
-        int view = server.getPlayerList().getViewDistance();
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+    /**
+     * After the server's view distance changed (sent to everyone): players in a limited level are told their own. Takes
+     * the player list itself: vanilla sets the distance from the list's constructor (integrated and dedicated), before
+     * {@code MinecraftServer.getPlayerList()} returns it. A level created after that takes its limit when its chunk map
+     * is built ({@code ChunkMapViewMixin}), so nothing is lost by finding no players then.
+     */
+    public static void syncLimited(PlayerList players) {
+        int view = players.getViewDistance();
+        for (ServerPlayer player : players.getPlayers()) {
             if (viewDistance(player.serverLevel()) != view) sync(player);
         }
     }

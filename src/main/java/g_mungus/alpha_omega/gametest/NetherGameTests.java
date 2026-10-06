@@ -700,7 +700,34 @@ public class NetherGameTests {
         helper.succeed();
     }
 
-    /** Band rules apply in the Nether: its band chunks are linked to their sources, its tile chunks are not band. */
+    /**
+     * A player list setting its view distance from its own constructor, as {@code IntegratedPlayerList} and
+     * {@code DedicatedPlayerList} do while the server is starting: the view limit's hook must work from the list it runs
+     * on (the server does not hand that list out yet), and the small Nether's chunk map keeps its limit.
+     */
+    @GameTest(template = TEMPLATE)
+    public static void viewLimitSurvivesAPlayerListBeingBuilt(GameTestHelper helper) {
+        net.minecraft.server.MinecraftServer server = helper.getLevel().getServer();
+        int view = server.getPlayerList().getViewDistance();
+        net.minecraft.server.players.PlayerList[] built = new net.minecraft.server.players.PlayerList[1];
+        try {
+            built[0] = new net.minecraft.server.players.PlayerList(server, server.registries(), null, 8) {
+                {
+                    this.setViewDistance(view);
+                }
+            };
+        } catch (RuntimeException e) {
+            helper.fail("setting the view distance while a player list is built threw " + e);
+        }
+        helper.assertTrue(built[0].getViewDistance() == view, "the new list's view distance is " + built[0].getViewDistance());
+        ServerLevel nether = nether(helper);
+        int limit = g_mungus.alpha_omega.neighbour.ImageGeometry.maxViewDistance(geometry(helper, nether));
+        helper.assertTrue(g_mungus.alpha_omega.nether.NetherView.viewDistance(nether) == Math.min(Math.max(2, view), limit),
+            "the Nether's view distance is " + g_mungus.alpha_omega.nether.NetherView.viewDistance(nether) + ", expected min(" + view + ", " + limit + ")");
+        helper.succeed();
+    }
+
+    /** Band rules apply in the Nether:its band chunks are linked to their sources, its tile chunks are not band. */
     @GameTest(template = TEMPLATE, timeoutTicks = 400)
     public static void netherBandIsLinked(GameTestHelper helper) {
         ServerLevel level = nether(helper);
