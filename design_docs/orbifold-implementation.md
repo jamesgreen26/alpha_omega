@@ -333,7 +333,7 @@ Can start after phase 3 and run alongside 4 to 8.
 
 ### Phase 12: Polish
 
-Compasses and maps (heading from the projection); F3 (canonical position, frame, depth past seam, latitude and longitude); `/orbifold tp <cone point|lat lon>`; `api/Orbifold` (`canon`, `copies`, `transform`, `toFrame`, transfer events); docs.
+Clouds placed from canonical, Γ-invariant coordinates, so they don't jump on a fold crossing (phase 5 finding); compasses and maps (heading from the projection); F3 (canonical position, frame, depth past seam, latitude and longitude); `/orbifold tp <cone point|lat lon>`; `api/Orbifold` (`canon`, `copies`, `transform`, `toFrame`, transfer events); docs.
 
 ---
 
