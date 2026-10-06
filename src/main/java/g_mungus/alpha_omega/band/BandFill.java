@@ -112,6 +112,7 @@ public final class BandFill {
         long self = chunk.getPos().toLong();
 
         // 1. Masks and stamps, pair by pair.
+        boolean sourceNewer = false;
         for (CopyLinks.Link link : links.links) {
             LevelChunk copy = link.chunk(level);
             if (copy == null) continue;
@@ -120,6 +121,7 @@ public final class BandFill {
             if (mine != theirs) {
                 BandCounters.stampMismatches++;
                 mergeMasks(level, chunk, data, links, link, copy, other, mine > theirs);
+                if (link.toTile && theirs > mine) sourceNewer = true;
             }
             long stamp = Math.max(mine, theirs);
             data.setStamp(link.key, stamp);
@@ -127,7 +129,9 @@ public final class BandFill {
             copy.setUnsaved(true);
         }
 
-        // 2. Cells: non-owner cells take their owner's content.
+        // 2. Cells: non-owner cells take their owner's content. A cell this chunk owns pushes its content to the copies,
+        // unless the source is newer (this chunk missed writes before a crash): every write was mirrored, so the source
+        // has the cell's latest content, and the owner takes it.
         BandData sourceData = ((BandChunk) source).alpha_omega$data(true);
         LevelChunkSection[] to = chunk.getSections(), from = source.getSections();
         boolean turned = sourceLink.turned;
@@ -150,11 +154,13 @@ public final class BandFill {
                             want = Band.turn(origin.getBlockState(sourceLink.local(lx), ly, sourceLink.local(lz)), turned);
                         } else {
                             int cell = BandData.cell(lx, ly, lz);
-                            if (data.flip(i, cell)) {
+                            if (data.flip(i, cell) && !sourceNewer) {
                                 pushOwned(level, chunk, links, pos, target.getBlockState(lx, ly, lz));
                                 continue;
                             }
-                            want = ownersState(level, links, sourceLink, source, sourceData, i, lx, ly, lz);
+                            want = data.flip(i, cell)
+                                ? Band.turn(origin.getBlockState(sourceLink.local(lx), ly, sourceLink.local(lz)), turned)
+                                : ownersState(level, links, sourceLink, source, sourceData, i, lx, ly, lz);
                         }
                         BlockState have = target.getBlockState(lx, ly, lz);
                         if (want == have) continue;
