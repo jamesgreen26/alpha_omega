@@ -3,7 +3,7 @@ package g_mungus.alpha_omega.mixin.client;
 import g_mungus.alpha_omega.client.NeighbourEffects;
 import g_mungus.alpha_omega.orbifold.Motion;
 import g_mungus.alpha_omega.orbifold.Transform;
-import g_mungus.alpha_omega.transfer.FaceTransfer;
+import g_mungus.alpha_omega.transfer.FrameTransfer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
@@ -27,7 +27,7 @@ abstract class EntityLerpMixin {
         Motion g = NeighbourEffects.crossing(entity.level(), entity.position(), new Vec3(x, y, z));
         if (g == null) return;
         Vec3 p = Transform.of(g).position(entity.position());
-        float[] rotation = FaceTransfer.rotateLook(g, entity.getYRot(), entity.getXRot());
+        float[] rotation = FrameTransfer.rotateLook(g, entity.getYRot(), entity.getXRot());
         entity.setPos(p.x, p.y, p.z);
         entity.setYRot(rotation[0]);
         entity.setXRot(rotation[1]);

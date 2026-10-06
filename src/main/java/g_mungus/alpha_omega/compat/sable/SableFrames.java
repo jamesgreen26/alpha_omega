@@ -4,6 +4,7 @@ import dev.ryanhcode.sable.companion.math.Pose3d;
 import dev.ryanhcode.sable.companion.math.Pose3dc;
 import g_mungus.alpha_omega.orbifold.Motion;
 import g_mungus.alpha_omega.orbifold.OrbifoldGeometry;
+import g_mungus.alpha_omega.transfer.Frames;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix3d;
 import org.joml.Quaterniond;
@@ -27,12 +28,12 @@ public final class SableFrames {
         pose.orientation().premul(rotation(g).getNormalizedRotation(new Quaterniond())).normalize();
     }
 
-    /**
-     * The element a sub-level jumped by between two poses it was sent, or null if it did not cross. Phase 5 works this
-     * out from the frames of the two; until then nothing crosses.
-     */
+    /** How near the same place in the world a pose must land to count as crossing rather than moving. */
+    private static final double SLACK = 16.0;
+
+    /** The element a sub-level jumped by between two poses it was sent, or null if it did not cross. */
     @Nullable
     public static Motion crossing(OrbifoldGeometry geometry, Pose3dc from, Pose3dc to) {
-        return null;
+        return Frames.crossing(geometry, from.position().x(), from.position().z(), to.position().x(), to.position().z(), SLACK);
     }
 }

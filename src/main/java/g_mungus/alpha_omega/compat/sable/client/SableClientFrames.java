@@ -4,7 +4,7 @@ import dev.ryanhcode.sable.Sable;
 import dev.ryanhcode.sable.companion.math.Pose3d;
 import dev.ryanhcode.sable.network.client.SubLevelSnapshotInterpolator;
 import dev.ryanhcode.sable.sublevel.ClientSubLevel;
-import g_mungus.alpha_omega.client.ClientFaceTransfer;
+import g_mungus.alpha_omega.client.ClientFrameTransfer;
 import g_mungus.alpha_omega.client.NeighbourEffects;
 import g_mungus.alpha_omega.compat.sable.SableFrames;
 import g_mungus.alpha_omega.mixin.compat.sable.client.SubLevelSnapshotInterpolatorAccessor;
@@ -65,7 +65,7 @@ public final class SableClientFrames {
         // The local player standing on it crosses with it, in the same tick, before it moves.
         LocalPlayer player = Minecraft.getInstance().player;
         if (carried != null && player != null && Sable.HELPER.getTrackingSubLevel(player) == subLevel) {
-            ClientFaceTransfer.carriedAcross(player, carried);
+            ClientFrameTransfer.carriedAcross(player, carried);
         }
         return moved;
     }

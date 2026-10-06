@@ -16,8 +16,8 @@ import g_mungus.alpha_omega.neighbour.ImageViews;
 import g_mungus.alpha_omega.orbifold.Motion;
 import g_mungus.alpha_omega.orbifold.Orbifold;
 import g_mungus.alpha_omega.orbifold.OrbifoldGeometry;
-import g_mungus.alpha_omega.transfer.FaceTransfer;
-import g_mungus.alpha_omega.transfer.FaceTransfers;
+import g_mungus.alpha_omega.transfer.FrameTransfer;
+import g_mungus.alpha_omega.transfer.FrameTransfers;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -42,13 +42,12 @@ import org.joml.Vector3dc;
  * {@code Γ} for its new frame, in the same storage: pose and last pose moved, orientation and velocities turned with
  * it. Entities standing on it, players too, go with it (and do not cross on their own while on it). It crosses once
  * the place it goes to is loaded; jointed sub-levels do not cross yet. Loaded only when Sable is.
- *
- * <p>Inactive until phase 5 ({@link FaceTransfer#destination} says nothing crosses).
+ * Like other entities, a sub-level crosses at {@code H}, or at {@code C + ½} if a player stands on it.
  */
 public final class SubLevelTransfers {
 
     /** Ticks after crossing before the same sub-level may cross again. */
-    private static final int COOLDOWN_TICKS = FaceTransfer.COOLDOWN_TICKS;
+    private static final int COOLDOWN_TICKS = FrameTransfer.COOLDOWN_TICKS;
 
     /** Per level: when each sub-level last crossed (game time). */
     private static final Map<ServerLevel, Map<UUID, Long>> CROSSED = new WeakHashMap<>();
@@ -69,13 +68,16 @@ public final class SubLevelTransfers {
         for (ServerSubLevel subLevel : List.copyOf(container.getAllSubLevels())) {
             if (subLevel.isRemoved() || crossed.containsKey(subLevel.getUniqueId())) continue;
             Vector3d position = subLevel.logicalPose().position();
-            Motion g = FaceTransfer.destination(geometry, position.x, position.y, position.z);
+            double depth = riders(level, subLevel).stream().anyMatch(rider -> rider instanceof Player)
+                ? FrameTransfer.playerDepth(geometry) : FrameTransfer.otherDepth(geometry);
+            Motion g = FrameTransfer.destination(geometry, position.x, position.z, depth);
             if (g == null) continue;
             // Jointed sub-levels would have to cross together, anchors and all: not yet.
             if (SubLevelHelper.getConnectedChain(subLevel).size() > 1) continue;
             // Until it can carry on there, it carries on here, in the band.
             if (!destinationReady(level, subLevel, g)) continue;
             transfer(level, system, subLevel, g);
+            g_mungus.alpha_omega.transfer.TransferCounters.count(g_mungus.alpha_omega.transfer.TransferCounters.Kind.SUB_LEVEL);
             crossed.put(subLevel.getUniqueId(), now);
         }
     }
@@ -128,7 +130,7 @@ public final class SubLevelTransfers {
         subLevel.forceUpdateGlobalBounds();
 
         for (Entity rider : riders) {
-            FaceTransfers.carry(level, rider, g);
+            FrameTransfers.carry(level, rider, g);
             EntitySubLevelUtil.setOldPosNoMovement(rider);
         }
     }

@@ -12,8 +12,6 @@ import org.jetbrains.annotations.Nullable;
 /**
  * Where things the client hears of are seen from the camera: particles and sounds at an image's position play at the
  * transformed position, and a remote entity that jumped by an element of {@code Γ} is re-expressed in its new frame.
- *
- * <p>Crossings ({@link #crossing}) are phase 5's; until then a remote entity is never re-expressed.
  */
 public final class NeighbourEffects {
 
@@ -34,13 +32,17 @@ public final class NeighbourEffects {
         return k.isIdentity() ? null : k;
     }
 
+    /** How near the same place in the world an entity must land to count as crossing rather than moving. */
+    private static final double CROSSING_SLACK = 16.0;
+
     /**
-     * The element a remote entity moved by between two positions it was sent, or null if it did not cross. Phase 5:
-     * the frame change between the two.
+     * The element a remote entity moved by between two positions it was sent, or null if it did not cross: it jumped
+     * in storage to near an expression of where it was ({@code Frames#crossing}).
      */
     @Nullable
     public static Motion crossing(Level level, Vec3 from, Vec3 to) {
-        if (Orbifold.of(level) == null) return null;
-        return null;
+        OrbifoldGeometry geometry = Orbifold.of(level);
+        if (geometry == null) return null;
+        return g_mungus.alpha_omega.transfer.Frames.crossing(geometry, from.x, from.z, to.x, to.z, CROSSING_SLACK);
     }
 }
