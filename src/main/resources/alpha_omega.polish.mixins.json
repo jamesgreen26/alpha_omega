@@ -5,8 +5,11 @@
   "compatibilityLevel": "JAVA_21",
   "minVersion": "0.8",
   "mixins": [
+    "MapItemMixin",
+    "MapItemSavedDataMixin"
   ],
   "client": [
+    "client.CompassItemPropertyFunctionMixin",
     "client.LevelRendererCloudMixin",
     "compat.sodium.CloudRendererMixin"
   ],
