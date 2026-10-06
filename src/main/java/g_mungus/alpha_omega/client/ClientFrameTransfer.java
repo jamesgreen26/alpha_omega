@@ -131,6 +131,8 @@ public final class ClientFrameTransfer {
             }
         }
         CloudFrame.transferred(g);
+        // Sodium has no vanilla area swap to mark the crossing for DevScript's crossshots: the move marks it.
+        DevScript.crossed();
         TransferStats.faceChanged();
     }
 }
