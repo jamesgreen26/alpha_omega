@@ -124,9 +124,12 @@ The fold rows are rounded to multiples of 128, so spawn sits a few dozen blocks 
 
 | k | a × b | North row | South row | Spawn | Equivalent circumference | Mean sky speed | Sky speed at spawn | Speed below 50% within |
 |---|---|---|---|---|---|---|---|---|
+| small | 3584 × 3072 | −1152 | 384 | (0, 49) | ~4,160 | 8.3° / 100 | 10.7° / 100 | ~280 blocks |
 | 2 | 7680 × 6656 | −2560 | 768 | (0, 42) | ~8,960 | 3.9° / 100 blocks | 5.0° / 100 | ~600 blocks of a cone point |
 | **4** | **15360 × 13312** | **−5248** | **1408** | **(0, −44)** | **~17,900** | **1.9° / 100** | **2.5° / 100** | **~1,200 blocks** |
 | 8 | 30720 × 26624 | −10368 | 2944 | (0, 40) | ~35,800 | 1.0° / 100 | 1.25° / 100 | ~2,400 blocks |
+
+The small size is not a multiple of the base lattice: `b/a = 0.857`, 1% off `√3/2`, which the `z` scale factor `s` absorbs. Its fold row and spawn come from the same rule as the others: spawn is `0.3909·b` south of `N`, with the row rounded to 128. At this size the coarsest (4096-block) climate octaves contribute nothing.
 
 Cone point x positions are always `0` and `±a/2` on the north row, and `±a/4` on the south row. "Equivalent circumference" is the circumference of a sphere with the world's area, `a·b/2`.
 

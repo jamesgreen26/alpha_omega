@@ -42,7 +42,7 @@ The work splits into four tracks that can run partly in parallel after the geome
 | Frames | Each player's frame is the plane | One frame per region | **A frame is the element of `Γ` that maps a band cell to its source.** In the band, at most four elements apply (§2.4). |
 | Rendering past the band | Not covered | v2 neighbour views of other storages | **Image views** of the same storage (§6). |
 | Sky | Hexagonal Weierstrass projection | Out of scope | W §6, through main's `PlanetProjection` and `LocalSky` API (§2 phase 2). |
-| Size | k = 2, 4 or 8 (open) | — | **Default k = 4**, setting k ∈ {2, 4, 8}. Gametests use the default. |
+| Size | k = 2, 4 or 8 (open) | — | **Presets** small (3584 × 3072), medium (k = 2), normal (k = 4, default) and large (k = 8), in `OrbifoldSize`. Saves keep `size_factor` for k sizes and use `size: "small"` otherwise. Gametests use the default; `-PorbifoldSize=small` runs them at small. |
 
 ### 1.2 What carries over from each branch
 
@@ -64,7 +64,7 @@ Dropped from v2: `CubeGeometry`, `CubeFace`, `CubeSun`, `CubeNoise`, `CubeChunkG
 
 ## 2. Geometry reference
 
-All numbers are for size factor `k`, with the k = 4 values in brackets. Coordinates are block `x` (east) and `z` (south).
+All numbers are for size factor `k`, with the k = 4 values in brackets. The small preset (3584 × 3072, north row −1152, spawn (0, 49)) isn't a multiple of the base pair; `OrbifoldSize` holds `a`, `b`, the fold row and spawn for every preset. Coordinates are block `x` (east) and `z` (south).
 
 ### 2.1 The tile
 
@@ -373,6 +373,7 @@ Add a dated line here at the end of each phase, as in v2's `progress.md`: what l
 - 2026-10-05 Phases 3 and 9 (noise) merged: tile terrain, empty band and skirt, void outside; write guard; structures kept 16 blocks inside the tile; spawn from the geometry. Noise invariant under Γ to ~1e-13 at every seam type and cone point (lattice octaves up to ~1000-block cells, spectral above; ≤5% stretch); climate and density sampled at cell centres, so everything moves by half a block. Residue: aquifers (and, unmeasured, carvers and biome jitter) on the folds, all below sea level. Not done: the RS §6.2 blend, cross-seam feature merge.
 - 2026-10-05 Phase 4 merged: copy links, paired tickets, promotion gate at the FULL step (fill before block entities, ticks or sending), forwarded reactions, block entity claims, capability and block entity redirects, owner-only POIs, stamps and recovery, `/orbifold check`/`scan`, `-PcheckCopies`. 40 band gametests across east–west, both folds and a corner near F. Gaps: client replicas untested with a client, light work on the main thread (~1.8 ms per fill), simulation-distance changes not followed by paired tickets.
 - 2026-10-05 Phase 6 merged: image views (server tickets, tracking, lingering; client per-image ViewAreas with the draw-once clip) in vanilla and Sodium. 6 unit + 15 gametests; screenshots at the east seam, north fold, F and N show correct placement and no doubled faces. Images start a band's depth earlier than planned. Gap: empty first frames after a crossing (phase 5). Combined `orbifold`: 86/86 gametests with copy checks, 62 unit tests, client audit clean.
+- 2026-10-05 Small size merged: presets in `OrbifoldSize` (small 3584 × 3072 plus k = 2/4/8), fold row and spawn derived from the projection (re-derives the k table exactly), save-compatible codec, `-PorbifoldSize=small`, `TestPlaces` for size-independent test sites. 66 unit tests; suites pass at small. Small has 4.3× the default sky speed, sparser spectral octaves (4096-block climate octaves constant). Phase 10 note: a 1:8 Nether at small has a 12-chunk-tall tile and will need more images or a view limit.
 
 ---
 
