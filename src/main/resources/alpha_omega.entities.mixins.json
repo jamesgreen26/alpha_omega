@@ -1,0 +1,19 @@
+{
+  "required": true,
+  "package": "g_mungus.alpha_omega.mixin.entities",
+  "compatibilityLevel": "JAVA_21",
+  "minVersion": "0.8",
+  "mixins": [
+    "BrainAccessor",
+    "EntityAnchorMixin",
+    "EyeOfEnderAccessor",
+    "PhantomAccessor",
+    "ServerGamePacketListenerFrameMixin",
+    "TurtleAccessor"
+  ],
+  "client": [
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

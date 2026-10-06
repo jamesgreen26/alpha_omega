@@ -25,6 +25,9 @@ config = "alpha_omega.worldgen.mixins.json"
 [[mixins]]
 config = "alpha_omega.images.mixins.json"
 
+[[mixins]]
+config = "alpha_omega.entities.mixins.json"
+
 [[dependencies.alpha_omega]]
 modId = "neoforge"
 type = "required"

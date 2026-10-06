@@ -11,11 +11,15 @@ import g_mungus.alpha_omega.gametest.OrbifoldGameTests;
 import g_mungus.alpha_omega.gametest.SableGameTests;
 import g_mungus.alpha_omega.gametest.TerrainGameTests;
 import g_mungus.alpha_omega.neighbour.ImageViews;
-import g_mungus.alpha_omega.network.FaceTransferPayload;
+import g_mungus.alpha_omega.network.FrameTransferAckPayload;
+import g_mungus.alpha_omega.network.FrameTransferPayload;
+import g_mungus.alpha_omega.network.ServerFrameTransferPayload;
 import g_mungus.alpha_omega.network.OrbifoldConfigurationTask;
 import g_mungus.alpha_omega.network.OrbifoldPayload;
 import g_mungus.alpha_omega.orbifold.Orbifold;
-import g_mungus.alpha_omega.transfer.FaceTransfers;
+import g_mungus.alpha_omega.transfer.BuiltinFrameTranslators;
+import g_mungus.alpha_omega.transfer.FrameGroups;
+import g_mungus.alpha_omega.transfer.FrameTransfers;
 import g_mungus.alpha_omega.worldgen.OrbifoldChunkGenerator;
 import java.lang.reflect.Field;
 import java.util.Map;
@@ -44,6 +48,9 @@ public class AlphaOmegaMod {
 
     public static final String MOD_ID = "alpha_omega";
     public static final Logger LOGGER = LogUtils.getLogger();
+    /** Applies a server-driven frame transfer on the client; set by the client entry point, so servers never load it. */
+    public static java.util.function.Consumer<ServerFrameTransferPayload> clientFrameTransfer = payload -> {
+    };
 
     private static final DeferredRegister<MapCodec<? extends ChunkGenerator>> CHUNK_GENERATORS =
         DeferredRegister.create(Registries.CHUNK_GENERATOR, MOD_ID);
@@ -60,7 +67,14 @@ public class AlphaOmegaMod {
         modEventBus.addListener((RegisterConfigurationTasksEvent event) -> event.register(new OrbifoldConfigurationTask(event.getListener())));
         NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent event) -> OrbifoldCommand.register(event.getDispatcher()));
         NeoForge.EVENT_BUS.addListener((LevelTickEvent.Post event) -> {
-            if (event.getLevel() instanceof ServerLevel level) ImageViews.tick(level);
+            if (event.getLevel() instanceof ServerLevel level) {
+                ImageViews.tick(level);
+                FrameGroups.tick(level);
+            }
+        });
+        BuiltinFrameTranslators.register();
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.entity.player.PlayerInteractEvent.RightClickBlock event) -> {
+            if (event.getEntity() instanceof ServerPlayer player) FrameGroups.beforeUse(player, event.getPos());
         });
         NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> ImageViews.clear());
         g_mungus.alpha_omega.band.BandEvents.register(modEventBus);
@@ -108,8 +122,12 @@ public class AlphaOmegaMod {
     private static void registerPayloads(RegisterPayloadHandlersEvent event) {
         event.registrar("1").configurationToClient(OrbifoldPayload.TYPE, OrbifoldPayload.STREAM_CODEC,
             (payload, context) -> Orbifold.setClient(payload.geometry().orElse(null)));
-        event.registrar("1").playToServer(FaceTransferPayload.TYPE, FaceTransferPayload.STREAM_CODEC,
-            (payload, context) -> FaceTransfers.handleClaim((ServerPlayer) context.player(), payload));
+        event.registrar("1").playToServer(FrameTransferPayload.TYPE, FrameTransferPayload.STREAM_CODEC,
+            (payload, context) -> FrameTransfers.handleClaim((ServerPlayer) context.player(), payload));
+        event.registrar("1").playToServer(FrameTransferAckPayload.TYPE, FrameTransferAckPayload.STREAM_CODEC,
+            (payload, context) -> FrameTransfers.handleAck((ServerPlayer) context.player(), payload.index()));
+        event.registrar("1").playToClient(ServerFrameTransferPayload.TYPE, ServerFrameTransferPayload.STREAM_CODEC,
+            (payload, context) -> clientFrameTransfer.accept(payload));
     }
 
     private static void registerGameTests(RegisterGameTestsEvent event) {
