@@ -14,7 +14,10 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 
-/** F3 shows the local sun in the overworld, after the coordinates, and how much of the neighbouring faces is drawn. */
+/**
+ * F3 shows the local sun in the overworld, after the coordinates, then the orbifold lines (region, frame, depth past the
+ * seam, source position, latitude, longitude and heading), and how much of the images is drawn.
+ */
 @Mixin(DebugScreenOverlay.class)
 abstract class DebugScreenOverlayMixin {
 
@@ -26,12 +29,26 @@ abstract class DebugScreenOverlayMixin {
     private List<String> alpha_omega$sun(List<String> lines) {
         Entity camera = this.minecraft.getCameraEntity();
         if (camera == null) return lines;
-        List<String> result = alpha_omega$withSun(lines, camera);
+        List<String> result = alpha_omega$withOrbifold(alpha_omega$withSun(lines, camera), camera);
         String neighbours = g_mungus.alpha_omega.client.ImageRenderer.debugLine();
         if (neighbours != null) {
             result = new ArrayList<>(result);
             result.add(neighbours);
         }
+        return result;
+    }
+
+    /** The orbifold lines ({@link g_mungus.alpha_omega.client.OrbifoldDebug}) after the coordinates and the sun. */
+    @Unique
+    private static List<String> alpha_omega$withOrbifold(List<String> lines, Entity camera) {
+        g_mungus.alpha_omega.orbifold.OrbifoldGeometry geometry = g_mungus.alpha_omega.orbifold.Orbifold.of(camera.level());
+        if (geometry == null) return lines;
+        List<String> result = new ArrayList<>(lines);
+        int at = 0;
+        for (int i = 0; i < result.size(); i++) {
+            if (result.get(i).startsWith("XYZ: ") || result.get(i).startsWith("Sun: ")) at = i + 1;
+        }
+        result.addAll(at, g_mungus.alpha_omega.client.OrbifoldDebug.lines(geometry, camera.getX(), camera.getY(), camera.getZ(), camera.getYRot()));
         return result;
     }
 
