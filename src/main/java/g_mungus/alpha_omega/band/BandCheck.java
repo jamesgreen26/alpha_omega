@@ -16,7 +16,8 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
 /**
  * The copy check (RS §3.7 invariant): for every loaded, filled band or skirt chunk and each loaded chunk it links to,
  * every cell equals its copy turned; each cell has exactly one owner among its loaded copies, and the tile copy's mask
- * agrees; and block entities sit only at owners.
+ * agrees; block entities sit only at owners; and no air cell is claimed, nor any cell beyond {@code C} without a block
+ * entity (RS §3.3).
  */
 public final class BandCheck {
 
@@ -57,7 +58,7 @@ public final class BandCheck {
             if (geometry.isTileChunk(pos.x, pos.z) || !geometry.inFootprintChunk(pos.x, pos.z)) continue;
             LevelChunk band = level.getChunkSource().getChunkNow(pos.x, pos.z);
             if (band == null || !Band.filled(band)) continue;
-            checkChunk(level, band, tally);
+            checkChunk(level, geometry, band, tally);
         }
         return new Result(tally.chunks, tally.cells, tally.mismatches, tally.examples);
     }
@@ -78,7 +79,7 @@ public final class BandCheck {
         return check(level, chunks);
     }
 
-    private static void checkChunk(ServerLevel level, LevelChunk band, Tally tally) {
+    private static void checkChunk(ServerLevel level, OrbifoldGeometry geometry, LevelChunk band, Tally tally) {
         CopyLinks links = Band.links(band);
         tally.chunks++;
         int baseX = band.getPos().getMinBlockX(), baseZ = band.getPos().getMinBlockZ();
@@ -140,6 +141,13 @@ public final class BandCheck {
                 if (owners > 1 || (allLoaded && owners != 1)) tally.wrong(at.toShortString() + " has " + owners + " owners");
                 if (source != null && allLoaded && Ownership.isOwner(source, sourceLink.map(at)) == claimed) {
                     tally.wrong(at.toShortString() + ": the source's mask disagrees with the copies' claims");
+                }
+                // Claims (RS §3.3): air is always nominal; past C only a block entity holds a claim.
+                if (data != null && data.flip(i, cell)) {
+                    if (band.getBlockState(at).isAir()) tally.wrong(at.toShortString() + " is air but claimed");
+                    else if (!Claims.inClaimZone(geometry, band, at) && !band.getBlockEntities().containsKey(at)) {
+                        tally.wrong(at.toShortString() + " is claimed beyond C without a block entity");
+                    }
                 }
             }
         }
