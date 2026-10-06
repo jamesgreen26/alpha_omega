@@ -5,6 +5,7 @@ import g_mungus.alpha_omega.orbifold.OrbifoldSettings;
 import g_mungus.alpha_omega.orbifold.OrbifoldSize;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
@@ -46,11 +47,20 @@ public final class AlphaOmegaConfig {
         return SPEC.isLoaded() ? TRANSFER_LINGER_TICKS.get() : DEFAULT_LINGER_TICKS;
     }
 
+    /**
+     * The settings for a world whose preset leaves them out. The system property {@value #SIZE_PROPERTY} (a size's id;
+     * {@code -PorbifoldSize=small} on a run task) overrides the configured size, so gametests can run at any size.
+     */
     public static OrbifoldSettings defaults() {
-        if (!SPEC.isLoaded()) return OrbifoldSettings.DEFAULT;
-        OrbifoldSize size = OrbifoldSize.byId(SIZE.get()).or(() -> OrbifoldSize.bySizeFactor(SIZE_FACTOR.get())).orElse(OrbifoldSize.DEFAULT);
+        Optional<OrbifoldSize> override = Optional.ofNullable(System.getProperty(SIZE_PROPERTY)).map(id -> OrbifoldSize.byId(id)
+            .orElseThrow(() -> new IllegalArgumentException(SIZE_PROPERTY + " must be one of " + OrbifoldSize.IDS + ": " + id)));
+        if (!SPEC.isLoaded()) return override.map(OrbifoldSettings.DEFAULT::withSize).orElse(OrbifoldSettings.DEFAULT);
+        OrbifoldSize size = override.or(() -> OrbifoldSize.byId(SIZE.get())).or(() -> OrbifoldSize.bySizeFactor(SIZE_FACTOR.get()))
+            .orElse(OrbifoldSize.DEFAULT);
         return new OrbifoldSettings(size, BAND_CHUNKS.get());
     }
+
+    public static final String SIZE_PROPERTY = "alpha_omega.size";
 
     /** {@code ""} and every size's id, in a mutable list (see {@code sizeFactor}). */
     private static List<String> sizeIds() {
