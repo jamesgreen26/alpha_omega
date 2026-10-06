@@ -6,27 +6,34 @@ import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
 
 /**
  * Development aid ({@code -Dalpha_omega.dev.transferStats}, Gradle {@code -PtransferStats}): what crossing a seam
- * costs the client. For two seconds after each crossing it counts chunks received (and of those, chunks it
- * already held), chunks forgotten, how many sections vanilla had to draw in the first frames and the sun's height
- * over the first ticks; then it logs them.
+ * costs the client. For two seconds after each crossing it counts chunks received (and of those, chunks it already
+ * held), chunks forgotten, and for the first frames how many sections vanilla chose to draw, how many of those were
+ * compiled, and how many the outgoing area drew for it during the hand-over ({@code ImageRenderer}); also the sun's
+ * height over the first ticks and how many frames the hand-over lasted. Then it logs them.
  */
 public final class TransferStats {
 
     private static final boolean ENABLED = Boolean.getBoolean("alpha_omega.dev.transferStats");
     private static final int WINDOW_TICKS = 40;
-    private static final int FRAMES = 5;
+    private static final int FRAMES = 8;
 
     private static int ticksLeft;
     private static int received;
     private static int alreadyHeld;
     private static int forgotten;
-    private static final List<Integer> visibleSections = new ArrayList<>();
+    private static int handoverFrames = -1;
+    private static final List<String> frames = new ArrayList<>();
     private static final List<String> sunHeights = new ArrayList<>();
 
     private TransferStats() {
+    }
+
+    public static boolean enabled() {
+        return ENABLED;
     }
 
     public static void faceChanged() {
@@ -34,7 +41,8 @@ public final class TransferStats {
         if (ticksLeft > 0) report();
         ticksLeft = WINDOW_TICKS;
         received = alreadyHeld = forgotten = 0;
-        visibleSections.clear();
+        handoverFrames = -1;
+        frames.clear();
         sunHeights.clear();
         sunHeight();
     }
@@ -47,6 +55,11 @@ public final class TransferStats {
         }
     }
 
+    /** Vanilla's area was swapped (a crossing, or a teleport by an element): starts a window if a crossing did not. */
+    public static void swapped() {
+        if (ENABLED && ticksLeft <= 0) faceChanged();
+    }
+
     public static void chunkReceived(boolean held) {
         if (ticksLeft <= 0) return;
         received++;
@@ -57,9 +70,18 @@ public final class TransferStats {
         if (ticksLeft > 0) forgotten++;
     }
 
-    /** Once per frame, after vanilla chose its sections. */
-    public static void frame(int sections) {
-        if (ticksLeft > 0 && visibleSections.size() < FRAMES) visibleSections.add(sections);
+    /** Once per frame, after vanilla and the images chose their sections: {@code visible/compiled+handed over}. */
+    public static void frame(List<SectionRenderDispatcher.RenderSection> visible) {
+        if (ticksLeft <= 0 || frames.size() >= FRAMES) return;
+        long compiled = visible.stream().filter(section -> section.getCompiled() != SectionRenderDispatcher.CompiledSection.UNCOMPILED).count();
+        frames.add(visible.size() + "/" + compiled + "+" + ImageRenderer.handoverDrawn());
+    }
+
+    public static void handoverEnded(int frameCount) {
+        if (ENABLED) {
+            handoverFrames = frameCount;
+            AlphaOmegaMod.LOGGER.info("Transfer stats: hand-over ended after {} frames", frameCount);
+        }
     }
 
     public static void tick() {
@@ -69,7 +91,7 @@ public final class TransferStats {
     }
 
     private static void report() {
-        AlphaOmegaMod.LOGGER.info("Transfer stats: received {} chunks ({} already held), forgot {}, visible sections in the first frames {}, "
-            + "sun height by tick {}", received, alreadyHeld, forgotten, visibleSections, sunHeights);
+        AlphaOmegaMod.LOGGER.info("Transfer stats: received {} chunks ({} already held), forgot {}, first frames (vanilla visible/compiled+handed over) {}, "
+            + "hand-over frames {}, sun height by tick {}", received, alreadyHeld, forgotten, frames, handoverFrames, sunHeights);
     }
 }

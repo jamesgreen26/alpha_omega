@@ -144,6 +144,46 @@ public final class ImageRenderer {
     /** Vanilla's area was swapped this frame, and its visible-section graph starts again from nothing. */
     private static boolean swapped;
 
+    /**
+     * The hand-over after a swap. The incoming area was an image's, which only ever compiled the tile chunks that image
+     * showed past the band: everything near the camera (the tile and band home now draws) is uncompiled in it. The
+     * outgoing area, now image {@code image}, has all of that compiled, in the old frame. Until home has compiled a
+     * section, the outgoing area draws it from there, moved by {@code image}: the same blocks, at the same place in
+     * the world. Meanwhile vanilla's visible-section graph runs without occlusion culling, which cannot see past
+     * uncompiled sections and would otherwise only grow outward a compile at a time.
+     */
+    private static final class Handover {
+        final Area area;
+        final Motion image;
+        int frames;
+        int quiet;
+        int drawn;
+
+        Handover(Area area, Motion image) {
+            this.area = area;
+            this.image = image;
+        }
+    }
+
+    /** A hand-over ends once the outgoing area has drawn nothing for this many frames in a row... */
+    private static final int HANDOVER_QUIET_FRAMES = 20;
+    /** ...or after this many frames whatever happens. */
+    private static final int HANDOVER_MAX_FRAMES = 1200;
+
+    @Nullable
+    private static Handover handover;
+
+    /** Whether vanilla's visible-section graph should skip occlusion culling: during a hand-over. */
+    public static boolean relaxCulling() {
+        return handover != null;
+    }
+
+    /** Sections the outgoing area drew for home in the frame just set up (0 outside a hand-over). */
+    public static int handoverDrawn() {
+        Handover now = handover;
+        return now == null ? 0 : now.drawn;
+    }
+
     private ImageRenderer() {
     }
 
@@ -155,6 +195,7 @@ public final class ImageRenderer {
         GROUND.clear();
         if (Sodium.loaded()) SodiumNeighbours.reset();
         swapped = false;
+        handover = null;
         geometry = null;
     }
 
@@ -220,7 +261,10 @@ public final class ImageRenderer {
             }
             AREAS.clear();
             AREAS.putAll(rekeyed);
-            AREAS.put(h, new Area(outgoing, h));
+            Area old = new Area(outgoing, h);
+            AREAS.put(h, old);
+            handover = new Handover(old, h);
+            TransferStats.swapped();
             access.alpha_omega$setViewArea(incoming.view);
             access.alpha_omega$sectionOcclusionGraph().waitAndReset(incoming.view);
             swapped = true;
@@ -282,7 +326,7 @@ public final class ImageRenderer {
         DRAWS.clear();
         List<Motion> images = images(cube, cam);
         snapshot = new Snapshot(cube, images, cam, viewDistance);
-        if (images.isEmpty()) return;
+        if (images.isEmpty() && handover == null) return;
         if (Sodium.loaded()) {
             // Sodium collects and draws the images' terrain (SodiumNeighbours); entities and block entities still
             // draw from here, each with its image's turn.
@@ -338,6 +382,50 @@ public final class ImageRenderer {
             }
             DRAWS.put(image, draw);
         }
+        handOver(access, cube, cam, frustum, reach);
+    }
+
+    /** During a hand-over: draws from the outgoing area what home has not compiled yet ({@link Handover}). */
+    private static void handOver(LevelRendererAccessor access, OrbifoldGeometry cube, Vec3 cam, Frustum frustum, double reach) {
+        Handover now = handover;
+        if (now == null) return;
+        now.frames++;
+        ViewArea home = access.alpha_omega$viewArea();
+        Motion h = now.image;
+        Draw draw = DRAWS.get(h);
+        if (draw == null) {
+            draw = new Draw(h, new Matrix4f().set(rotation(h)), new Quaternionf().setFromNormalized(rotation(h)), virtualCamera(h, cam),
+                new ArrayList<>(), new IdentityHashMap<>());
+            DRAWS.put(h, draw);
+        }
+        int drawn = 0;
+        for (SectionRenderDispatcher.RenderSection section : now.area.view.sections) {
+            if (section.getCompiled() == SectionRenderDispatcher.CompiledSection.UNCOMPILED) continue;
+            BlockPos origin = section.getOrigin();
+            int chunkX = origin.getX() >> 4, chunkZ = origin.getZ() >> 4;
+            // Only what home drew before and draws now: the rest the image shows in its own right.
+            if (!ImageGeometry.homeDraws(cube, chunkX, chunkZ)) continue;
+            int homeX = h.chunkX(chunkX), homeZ = h.chunkZ(chunkZ);
+            if (!ImageGeometry.homeDraws(cube, homeX, homeZ)) continue;
+            BlockPos homeOrigin = new BlockPos(homeX << 4, origin.getY(), homeZ << 4);
+            SectionRenderDispatcher.RenderSection own = home == null ? null : ((ViewAreaAccessor) home).alpha_omega$getRenderSectionAt(homeOrigin);
+            if (own != null && own.getOrigin().equals(homeOrigin) && own.getCompiled() != SectionRenderDispatcher.CompiledSection.UNCOMPILED) continue;
+            AABB box = toHome(h, section.getBoundingBox());
+            if (distance(box, cam) > reach || !frustum.isVisible(box)) continue;
+            drawn++;
+            draw.visible.add(section);
+            for (RenderType layer : ((CompiledSectionAccessor) section.getCompiled()).alpha_omega$hasBlocks()) {
+                draw.layers.computeIfAbsent(layer, l -> new ArrayList<>()).add(section);
+            }
+        }
+        now.drawn = drawn;
+        now.quiet = drawn == 0 ? now.quiet + 1 : 0;
+        if (now.quiet >= HANDOVER_QUIET_FRAMES || now.frames >= HANDOVER_MAX_FRAMES) {
+            TransferStats.handoverEnded(now.frames);
+            handover = null;
+            // Back to occlusion culling, from a graph built with it.
+            access.alpha_omega$sectionOcclusionGraph().invalidate();
+        }
     }
 
     /** Where the camera is as seen from an image's storage: {@code g⁻¹(camera)}. */
@@ -355,7 +443,7 @@ public final class ImageRenderer {
         Area area = AREAS.get(image);
         if (area != null) return area;
         for (Area spare : AREAS.values()) {
-            if (images.contains(spare.image)) continue;
+            if (images.contains(spare.image) || handover != null && handover.area == spare) continue;
             AREAS.remove(spare.image);
             spare.image = image;
             spare.placedAt = Long.MIN_VALUE;

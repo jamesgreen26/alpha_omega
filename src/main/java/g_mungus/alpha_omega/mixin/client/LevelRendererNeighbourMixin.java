@@ -50,7 +50,7 @@ abstract class LevelRendererNeighbourMixin {
                                              LightTexture lightTexture, Matrix4f frustumMatrix, Matrix4f projectionMatrix, CallbackInfo ci,
                                              @Local Frustum frustum) {
         ImageRenderer.setup((LevelRenderer) (Object) this, camera, frustum, this.minecraft.options.getEffectiveRenderDistance());
-        TransferStats.frame(this.visibleSections.size());
+        TransferStats.frame(this.visibleSections);
     }
 
     @Inject(method = "renderLevel", at = @At(value = "INVOKE", ordinal = 0,

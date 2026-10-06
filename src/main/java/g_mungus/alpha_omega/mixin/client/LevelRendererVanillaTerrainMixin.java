@@ -45,6 +45,13 @@ abstract class LevelRendererVanillaTerrainMixin {
         ImageRenderer.afterOcclusionUpdate((LevelRenderer) (Object) this);
     }
 
+    /** During a hand-over after a crossing, vanilla's graph runs without occlusion culling ({@code ImageRenderer}). */
+    @com.llamalad7.mixinextras.injector.ModifyExpressionValue(method = "setupRender",
+        at = @At(value = "FIELD", target = "Lnet/minecraft/client/Minecraft;smartCull:Z"))
+    private boolean alpha_omega$relaxCulling(boolean smartCull) {
+        return smartCull && !ImageRenderer.relaxCulling();
+    }
+
     @Inject(method = "renderSectionLayer", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/ShaderInstance;clear()V"))
     private void alpha_omega$drawNeighbours(RenderType type, double camX, double camY, double camZ, Matrix4f modelView, Matrix4f projection, CallbackInfo ci) {
         ImageRenderer.drawLayer(type, RenderSystem.getShader(), camX, camY, camZ, modelView);
