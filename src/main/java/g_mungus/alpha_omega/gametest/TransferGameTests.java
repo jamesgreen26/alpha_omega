@@ -110,12 +110,12 @@ public class TransferGameTests {
     /** Starting just short of {@code H} past each kind of seam, flying outward: both ways near F, and across its corner. */
     private static List<Crossing> crossings(OrbifoldGeometry g) {
         double d = g.band - 0.3;
-        double zMid = -2000.5;
+        double zMid = TestPlaces.at(g, -2000.5, g.northRow + 300.5);
         List<Crossing> list = new ArrayList<>();
         list.add(new Crossing("east", new Vec3(g.maxX + d, HEIGHT, zMid), new Vec3(1, 0, 0), g.west));
         list.add(new Crossing("west", new Vec3(g.minX - d, HEIGHT, zMid + 40), new Vec3(-1, 0, 0), g.east));
-        list.add(new Crossing("north fold", new Vec3(600.5, HEIGHT, g.northRow - d), new Vec3(0, 0, -1), g.northFold));
-        list.add(new Crossing("south fold", new Vec3(g.a / 4.0 + 600.5, HEIGHT, g.southRow + d), new Vec3(0, 0, 1), g.southFold));
+        list.add(new Crossing("north fold", new Vec3(TestPlaces.at(g, 600.5, 1300.5), HEIGHT, g.northRow - d), new Vec3(0, 0, -1), g.northFold));
+        list.add(new Crossing("south fold", new Vec3(g.a / 4.0 + TestPlaces.at(g, 600.5, 300.5), HEIGHT, g.southRow + d), new Vec3(0, 0, 1), g.southFold));
         list.add(new Crossing("east near F", new Vec3(g.maxX + d, HEIGHT, g.northRow + 20.5), new Vec3(1, 0, 0), g.west));
         list.add(new Crossing("west near F", new Vec3(g.minX - d, HEIGHT, g.northRow + 20.5), new Vec3(-1, 0, 0), g.east));
         list.add(new Crossing("north fold near F", new Vec3(g.maxX - 20.5, HEIGHT, g.northRow - d), new Vec3(0, 0, -1), g.northFold));
@@ -239,20 +239,22 @@ public class TransferGameTests {
         OrbifoldGeometry g = geometry(helper);
         ServerLevel level = helper.getLevel();
         int zN = g.northRow;
+        // At other sizes the same layout, mirrored onto x = ±1200 (clear of the other tests' sites).
+        int fx = TestPlaces.at(g, 600, 1200);
         // One floor across the fold near x = 600, and its other half near x = −600: the band past the fold at each is
         // the tile at the other.
-        Set<ChunkPos> forced = loadArea(level, 590, zN - 55, 611, zN + 55);
-        forced.addAll(loadArea(level, -611, zN - 55, -590, zN + 55));
-        floor(level, 596, zN - 45, 605, zN + 44);
-        floor(level, -606, zN - 45, -597, zN + 44);
+        Set<ChunkPos> forced = loadArea(level, fx - 10, zN - 55, fx + 11, zN + 55);
+        forced.addAll(loadArea(level, -fx - 11, zN - 55, -fx + 10, zN + 55));
+        floor(level, fx - 4, zN - 45, fx + 5, zN + 44);
+        floor(level, -fx - 6, zN - 45, -fx + 3, zN + 44);
         ServerPlayer player = TestPlayers.survival(helper);
         player.addEffect(new MobEffectInstance(MobEffects.DAMAGE_RESISTANCE, 100000, 4, false, false));
         // Facing north (yaw 180).
-        player.teleportTo(level, -600.5, FLOOR + 1, zN + 12.5, 180.0F, 0.0F);
+        player.teleportTo(level, -fx - 0.5, FLOOR + 1, zN + 12.5, 180.0F, 0.0F);
         Zombie zombie = EntityType.ZOMBIE.create(level);
         zombie.setPersistenceRequired();
         zombie.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
-        zombie.moveTo(600.5, FLOOR + 1, zN + 12.5, 0.0F, 0.0F);
+        zombie.moveTo(fx + 0.5, FLOOR + 1, zN + 12.5, 0.0F, 0.0F);
         level.addFreshEntity(zombie);
         zombie.setTarget(player);
         FrameChanges changes = new FrameChanges(zombie);
@@ -282,8 +284,8 @@ public class TransferGameTests {
                 String failure = lost[0];
                 zombie.discard();
                 level.getServer().getPlayerList().remove(player);
-                clearFloor(level, 596, zN - 45, 605, zN + 44);
-                clearFloor(level, -606, zN - 45, -597, zN + 44);
+                clearFloor(level, fx - 4, zN - 45, fx + 5, zN + 44);
+                clearFloor(level, -fx - 6, zN - 45, -fx + 3, zN + 44);
                 TestChunks.release(level, forced);
                 if (failure != null) helper.fail("the zombie lost its target: " + failure + " (" + state + ")");
                 else if (!reached) helper.fail("the zombie did not catch the player: " + state);
@@ -300,7 +302,7 @@ public class TransferGameTests {
     public static void villagerKeepsHomeAndJobSite(GameTestHelper helper) {
         OrbifoldGeometry g = geometry(helper);
         ServerLevel level = helper.getLevel();
-        Vec3 at = new Vec3(g.maxX + 40.5, HEIGHT, -1500.5);
+        Vec3 at = new Vec3(g.maxX + 40.5, HEIGHT, TestPlaces.at(g, -1500.5, g.northRow + 400.5));
         Vec3 arrived = Transform.of(g.west).position(at);
         Set<ChunkPos> forced = load(level, List.of(at, arrived));
         Villager villager = EntityType.VILLAGER.create(level);
@@ -351,13 +353,14 @@ public class TransferGameTests {
         OrbifoldGeometry g = geometry(helper);
         ServerLevel level = helper.getLevel();
         int zN = g.northRow;
-        Set<ChunkPos> forced = loadArea(level, g.maxX - 40, -1200, g.maxX + 40, -1000);
-        forced.addAll(loadArea(level, g.minX - 40, -1200, g.minX + 40, -1000));
+        int lane = TestPlaces.at(g, -1200, g.northRow + 500);
+        Set<ChunkPos> forced = loadArea(level, g.maxX - 40, lane, g.maxX + 40, lane + 200);
+        forced.addAll(loadArea(level, g.minX - 40, lane, g.minX + 40, lane + 200));
         forced.addAll(loadArea(level, -40, zN - 40, 40, zN + 40));
         ServerPlayer walker = TestPlayers.mock(helper);
         walker.setNoGravity(true);
         // 20 blocks into the band past the east seam, walking south along it.
-        walker.teleportTo(level, g.maxX + 20.5, HEIGHT, -1190.5, 0.0F, 0.0F);
+        walker.teleportTo(level, g.maxX + 20.5, HEIGHT, lane + 10.5, 0.0F, 0.0F);
         ServerPlayer circler = TestPlayers.mock(helper);
         circler.setNoGravity(true);
         circler.teleportTo(level, 20.5, HEIGHT, zN + 0.5, 0.0F, 0.0F);
@@ -365,7 +368,7 @@ public class TransferGameTests {
         walkerCow.setNoAi(true);
         walkerCow.setNoGravity(true);
         walkerCow.setPersistenceRequired();
-        walkerCow.moveTo(g.minX + 8.5, HEIGHT, -1150.5);
+        walkerCow.moveTo(g.minX + 8.5, HEIGHT, lane + 50.5);
         level.addFreshEntity(walkerCow);
         Cow circlerCow = EntityType.COW.create(level);
         circlerCow.setNoAi(true);
@@ -406,7 +409,7 @@ public class TransferGameTests {
     public static void twoPlayersMeetInOneFrame(GameTestHelper helper) {
         OrbifoldGeometry g = geometry(helper);
         ServerLevel level = helper.getLevel();
-        double z = -2600.5;
+        double z = TestPlaces.at(g, -2600.5, g.northRow + 450.5);
         Set<ChunkPos> forced = loadArea(level, g.maxX - 70, z - 20, g.maxX + 70, z + 20);
         forced.addAll(loadArea(level, g.minX - 70, z - 20, g.minX + 70, z + 20));
         ServerPlayer a = TestPlayers.mock(helper);

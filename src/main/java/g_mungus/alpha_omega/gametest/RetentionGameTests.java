@@ -249,7 +249,8 @@ public class RetentionGameTests {
     public static void crossingKeepsView(GameTestHelper helper) {
         OrbifoldGeometry g = geometry(helper);
         double depth = FrameTransfer.playerDepth(g) + 0.2;
-        cross(helper, new Vec3(g.maxX + depth, 120.0, -3100.5), new Vec3(g.maxX + depth - 5.0, 120.0, -3098.5), false);
+        cross(helper, new Vec3(g.maxX + depth, 120.0, TestPlaces.at(g, -3100.5, g.northRow + 1000.5)),
+            new Vec3(g.maxX + depth - 5.0, 120.0, TestPlaces.at(g, -3098.5, g.northRow + 1002.5)), false);
     }
 
     /** Crossing the north fold and straight back again keeps everything still in view. */
@@ -257,6 +258,7 @@ public class RetentionGameTests {
     public static void crossingBackKeepsView(GameTestHelper helper) {
         OrbifoldGeometry g = geometry(helper);
         double depth = FrameTransfer.playerDepth(g) + 0.2;
-        cross(helper, new Vec3(1500.5, 160.0, g.northRow - depth), new Vec3(1498.5, 160.0, g.northRow - depth + 5.0), true);
+        cross(helper, new Vec3(TestPlaces.at(g, 1500.5, -1300.5), 160.0, g.northRow - depth),
+            new Vec3(TestPlaces.at(g, 1498.5, -1302.5), 160.0, g.northRow - depth + 5.0), true);
     }
 }

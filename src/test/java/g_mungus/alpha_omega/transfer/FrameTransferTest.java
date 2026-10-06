@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import g_mungus.alpha_omega.orbifold.Motion;
 import g_mungus.alpha_omega.orbifold.OrbifoldGeometry;
+import g_mungus.alpha_omega.orbifold.OrbifoldSize;
 import g_mungus.alpha_omega.orbifold.Transform;
 import java.util.List;
 import java.util.Random;
@@ -17,7 +18,7 @@ import org.junit.jupiter.api.Test;
 /** Transfers' pure rules ({@code orbifold-implementation.md} phase 5): motions on state, crossings, expressions, groups. */
 class FrameTransferTest {
 
-    private static final OrbifoldGeometry G = new OrbifoldGeometry(4, 4);
+    private static final OrbifoldGeometry G = new OrbifoldGeometry(OrbifoldSize.DEFAULT, 4);
     private static final double EPS = 1e-9;
 
     private static List<Motion> elements() {
