@@ -31,6 +31,9 @@ config = "alpha_omega.entities.mixins.json"
 [[mixins]]
 config = "alpha_omega.bridges.mixins.json"
 
+[[mixins]]
+config = "alpha_omega.polish.mixins.json"
+
 [[dependencies.alpha_omega]]
 modId = "neoforge"
 type = "required"

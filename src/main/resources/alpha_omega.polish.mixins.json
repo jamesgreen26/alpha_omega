@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "package": "g_mungus.alpha_omega.mixin.polish",
+  "plugin": "g_mungus.alpha_omega.compat.PolishMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "minVersion": "0.8",
+  "mixins": [
+  ],
+  "client": [
+    "client.LevelRendererCloudMixin",
+    "compat.sodium.CloudRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
