@@ -27,6 +27,17 @@ final class TestPlayers {
 
     /** A mock player with a given id, which loads any player data saved under it, as a returning player does. */
     static ServerPlayer mock(GameTestHelper helper, UUID id) {
+        return mock(helper, id, true);
+    }
+
+    /** A mock player in survival: mobs target it. */
+    static ServerPlayer survival(GameTestHelper helper) {
+        ServerPlayer player = mock(helper, UUID.randomUUID(), false);
+        player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+        return player;
+    }
+
+    private static ServerPlayer mock(GameTestHelper helper, UUID id, boolean creative) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
         CommonListenerCookie cookie = CommonListenerCookie.createInitial(new GameProfile(id, "test-mock-player"), false);
@@ -38,7 +49,7 @@ final class TestPlayers {
 
             @Override
             public boolean isCreative() {
-                return true;
+                return creative;
             }
         };
         Connection connection = new Connection(PacketFlow.SERVERBOUND);
