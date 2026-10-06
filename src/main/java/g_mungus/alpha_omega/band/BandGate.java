@@ -3,18 +3,20 @@ package g_mungus.alpha_omega.band;
 import g_mungus.alpha_omega.AlphaOmegaMod;
 import g_mungus.alpha_omega.mixin.band.ChunkMapBandAccessor;
 import g_mungus.alpha_omega.orbifold.OrbifoldGeometry;
-import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.GenerationChunkHolder;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.util.StaticCache2D;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.chunk.status.ChunkStep;
@@ -42,10 +44,14 @@ public final class BandGate {
     private static final int MAX_ATTEMPTS = 8;
     private static final long STALE_MILLIS = 120_000;
 
-    /** Band chunks let through the gate, whose next {@code FULL} step runs. Any thread. */
-    private static final Set<Long> PASSING = ConcurrentHashMap.newKeySet();
-    /** Band chunks holding a gate ticket on their source. Main thread. */
-    private static final Long2ObjectOpenHashMap<Waiting> WAITING = new Long2ObjectOpenHashMap<>();
+    /** Band chunks let through the gate, whose next {@code FULL} step runs, by level. Any thread. */
+    private static final Set<Key> PASSING = ConcurrentHashMap.newKeySet();
+    /** Band chunks holding a gate ticket on their source, by level. Main thread. */
+    private static final Map<Key, Waiting> WAITING = new HashMap<>();
+
+    /** A band chunk of a level: the overworld and the Nether each have their own. */
+    private record Key(ResourceKey<Level> level, long chunk) {
+    }
 
     private record Waiting(ServerLevel level, ChunkPos source, long since) {
     }
@@ -65,11 +71,12 @@ public final class BandGate {
         if (geometry == null) return null;
         ChunkPos pos = holder.getPos();
         if (geometry.isTileChunk(pos.x, pos.z) || !geometry.inFootprintChunk(pos.x, pos.z)) return null;
-        if (PASSING.remove(pos.toLong())) return null;
+        Key key = new Key(level.dimension(), pos.toLong());
+        if (PASSING.remove(key)) return null;
         CompletableFuture<Void> ready = new CompletableFuture<>();
         ((ChunkMapBandAccessor) map).alpha_omega$mainThreadExecutor().execute(() -> waitForSource(level, geometry, pos, ready, 0));
         return ready.thenCompose(v -> {
-            PASSING.add(pos.toLong());
+            PASSING.add(key);
             return map.applyStep(holder, step, cache);
         });
     }
@@ -80,9 +87,10 @@ public final class BandGate {
         ChunkPos source = new ChunkPos(cell.x(), cell.z());
         if (attempt == 0) {
             BandCounters.gateWaits++;
-            if (!WAITING.containsKey(band.toLong())) {
+            Key key = new Key(level.dimension(), band.toLong());
+            if (!WAITING.containsKey(key)) {
                 level.getChunkSource().addRegionTicket(GATE, source, GATE_LEVEL_DISTANCE, band);
-                WAITING.put(band.toLong(), new Waiting(level, source, System.currentTimeMillis()));
+                WAITING.put(key, new Waiting(level, source, System.currentTimeMillis()));
             }
         }
         if (level.getChunkSource().getChunkNow(source.x, source.z) != null) {
@@ -105,7 +113,7 @@ public final class BandGate {
 
     /** The band chunk has been filled (or let through): its source no longer needs holding. Main thread. */
     public static void release(ServerLevel level, ChunkPos band) {
-        Waiting waiting = WAITING.remove(band.toLong());
+        Waiting waiting = WAITING.remove(new Key(level.dimension(), band.toLong()));
         if (waiting != null) waiting.level.getChunkSource().removeRegionTicket(GATE, waiting.source, GATE_LEVEL_DISTANCE, band);
     }
 
@@ -113,12 +121,12 @@ public final class BandGate {
     public static void tick() {
         if (WAITING.isEmpty()) return;
         long now = System.currentTimeMillis();
-        var it = WAITING.long2ObjectEntrySet().fastIterator();
+        var it = WAITING.entrySet().iterator();
         while (it.hasNext()) {
-            Long2ObjectMap.Entry<Waiting> entry = it.next();
+            Map.Entry<Key, Waiting> entry = it.next();
             Waiting waiting = entry.getValue();
             if (now - waiting.since < STALE_MILLIS) continue;
-            waiting.level.getChunkSource().removeRegionTicket(GATE, waiting.source, GATE_LEVEL_DISTANCE, new ChunkPos(entry.getLongKey()));
+            waiting.level.getChunkSource().removeRegionTicket(GATE, waiting.source, GATE_LEVEL_DISTANCE, new ChunkPos(entry.getKey().chunk()));
             it.remove();
         }
     }

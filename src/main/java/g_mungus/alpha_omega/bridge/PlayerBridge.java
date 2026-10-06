@@ -2,6 +2,7 @@ package g_mungus.alpha_omega.bridge;
 
 import g_mungus.alpha_omega.band.Band;
 import g_mungus.alpha_omega.orbifold.Motion;
+import g_mungus.alpha_omega.orbifold.Orbifold;
 import g_mungus.alpha_omega.orbifold.OrbifoldGeometry;
 import g_mungus.alpha_omega.orbifold.Transform;
 import java.util.ArrayList;
@@ -100,9 +101,8 @@ public final class PlayerBridge {
      */
     public static boolean broadcast(MinecraftServer server, List<ServerPlayer> players, @Nullable Player except, double x, double y, double z,
         double radius, net.minecraft.resources.ResourceKey<Level> dimension, Packet<?> packet) {
-        if (dimension != Level.OVERWORLD) return false;
-        ServerLevel level = server.overworld();
-        if (level == null) return false;
+        ServerLevel level = server.getLevel(dimension);
+        if (level == null || Orbifold.of(level) == null) return false;
         List<Motion> images = images(level, x, z, radius);
         if (images.isEmpty()) return false;
         BridgeCounters.run(BridgeCounters.Kind.BROADCAST, x, z, radius);

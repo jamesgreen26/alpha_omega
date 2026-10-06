@@ -200,6 +200,8 @@ public final class ImageRenderer {
         swapped = false;
         handover = null;
         geometry = null;
+        // A new level (another dimension) starts without a last camera, so its first frame is never taken for a crossing.
+        lastCamera = null;
     }
 
     /**

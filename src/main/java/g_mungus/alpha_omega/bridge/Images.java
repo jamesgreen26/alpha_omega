@@ -5,8 +5,9 @@ import g_mungus.alpha_omega.orbifold.OrbifoldGeometry;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import org.jetbrains.annotations.Nullable;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The other places in storage that hold the cells of a region (RS §5, orbifold plan phase 7): its <b>images</b>. An
@@ -26,11 +27,11 @@ public final class Images {
     private record Element(Motion motion, double minX, double minZ, double maxX, double maxZ) {
     }
 
-    private record Cache(OrbifoldGeometry geometry, Element[] elements) {
-    }
-
-    @Nullable
-    private static volatile Cache cache;
+    /**
+     * Elements per geometry (by identity: a geometry has no {@code equals}), so the overworld and the Nether, which tick
+     * one after the other, keep theirs. Cleared if it ever holds more than a handful (geometries of earlier worlds).
+     */
+    private static final Map<OrbifoldGeometry, Element[]> CACHE = new ConcurrentHashMap<>();
 
     private Images() {
     }
@@ -72,8 +73,8 @@ public final class Images {
     }
 
     private static Element[] elements(OrbifoldGeometry geometry) {
-        Cache last = cache;
-        if (last != null && last.geometry == geometry) return last.elements;
+        Element[] cached = CACHE.get(geometry);
+        if (cached != null) return cached;
         // Every product of up to four generators: enough to reach each place a footprint cell can be held, including
         // round the cone points, where a cell's copies are a fold and a translation away from each other.
         Set<Motion> found = new LinkedHashSet<>();
@@ -101,7 +102,8 @@ public final class Images {
             if (e.maxX >= fMinX && e.minX <= fMaxX && e.maxZ >= fMinZ && e.minZ <= fMaxZ) elements.add(e);
         }
         Element[] array = elements.toArray(Element[]::new);
-        cache = new Cache(geometry, array);
+        if (CACHE.size() >= 8) CACHE.clear();
+        CACHE.put(geometry, array);
         return array;
     }
 

@@ -8,7 +8,9 @@ import it.unimi.dsi.fastutil.shorts.ShortList;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ServerLevel;
@@ -37,8 +39,8 @@ public final class BandFill {
 
     private static final Set<Heightmap.Types> HEIGHTMAPS = EnumSet.of(Heightmap.Types.MOTION_BLOCKING, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
         Heightmap.Types.OCEAN_FLOOR, Heightmap.Types.WORLD_SURFACE);
-    /** Band chunks the gate let through unfilled (its fallback), to fill once their source is loaded. */
-    private static final LongLinkedOpenHashSet PENDING = new LongLinkedOpenHashSet();
+    /** Band chunks the gate let through unfilled (its fallback), to fill once their source is loaded; per level. */
+    private static final Map<ServerLevel, LongLinkedOpenHashSet> PENDING = new WeakHashMap<>();
 
     private BandFill() {
     }
@@ -63,7 +65,7 @@ public final class BandFill {
         CopyLinks.Link source = links.source();
         if (source == null || source.chunk(level) == null) {
             band.alpha_omega$setFilled(false);
-            PENDING.add(chunk.getPos().toLong());
+            PENDING.computeIfAbsent(level, l -> new LongLinkedOpenHashSet()).add(chunk.getPos().toLong());
             BandCounters.gateFallbacks++;
             return;
         }
@@ -76,8 +78,9 @@ public final class BandFill {
 
     /** Fills chunks the gate let through unfilled, once their sources are loaded. Each level tick. */
     public static void flush(ServerLevel level) {
-        if (PENDING.isEmpty()) return;
-        LongIterator it = PENDING.iterator();
+        LongLinkedOpenHashSet pending = PENDING.get(level);
+        if (pending == null || pending.isEmpty()) return;
+        LongIterator it = pending.iterator();
         while (it.hasNext()) {
             long key = it.nextLong();
             LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key));
