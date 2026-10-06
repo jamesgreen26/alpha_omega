@@ -167,6 +167,38 @@ public final class FrameGroups {
         }
     }
 
+    /**
+     * Right after a player changes frame: what was following it joins it at once, rather than at the next check. Up to
+     * then those entities were beside it in storage; now they are a seam's width of storage away, where a mob chasing
+     * it would give up its target as out of range. Entities within {@code R} of it in the world move to their
+     * expression beside it, if valid; a mob targeting it moves even if it changed frame lately.
+     */
+    public static void afterPlayerMoved(ServerLevel level, ServerPlayer player) {
+        OrbifoldGeometry geometry = Orbifold.of(level);
+        if (geometry == null) return;
+        double radius = OrbifoldGeometry.INTERACTION_RADIUS;
+        double limit = geometry.band - FOLLOW_MARGIN;
+        Set<Entity> seen = new HashSet<>();
+        for (Frames.Expression where : Frames.expressions(geometry, player.getX(), player.getZ(), geometry.reach)) {
+            if (where.motion().isIdentity()) continue;
+            // Where the player's old neighbours are: around its other expressions.
+            net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(where.x() - radius, player.getY() - radius, where.z() - radius,
+                where.x() + radius, player.getY() + radius, where.z() + radius);
+            for (Entity entity : level.getEntities((Entity) null, box, e -> !(e instanceof Player) && canFollow(e))) {
+                if (!seen.add(entity) || FrameTransfer.anchored(entity) || FrameTransfer.carried(entity)) continue;
+                boolean chasing = entity instanceof net.minecraft.world.entity.Mob mob && mob.getTarget() == player;
+                if (!chasing && FrameTransfer.coolingDown(entity, FrameTransfer.FOLLOW_COOLDOWN_TICKS)) continue;
+                Frames.Expression best = Frames.nearest(geometry, entity.getX(), entity.getZ(), limit, player.getX(), player.getZ());
+                if (best.motion().isIdentity() || best.distanceSqr(player.getX(), player.getZ()) > radius * radius
+                    || !FrameTransfer.destinationLoaded(entity, best.motion())) {
+                    continue;
+                }
+                TransferCounters.count(TransferCounters.Kind.FOLLOWER);
+                FrameTransfers.transfer(level, entity, best.motion(), null);
+            }
+        }
+    }
+
     /** The group a player was in at the last check, itself alone if none. */
     public static List<ServerPlayer> groupOf(ServerPlayer player) {
         List<List<ServerPlayer>> groups = GROUPS.get(player.serverLevel());

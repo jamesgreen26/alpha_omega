@@ -175,6 +175,11 @@ public final class FrameTransfers {
         for (Entity entity : group) {
             if (entity instanceof ServerPlayer player) level.getChunkSource().move(player);
         }
+        if (!was) {
+            for (Entity entity : group) {
+                if (entity instanceof ServerPlayer player) FrameGroups.afterPlayerMoved(level, player);
+            }
+        }
     }
 
     /**
