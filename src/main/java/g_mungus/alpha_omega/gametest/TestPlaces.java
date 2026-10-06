@@ -13,11 +13,14 @@ import g_mungus.alpha_omega.orbifold.OrbifoldSize;
  *   192  band lanes, 32 apart        (default −2000)
  *   592  image lingers walk, ~250 west of the seam (default −2100.5); far enough from both folds to need no fold image
  *   692  image walk south, 320       (default −1500.5)
+ *  1040  bridge lanes, 32 apart      (default −3600; owners by the west edge, copies in the east band)
  *  1216  mob sent across the seam    (default 600.5)
  *  1376  mob in the far band         (default 900.5)
  * </pre>
  * The south lanes start at {@code x = −1000} (default −1500), and the gate's forced tile chunk at the north seam at
- * {@code x = −1000} (default 3000), clear of the north lanes and image walks.
+ * {@code x = −1000} (default 3000), clear of the north lanes and image walks. Bridge sites on the north fold are at
+ * {@code x = 400} and up at every size (copies at {@code −401} and down), and on the south fold at {@code x = 300} and up
+ * (default 2500).
  */
 final class TestPlaces {
 

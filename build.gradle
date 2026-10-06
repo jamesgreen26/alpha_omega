@@ -46,6 +46,8 @@ neoForge {
             if (project.hasProperty('checkCopies')) systemProperty 'alpha_omega.band.checkCopies', 'true'
             // -PorbifoldSize=small makes the gametest world that size (config.AlphaOmegaConfig.defaults).
             if (project.hasProperty('orbifoldSize')) systemProperty 'alpha_omega.size', project.property('orbifoldSize')
+            // -PnoBridges leaves the phase 7 bridges out, to see what they change (bridge.BridgeMixinPlugin).
+            if (project.hasProperty('noBridges')) systemProperty 'alpha_omega.bridges.off', 'true'
         }
     }
 

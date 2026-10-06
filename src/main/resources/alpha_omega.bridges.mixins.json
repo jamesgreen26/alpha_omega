@@ -1,6 +1,7 @@
 {
   "required": true,
   "package": "g_mungus.alpha_omega.mixin.bridges",
+  "plugin": "g_mungus.alpha_omega.bridge.BridgeMixinPlugin",
   "compatibilityLevel": "JAVA_21",
   "minVersion": "0.8",
   "mixins": [
