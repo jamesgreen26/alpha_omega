@@ -8,8 +8,11 @@
     "EntityPushBridgeMixin",
     "EntitySectionStorageBridgeMixin",
     "PersistentEntitySectionManagerAccessor",
+    "PlayerListBridgeMixin",
     "ServerLevelBridgeMixin",
-    "ServerLevelEntitiesAccessor"
+    "ServerLevelEntitiesAccessor",
+    "TrialSpawnerDataBridgeMixin",
+    "VaultSharedDataBridgeMixin"
   ],
   "client": [
   ],
