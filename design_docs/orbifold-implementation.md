@@ -320,16 +320,57 @@ Can start after phase 3 and run alongside 4 to 8.
 
 **Tests:** an overworld portal at each seam type links to a Nether portal and back to the same overworld copy set.
 
-### Phase 11: Compat and audit
+### Phase 11a: Explicit compat (C2ME, Sable, Sodium)
+
+These three mods replace systems the orbifold hooks directly: the chunk pipeline, physics and the renderer. So each gets dedicated compat code.
 
 **Tasks:**
 
-- C2ME: paired tickets and the promotion gate under its chunk system; the density compiler with the orbifold lattice (main's `ImprovedNoiseEqualityMixin` pattern).
-- Sable: full `SableGameTests`.
-- Sodium: phase 6.
-- Mod compatibility: run main's `mod-compatibility.md` findings with Create and ZPS. Each "lap≠0" finding should pass everywhere. Each "seam" finding should pass when the build is placed from one side.
+- **C2ME:**
+  - Paired tickets, the promotion gate and image-view tickets under its chunk system.
+  - The density compiler and its equality checks with the orbifold lattice. Main's `ImprovedNoiseEqualityMixin` pattern: AND in `alpha_omega$invariant()`.
+  - The `@Overwrite` of `ImprovedNoise.noise` alongside its math optimisations.
+- **Sable:**
+  - Sub-levels crossing seams in a client, including with a player aboard.
+  - Sub-levels colliding with band copies.
+  - Full `SableGameTests`.
+- **Sodium:**
+  - The crossing hand-over (phase 5 built it for the vanilla renderer only).
+  - Translucent sorting in images.
+  - Check image clipping after later phases.
 
-**Done when** the full suite passes with `-PwithSable`, `-PwithC2me` and `-PwithSodium`, and the mod findings are recorded in `progress.md`.
+**Done when** each mod's gametests pass with `-PwithC2me`, `-PwithSable` and `-PwithSodium`, and a dev-client walk across every seam type works with Sodium.
+
+### Phase 11b: General mod compatibility
+
+**Goal:** tech and content mods work across seams without per-mod code. Create and ZPS are the **reference mods** used to find and prove the general mechanisms, not targets for special cases. Explicit compat for them comes only after a general approach has failed, or to fill a gap where one isn't feasible, and each such case is justified in the progress log.
+
+**Method:**
+
+1. **Reproduce.** Rebuild main's `archive/mod-compatibility.md` findings as orbifold scenarios across seams, with Create and ZPS in the dev environment.
+   - Each "lap≠0" finding should already pass, because storage frame equals simulation frame.
+   - Each "seam" finding should pass when built from one side (phase 8 claims).
+2. **Classify.** Group the failures by generic cause (RS §9's limits), not by mod:
+   1. Block entity ↔ block entity across frames.
+   2. Block → entity geometry across frames.
+   3. Directional APIs outside capabilities.
+   4. Incomplete `rotate`.
+   5. Direct section writes.
+   6. Absolute positions in custom packets or saved data.
+   7. Entity ↔ block entity anchoring, such as contraptions.
+3. **Fix generically.** For each cause, prefer a mechanism that helps every mod. Candidates:
+   - the structure-joining claim (RS open decision 3): a placement joins the frame of the structure it touches;
+   - pulling entities found by a block's geometry query into the block's frame;
+   - extending the anchoring heuristic;
+   - the interaction pull for GUI and packet range checks;
+   - the `api/Orbifold.toFrame` helper for mods that adopt it;
+   - detection and warnings, such as the copy check flagging section writes that bypass the mirror.
+4. **Only then explicit compat.** For what remains, add the smallest targeted compat for Create or ZPS, behind `CompatMixinPlugin`, documented with the generic cause it works around.
+
+**Done when:**
+- every main finding is recorded as passing generically, passing with explicit compat (justified), or a known limit;
+- a scripted test world exercises the main Create and ZPS scenarios across each seam type;
+- `progress.md` lists the generic mechanisms added.
 
 ### Phase 12: Polish
 
@@ -342,7 +383,7 @@ Clouds placed from canonical, Γ-invariant coordinates, so they don't jump on a 
 ```
 0 ─▶ 1 ─┬─▶ 2 (sky) ───────────────────────────────────────────┐
         ├─▶ 3 ─┬─▶ 9 (terrain) ──────────────────────▶ 10 ──────┤
-        │      └─▶ 4 (spike, then full) ─▶ 5 ─▶ 7 ─▶ 8 ─────────┼─▶ 11 ─▶ 12
+        │      └─▶ 4 (spike, then full) ─▶ 5 ─▶ 7 ─▶ 8 ─────────┼─▶ 11a ─▶ 11b ─▶ 12
         │                                  └─▶ 6 (image views) ─┘
 ```
 
