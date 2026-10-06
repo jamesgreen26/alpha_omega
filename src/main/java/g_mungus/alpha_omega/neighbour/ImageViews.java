@@ -116,7 +116,9 @@ public final class ImageViews {
      * are physically in the tile on the far side.
      */
     public static boolean shows(OrbifoldGeometry geometry, ImageTrackingView.Virtual square, int chunkX, int chunkZ) {
-        return ImageGeometry.live(geometry, chunkX, chunkZ);
+        // The player's own square left behind by a crossing lingers whole, skirt included, as it was: crossing straight
+        // back (a group or an interaction moving the player) then forgets and resends nothing.
+        return square.image().isIdentity() || ImageGeometry.live(geometry, chunkX, chunkZ);
     }
 
     private static boolean jumped(ChunkPos from, ChunkPos to) {
