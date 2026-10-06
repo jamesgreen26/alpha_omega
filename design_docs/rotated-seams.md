@@ -126,6 +126,16 @@ A write is a **placement** when the old state is air, a replaceable block or a b
 - A change of state of the same block (dust power, door open, crop age) never changes the owner.
 - Moved blocks (pistons, Create contraption disassembly) are placements in the frame of the logic that moves them, so they stay with their builder's frame.
 
+**As implemented (phase 8, `band/Claims`).**
+- **When the rule applies:** to every original (not mirrored) write in a chunk with copies, at the copy where the write was made.
+- **Moving pistons:** writing a moving piston is also a placement, whatever it replaces.
+- **Placing in the tile:** gives the cell back to the tile copy.
+- **Timing:** the claim happens straight after the section write: before the mirror, `onRemove`/`onPlace` and block entity creation. A removal returns the cell to nominal at the end of the write, so the old block's `onRemove` still reaches its owner's block entity.
+- **Block entities:** a block entity that a write at a non-owner copy would create (beyond `C`, or a block-to-block change) is created at the owner instead. It is empty, so nothing frame-dependent is lost.
+- **Explicit `setBlockEntity`:** a block entity set explicitly at a non-owner copy (pistons) claims the cell. Beyond `C` that claim ends when the block entity is removed. Inside `C`, ownership follows the block.
+- **Recovery:** a claimed cell takes a newer source's block state; its block entity data is not refreshed.
+- **Built from both sides (§9 limit 1):** a test multiblock whose controller stores absolute part positions still forms, because lookups reach the far parts through the owner redirect. Each far part reports itself unlinked, because its own position is in the other frame.
+
 So a player standing in A's frame builds a tank, a gearbox chain or a reactor across the nominal seam, and all of it is owned by A. Its block entities are created in A's storage at A-frame positions, and every position they store, compare or send is in one frame. Players stay in their frame throughout the claim zone (§4.2), so a build made in one visit is always in one frame.
 
 ### 3.4 Block entities
