@@ -16,7 +16,8 @@ import net.minecraft.world.phys.Vec3;
 /**
  * {@code /orbifold info}: the tile, its cone points, and for the cell the caller is in: whether it is tile, band or
  * skirt, its source and frame, its source's copy set, and how far past the nearest seam it is; and who owns the targeted
- * cell. {@code /orbifold scan}: counters, and the claims held in loaded chunks.
+ * cell. {@code /orbifold scan}: counters, and the claims held in loaded chunks. {@code /orbifold tp}: to a cone point or
+ * a latitude and longitude ({@link OrbifoldTeleport}).
  */
 public final class OrbifoldCommand {
 
@@ -28,6 +29,7 @@ public final class OrbifoldCommand {
             .then(Commands.literal("info").executes(OrbifoldCommand::info))
             .then(Commands.literal("time").executes(g_mungus.alpha_omega.sky.LocalTimeCommand::time))
             .then(Commands.literal("scan").executes(OrbifoldCommand::scan))
+            .then(OrbifoldTeleport.node())
             .then(Commands.literal("check").executes(context -> check(context, 4))
                 .then(Commands.argument("radius", com.mojang.brigadier.arguments.IntegerArgumentType.integer(0, 32))
                     .executes(context -> check(context, com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(context, "radius"))))));
@@ -36,10 +38,7 @@ public final class OrbifoldCommand {
     private static int info(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
         OrbifoldGeometry geometry = Orbifold.of(source.getLevel());
-        if (geometry == null) {
-            source.sendFailure(Component.literal("This dimension is not an orbifold"));
-            return 0;
-        }
+        if (geometry == null) return OrbifoldTeleport.notOrbifold(source);
         for (String line : lines(geometry, source.getPosition())) source.sendSuccess(() -> Component.literal(line), false);
         BlockPos target = BlockPos.containing(source.getPosition());
         if (source.getEntity() != null && source.getEntity().pick(20.0, 0.0F, false) instanceof net.minecraft.world.phys.BlockHitResult hit

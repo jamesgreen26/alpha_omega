@@ -27,6 +27,8 @@ neoForge {
             if (project.hasProperty('transferStats')) systemProperty 'alpha_omega.dev.transferStats', 'true'
             // -PnoHandover swaps areas on a crossing without the hand-over, to compare (see client.ImageRenderer).
             if (project.hasProperty('noHandover')) systemProperty 'alpha_omega.dev.noHandover', 'true'
+            // -PvanillaClouds places clouds from storage as vanilla does, to compare crossings (see client.CloudFrame).
+            if (project.hasProperty('vanillaClouds')) systemProperty 'alpha_omega.dev.vanillaClouds', 'true'
             // -PbandDetectors counts reactions that reach a non-owner band copy (see band.BandCounters).
             if (project.hasProperty('bandDetectors')) systemProperty 'alpha_omega.band.detectors', 'true'
         }

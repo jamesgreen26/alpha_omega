@@ -47,6 +47,7 @@ public final class ClientFrameTransfer {
 
     /** A new connection starts both counts again. */
     public static void reset() {
+        CloudFrame.reset();
         PENDING.clear();
         claims = 0;
         seen = 0;
@@ -134,6 +135,9 @@ public final class ClientFrameTransfer {
                 entity.lerpTo(p.x, p.y, p.z, rotation[0], rotation[1], 1);
             }
         }
+        CloudFrame.transferred(g);
+        // Sodium has no vanilla area swap to mark the crossing for DevScript's crossshots: the move marks it.
+        DevScript.crossed();
         TransferStats.faceChanged();
     }
 }

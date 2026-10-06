@@ -175,6 +175,7 @@ public final class FrameTransfers {
         for (Entity entity : group) {
             if (entity instanceof ServerPlayer player) level.getChunkSource().move(player);
         }
+        g_mungus.alpha_omega.api.FrameTransferEvent.post(level, root, group, g, claimant, carried);
         if (!was) {
             for (Entity entity : group) {
                 if (entity instanceof ServerPlayer player) FrameGroups.afterPlayerMoved(level, player);

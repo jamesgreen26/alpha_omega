@@ -137,7 +137,7 @@ public class AlphaOmegaMod {
             g_mungus.alpha_omega.gametest.ImageGameTests.class, g_mungus.alpha_omega.gametest.BandGameTests.class,
             g_mungus.alpha_omega.gametest.TransferGameTests.class, g_mungus.alpha_omega.gametest.RetentionGameTests.class,
             g_mungus.alpha_omega.gametest.BridgeGameTests.class, g_mungus.alpha_omega.gametest.ClaimGameTests.class,
-            g_mungus.alpha_omega.gametest.NetherGameTests.class), event::register);
+            g_mungus.alpha_omega.gametest.PolishGameTests.class, g_mungus.alpha_omega.gametest.NetherGameTests.class), event::register);
     }
 
 }

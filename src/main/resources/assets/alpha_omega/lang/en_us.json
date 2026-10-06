@@ -7,5 +7,8 @@
   "alpha_omega.orbifold.size.medium": "medium",
   "alpha_omega.orbifold.size.normal": "normal",
   "alpha_omega.orbifold.size.large": "large",
-  "alpha_omega.orbifold.hint": "Larger worlds take longer to walk round; the sky turns more slowly."
+  "alpha_omega.orbifold.hint": "Larger worlds take longer to walk round; the sky turns more slowly.",
+  "commands.alpha_omega.orbifold.not_orbifold": "This dimension is not an orbifold",
+  "commands.alpha_omega.orbifold.tp.cone": "Teleported %s to cone point %s, at %s %s %s",
+  "commands.alpha_omega.orbifold.tp.place": "Teleported %s to %s, at %s %s %s"
 }
