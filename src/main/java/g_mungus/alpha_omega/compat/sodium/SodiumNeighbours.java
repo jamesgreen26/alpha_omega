@@ -25,7 +25,10 @@ import net.caffeinemc.mods.sodium.client.render.chunk.TaskQueueType;
 import net.caffeinemc.mods.sodium.client.render.chunk.lists.ChunkRenderList;
 import net.caffeinemc.mods.sodium.client.render.chunk.lists.OcclusionSectionCollector;
 import net.caffeinemc.mods.sodium.client.render.chunk.lists.SectionCollector;
-import net.caffeinemc.mods.sodium.client.render.chunk.lists.SortedRenderLists;
+import net.caffeinemc.mods.sodium.client.render.chunk.lists.ChunkRenderListIterable;
+import net.caffeinemc.mods.sodium.client.render.chunk.lists.SortItemsProvider;
+import net.caffeinemc.mods.sodium.client.util.iterator.ReversibleObjectArrayIterator;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.caffeinemc.mods.sodium.client.render.chunk.map.ChunkTrackerHolder;
 import net.caffeinemc.mods.sodium.client.render.chunk.region.RenderRegion;
 import net.caffeinemc.mods.sodium.client.render.chunk.terrain.DefaultTerrainRenderPasses;
@@ -63,6 +66,10 @@ import org.joml.Vector3d;
  * to build. Each terrain layer of an image then draws with its turn in the model-view matrix and Sodium's camera at
  * the image's virtual camera.
  *
+ * <p>Sodium keeps one render list per region, and one cached set of draw commands per region and pass, both made for
+ * its own camera. Near a cone point an image draws regions the camera's own view draws too, so each image keeps render
+ * lists of its own, and the cached commands of its regions are cleared around its draw.
+ *
  * <p>Clipped as the vanilla path is: an image collects only tile chunks it takes past the band
  * ({@link ImageRenderer#shows}), and Sodium's own search skips the skirt and the void beyond
  * ({@code mixin.images.compat.sodium.SectionCollectorMixin}).
@@ -83,12 +90,17 @@ public final class SodiumNeighbours {
         final Column[] columns;
         /** Per column slot, the chunk it was worked out for. */
         final long[] columnAt;
+        /**
+         * The image's own render list per region. Sodium keeps one list per region for its own search, which near a
+         * cone point the image shares; its sections go into lists of its own instead.
+         */
+        final Map<RenderRegion, ChunkRenderList> own = new java.util.IdentityHashMap<>();
         /** Collected in the current search, until Sodium finalises its lists. */
         @Nullable
-        SectionCollector pending;
+        ObjectArrayList<ChunkRenderList> pending;
         @Nullable
         double[] pendingCamera;
-        SortedRenderLists lists = SortedRenderLists.empty();
+        ImageLists lists = ImageLists.EMPTY;
         int visible;
         int built;
 
@@ -112,6 +124,31 @@ public final class SodiumNeighbours {
     }
 
     private static final Map<Motion, Face> FACES = new LinkedHashMap<>();
+
+    /** An image's render lists, in drawing order, as Sodium's renderer takes them. */
+    private record ImageLists(ObjectArrayList<ChunkRenderList> lists) implements ChunkRenderListIterable {
+        static final ImageLists EMPTY = new ImageLists(new ObjectArrayList<>());
+
+        @Override
+        public Iterator<ChunkRenderList> iterator(boolean reverse) {
+            return new ReversibleObjectArrayIterator<>(this.lists, reverse);
+        }
+    }
+
+    /** Scratch space for sorting sections within a list, shared by every image (all on the render thread). */
+    private static final SortItemsProvider SORT_ITEMS = new SortItemsProvider() {
+        private int[] items;
+
+        @Override
+        public int[] getCachedSortItems() {
+            return this.items;
+        }
+
+        @Override
+        public void setCachedSortItems(int[] items) {
+            this.items = items;
+        }
+    };
     /** The section manager the faces' lists belong to; a new one (Sodium reloaded) starts them again. */
     @Nullable
     private static RenderSectionManager manager;
@@ -179,6 +216,7 @@ public final class SodiumNeighbours {
             SectionCollector ahead = new OcclusionSectionCollector(frame, rebuildQueue, sortQueue);
             state.visible = 0;
             state.built = 0;
+            ObjectArrayList<ChunkRenderList> used = new ObjectArrayList<>();
             for (Column column : state.columns) {
                 if (column == NOTHING) continue;
                 if (ImageRenderer.distance(column.box, cam) > reach + ImageRenderer.SECTION_RADIUS) continue;
@@ -191,7 +229,15 @@ public final class SodiumNeighbours {
                     RenderSection section = byPosition.get(SectionPos.asLong(column.chunkX, sectionY, column.chunkZ));
                     if (section == null) continue;
                     if (columnInView && frustum.isVisible(box)) {
-                        collector.visit(section);
+                        // Sodium's collector only queues the section's build here; it is drawn from the image's list.
+                        collector.visitWithFlags(section, 0);
+                        RenderRegion region = section.getRegion();
+                        ChunkRenderList list = state.own.computeIfAbsent(region, ChunkRenderList::new);
+                        if (list.getLastVisibleFrame() != frame) {
+                            list.reset(frame, false);
+                            used.add(list);
+                        }
+                        list.add(section.getSectionIndex(), section.getFlags());
                         state.visible++;
                         if (section.isBuilt()) state.built++;
                     } else {
@@ -204,7 +250,9 @@ public final class SodiumNeighbours {
             collector.getTaskLists().forEach((type, queue) -> taskLists.get(type).addAll(queue));
             ahead.getTaskLists().forEach((type, queue) -> taskLists.get(type).addAll(queue));
             revisit |= collector.needsRevisitForPendingUpdates();
-            state.pending = collector;
+            // Regions this image no longer draws let go of their lists (and so of the regions).
+            state.own.values().removeIf(list -> !used.contains(list));
+            state.pending = used;
             state.pendingCamera = virtual;
         }
         return revisit;
@@ -245,8 +293,14 @@ public final class SodiumNeighbours {
         for (Face state : FACES.values()) {
             if (state.pending == null) continue;
             double[] camera = state.pendingCamera;
-            // Only the viewport's position is read in making the lists.
-            state.lists = state.pending.createRenderLists(new Viewport(null, new Vector3d(camera[0], camera[1], camera[2])));
+            SectionPos at = SectionPos.of(net.minecraft.core.BlockPos.containing(camera[0], camera[1], camera[2]));
+            ObjectArrayList<ChunkRenderList> lists = state.pending;
+            // Nearest region first (Sodium's order), each list's sections sorted from the image's camera.
+            lists.sort(java.util.Comparator.comparingInt(list -> Math.abs(list.getRegion().getX() - (at.getX() >> RenderRegion.REGION_WIDTH_SH))
+                + Math.abs(list.getRegion().getY() - (at.getY() >> RenderRegion.REGION_HEIGHT_SH))
+                + Math.abs(list.getRegion().getZ() - (at.getZ() >> RenderRegion.REGION_LENGTH_SH))));
+            for (ChunkRenderList list : lists) list.prepareForRender(at, SORT_ITEMS);
+            state.lists = new ImageLists(lists);
             state.pending = null;
         }
     }
@@ -300,9 +354,23 @@ public final class SodiumNeighbours {
                 Matrix4f modelView = new Matrix4f(matrices.modelView()).mul(new Matrix4f().set(ImageRenderer.rotation(image)));
                 ChunkRenderMatrices rotated = new ChunkRenderMatrices(matrices.projection(), modelView);
                 CameraTransform camera = new CameraTransform(virtual.x, virtual.y, virtual.z);
+                // Sodium keeps each region's draw commands, worked out for one camera, until its lists change. Near a
+                // cone point an image shares regions with the camera's own view (and images with each other), so
+                // the commands are worked out afresh for this image, and again for whoever draws the region next.
+                clearBatches(state.lists, passes);
                 for (TerrainRenderPass pass : passes) renderer.render(rotated, commandList, state.lists, pass, camera, indexed);
+                clearBatches(state.lists, passes);
             }
             commandList.flush();
+        }
+    }
+
+    /** Forgets the cached draw commands of every region in some render lists, for some passes. */
+    private static void clearBatches(ImageLists lists, TerrainRenderPass[] passes) {
+        Iterator<ChunkRenderList> it = lists.iterator();
+        while (it.hasNext()) {
+            RenderRegion region = it.next().getRegion();
+            for (TerrainRenderPass pass : passes) region.clearCachedBatchFor(pass);
         }
     }
 
