@@ -22,11 +22,13 @@ import org.junit.jupiter.api.Test;
 /** {@link OrbifoldGeometry} against {@code orbifold-implementation.md} phase 1 "Tests". */
 class OrbifoldGeometryTest {
 
-    private static final OrbifoldGeometry DEFAULT = new OrbifoldGeometry(4, 4);
+    private static final OrbifoldGeometry DEFAULT = new OrbifoldGeometry(OrbifoldSize.NORMAL, 4);
 
-    /** Every size, with the default band, and the smallest and largest bands at the smallest size. */
+    /** Every size, with the default band, and the smallest and largest bands at the two smallest sizes. */
     private static List<OrbifoldGeometry> all() {
-        return List.of(new OrbifoldGeometry(2, 4), DEFAULT, new OrbifoldGeometry(8, 4), new OrbifoldGeometry(2, 2), new OrbifoldGeometry(2, 16));
+        return List.of(new OrbifoldGeometry(OrbifoldSize.SMALL, 4), new OrbifoldGeometry(OrbifoldSize.MEDIUM, 4), DEFAULT,
+            new OrbifoldGeometry(OrbifoldSize.LARGE, 4), new OrbifoldGeometry(OrbifoldSize.MEDIUM, 2), new OrbifoldGeometry(OrbifoldSize.MEDIUM, 16),
+            new OrbifoldGeometry(OrbifoldSize.SMALL, 2), new OrbifoldGeometry(OrbifoldSize.SMALL, 16));
     }
 
     /** Calls {@code action} on every cell of the footprint outside the tile (band and skirt). */
@@ -53,7 +55,9 @@ class OrbifoldGeometryTest {
 
     @Test
     void sizesMatchTheWrappingPlan() {
-        OrbifoldGeometry k2 = new OrbifoldGeometry(2, 4), k8 = new OrbifoldGeometry(8, 4);
+        OrbifoldGeometry k2 = new OrbifoldGeometry(OrbifoldSize.MEDIUM, 4), k8 = new OrbifoldGeometry(OrbifoldSize.LARGE, 4);
+        OrbifoldGeometry small = new OrbifoldGeometry(OrbifoldSize.SMALL, 4);
+        assertEquals(List.of(3584, 3072, -1152, 384, 0, 49), List.of(small.a, small.b, small.northRow, small.southRow, small.spawnX, small.spawnZ));
         assertEquals(List.of(7680, 6656, -2560, 768, 0, 42), List.of(k2.a, k2.b, k2.northRow, k2.southRow, k2.spawnX, k2.spawnZ));
         assertEquals(List.of(15360, 13312, -5248, 1408, 0, -44), List.of(DEFAULT.a, DEFAULT.b, DEFAULT.northRow, DEFAULT.southRow, DEFAULT.spawnX, DEFAULT.spawnZ));
         assertEquals(List.of(30720, 26624, -10368, 2944, 0, 40), List.of(k8.a, k8.b, k8.northRow, k8.southRow, k8.spawnX, k8.spawnZ));
@@ -68,6 +72,58 @@ class OrbifoldGeometryTest {
                 assertEquals(0, cone.x() % 128, cone.name());
                 assertEquals(0, cone.z() % 128, cone.name());
             }
+        }
+    }
+
+    /** The presets: the k sizes are 3840·k × 3328·k, ids and size factors look them up, and the default is k = 4. */
+    @Test
+    void presetsAreTheSizes() {
+        assertEquals(List.of(OrbifoldSize.SMALL, OrbifoldSize.MEDIUM, OrbifoldSize.NORMAL, OrbifoldSize.LARGE), OrbifoldSize.PRESETS);
+        assertEquals(OrbifoldSize.NORMAL, OrbifoldSize.DEFAULT);
+        assertEquals(4, OrbifoldSize.DEFAULT.sizeFactor());
+        assertEquals(List.of(2, 4, 8), OrbifoldSize.SIZE_FACTORS);
+        for (OrbifoldSize size : OrbifoldSize.PRESETS) {
+            assertEquals(size, OrbifoldSize.byId(size.id()).orElseThrow());
+            if (size.sizeFactor() != 0) {
+                assertEquals(List.of(3840 * size.sizeFactor(), 3328 * size.sizeFactor()), List.of(size.a(), size.b()));
+                assertEquals(size, OrbifoldSize.bySizeFactor(size.sizeFactor()).orElseThrow());
+            }
+        }
+        assertTrue(OrbifoldSize.bySizeFactor(0).isEmpty() && OrbifoldSize.bySizeFactor(3).isEmpty());
+        // The small size: b/a 1.0% short of √3/2, and about 5.5 M blocks² of area (the tile, a·b/2).
+        OrbifoldSize small = OrbifoldSize.SMALL;
+        assertEquals(0.0103, 1 - (double) small.b() / small.a() / (Math.sqrt(3) / 2), 0.0001);
+        assertEquals(5.5e6, small.a() * (double) small.b() / 2, 0.01e6);
+    }
+
+    /**
+     * Every element of Γ maps chunks to whole chunks in the overworld and in the Nether at 1:8: {@code a} is a multiple
+     * of 512 (cone points at ±a/4), {@code b/2} and the fold rows of 128, so every cone point is on a multiple of 128,
+     * and the generators of the 1:8 lattice are chunk-aligned too.
+     */
+    @Test
+    void everySizeIsChunkAlignedInTheNether() {
+        for (OrbifoldSize size : OrbifoldSize.PRESETS) {
+            assertEquals(0, size.a() % 512, size.id());
+            assertEquals(0, (size.b() / 2) % 128, size.id());
+            assertEquals(0, size.northRow() % 128, size.id());
+            OrbifoldGeometry g = new OrbifoldGeometry(size, 4);
+            assertEquals(0, g.southRow % 128, size.id());
+            for (OrbifoldGeometry.ConePoint cone : g.conePoints()) {
+                assertEquals(0, cone.x() % 128, size.id() + " " + cone.name());
+                assertEquals(0, cone.z() % 128, size.id() + " " + cone.name());
+            }
+            for (Motion m : elementsNearTheTile(g)) assertTrue(m.chunkAligned(), size.id() + " " + m);
+            // The Nether: the same layout scaled by 1/8.
+            int a8 = g.a / 8, b8 = g.b / 8, north8 = g.northRow / 8, south8 = g.southRow / 8;
+            assertEquals(g.a, 8 * a8);
+            assertEquals(g.northRow, 8 * north8);
+            assertEquals(g.southRow, 8 * south8);
+            List<Motion> nether = new ArrayList<>(List.of(Motion.translation(a8, 0), Motion.translation(-a8, 0), Motion.translation(a8 / 2, b8),
+                Motion.halfTurn(0, 2 * north8), Motion.halfTurn(a8 / 2, 2 * south8), Motion.halfTurn(-a8 / 2, 2 * south8),
+                Motion.halfTurn(a8, 2 * north8)));
+            for (Motion m : nether) assertTrue(m.chunkAligned(), size.id() + " Nether " + m);
+            for (int c : new int[] {a8 / 2, a8 / 4, north8, south8}) assertEquals(0, c % 16, size.id() + " Nether cone point coordinate " + c);
         }
     }
 
@@ -120,7 +176,7 @@ class OrbifoldGeometryTest {
             assertEquals((long) (g.a + side) * (g.b / 2 + side) - (long) g.a * (g.b / 2), count[0], "band and skirt cells");
         }
         // Tile cells are their own source: all of them at the smallest size, the edges at the others.
-        OrbifoldGeometry small = new OrbifoldGeometry(2, 4);
+        OrbifoldGeometry small = new OrbifoldGeometry(OrbifoldSize.MEDIUM, 4);
         for (int x = small.minX; x < small.maxX; x++) {
             for (int z = small.northRow; z < small.southRow; z++) {
                 assertTrue(small.frame(x, z).isIdentity());
@@ -137,7 +193,7 @@ class OrbifoldGeometryTest {
     /** No two tile cells are the same place: the tile is a fundamental domain. */
     @Test
     void noTwoTileCellsAreIdentified() {
-        for (OrbifoldGeometry g : List.of(DEFAULT, new OrbifoldGeometry(2, 16))) {
+        for (OrbifoldGeometry g : List.of(DEFAULT, new OrbifoldGeometry(OrbifoldSize.MEDIUM, 16), new OrbifoldGeometry(OrbifoldSize.SMALL, 16))) {
             List<Motion> elements = elementsNearTheTile(g);
             forEachEdgeTileCell(g, (x, z) -> {
                 for (Motion m : elements) {
@@ -203,7 +259,7 @@ class OrbifoldGeometryTest {
     /** No cell or chunk is its own image: half turns fix only lattice points on chunk corners, never a cell. */
     @Test
     void noCellOrChunkIsItsOwnImage() {
-        for (OrbifoldGeometry g : List.of(DEFAULT, new OrbifoldGeometry(2, 16))) {
+        for (OrbifoldGeometry g : List.of(DEFAULT, new OrbifoldGeometry(OrbifoldSize.MEDIUM, 16), new OrbifoldGeometry(OrbifoldSize.SMALL, 16))) {
             List<Motion> elements = elementsNearTheTile(g);
             List<Motion> turns = new ArrayList<>();
             for (OrbifoldGeometry.ConePoint cone : g.conePoints()) turns.add(Motion.halfTurn(2 * cone.x(), 2 * cone.z()));
@@ -409,6 +465,10 @@ class OrbifoldGeometryTest {
     void infoReadsAtSpawnAndConePoints() {
         OrbifoldGeometry g = DEFAULT;
         List<String> spawn = OrbifoldCommand.lines(g, new Vec3(0.5, 70, -43.5));
+        assertTrue(spawn.get(0).startsWith("orbifold normal (15360 x 13312, k=4): tile x -7680..7680, z -5248..1408"), spawn.get(0));
+        List<String> small = OrbifoldCommand.lines(new OrbifoldGeometry(OrbifoldSize.SMALL, 4), new Vec3(0.5, 70, 49.5));
+        assertTrue(small.get(0).startsWith("orbifold small (3584 x 3072): tile x -1792..1792, z -1152..384"), small.get(0));
+        assertTrue(small.get(1).contains("N (0, -1152), F (1792, -1152), E (896, 384), W (-896, 384); spawn (0, 49)"), small.get(1));
         assertTrue(spawn.get(2).startsWith("Cell 0 -44: tile, 1451.5 short of the nearest seam; frame id"), spawn.get(2));
         assertTrue(spawn.get(3).equals("Source (0, -44); its copies: none"), spawn.get(3));
         assertTrue(spawn.get(1).contains("N (0, -5248), F (7680, -5248), E (3840, 1408), W (-3840, 1408)"), spawn.get(1));

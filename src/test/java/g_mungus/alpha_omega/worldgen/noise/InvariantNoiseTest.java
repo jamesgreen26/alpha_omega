@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import g_mungus.alpha_omega.orbifold.OrbifoldGeometry;
+import g_mungus.alpha_omega.orbifold.OrbifoldSize;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -77,27 +78,65 @@ class InvariantNoiseTest {
         assertTrue(largest > 0.05, octave.describe() + " is flat: " + largest);
     }
 
+    /** The lattice scales, less those that go spectral at a size (at the small size, the 503-block cell). */
+    private static double[] latticeScales(OrbifoldGeometry g) {
+        return Arrays.stream(LATTICE_SCALES).filter(s -> OrbifoldLattice.create(g, NoiseSymmetry.even(s), permutation(0), 0.0, 0) != null).toArray();
+    }
+
     @Test
     void latticeOctavesAreInvariant() {
-        for (int k : OrbifoldGeometry.SIZE_FACTORS) {
+        for (OrbifoldSize k : OrbifoldSize.PRESETS) {
             OrbifoldGeometry g = new OrbifoldGeometry(k, 4);
-            for (InvariantOctave octave : octaves(g, LATTICE_SCALES, true)) assertInvariant(g, octave);
+            for (InvariantOctave octave : octaves(g, latticeScales(g), true)) assertInvariant(g, octave);
         }
     }
 
     @Test
     void spectralOctavesAreInvariant() {
-        OrbifoldGeometry g = new OrbifoldGeometry(4, 4);
-        for (InvariantOctave octave : octaves(g, SPECTRAL_SCALES, false)) {
-            if (((SpectralNoise) octave).terms() == 0) continue;
-            assertInvariant(g, octave);
+        for (OrbifoldSize k : OrbifoldSize.PRESETS) {
+            OrbifoldGeometry g = new OrbifoldGeometry(k, 4);
+            double[] scales = k == OrbifoldSize.SMALL ? new double[] {1.0 / 503.0, 1.0 / 1024.0, 1.0 / 2048.0, 1.0 / 4096.0} : SPECTRAL_SCALES;
+            for (InvariantOctave octave : octaves(g, scales, false)) {
+                if (((SpectralNoise) octave).terms() == 0) continue;
+                assertInvariant(g, octave);
+            }
         }
+    }
+
+    /**
+     * Which of vanilla's octave cells are lattice and which spectral, per size. The k sizes all agree on cells up to 503
+     * blocks; the small size's {@code a/2 = 1792 = 7·256} needs 12% stretch for 503-block cells, so they go spectral
+     * there, and its 191.5-block cells are stretched 3.8% along x (0.3% at the k sizes). Cells of 1024 blocks are
+     * lattice only at the large size, as before.
+     */
+    @Test
+    void octaveKindsPerSize() {
+        double[] cells = {0.4676, 3.74, 4.0, 1024.0 / 171.103, 59.8, 191.5, 256.0, 503.0, 1024.0, 2048.0};
+        StringBuilder table = new StringBuilder();
+        for (OrbifoldSize k : OrbifoldSize.PRESETS) {
+            OrbifoldGeometry g = new OrbifoldGeometry(k, 4);
+            StringBuilder spectral = new StringBuilder();
+            for (double cell : cells) {
+                OrbifoldLattice lattice = OrbifoldLattice.create(g, NoiseSymmetry.even(1.0 / cell), permutation(0), 0.0, 0);
+                InvariantOctave octave = InvariantOctaves.create(g, NoiseSymmetry.even(1.0 / cell), permutation(0), 0.0);
+                table.append(String.format(java.util.Locale.ROOT, "%-7s %8.2f: %s%n", k.id(), cell, octave.describe()));
+                if (lattice == null) spectral.append(cell >= 1000 ? String.valueOf((int) cell) : String.valueOf(cell)).append(' ');
+                assertEquals(lattice != null, octave instanceof OrbifoldLattice, octave.describe());
+            }
+            String expected = switch (k.id()) {
+                case "small" -> "503.0 1024 2048 ";
+                case "large" -> "2048 ";
+                default -> "1024 2048 ";
+            };
+            assertEquals(expected, spectral.toString(), k.id());
+        }
+        System.out.print(table);
     }
 
     /** At a cone point an even octave has zero gradient: its values a step either side agree. */
     @Test
     void gradientIsFlatAtConePoints() {
-        OrbifoldGeometry g = new OrbifoldGeometry(4, 4);
+        OrbifoldGeometry g = new OrbifoldGeometry(OrbifoldSize.NORMAL, 4);
         List<InvariantOctave> octaves = new ArrayList<>(octaves(g, LATTICE_SCALES, true));
         octaves.addAll(octaves(g, SPECTRAL_SCALES, false));
         for (InvariantOctave octave : octaves) {
@@ -149,7 +188,7 @@ class InvariantNoiseTest {
     /** A lattice octave is stretched at most {@link OrbifoldLattice#MAX_STRETCH}; past that the octave goes spectral. */
     @Test
     void stretchStaysWithinTheBound() {
-        OrbifoldGeometry g = new OrbifoldGeometry(4, 4);
+        OrbifoldGeometry g = new OrbifoldGeometry(OrbifoldSize.NORMAL, 4);
         int lattice = 0;
         for (double cell = 0.3; cell < 3000.0; cell *= 1.013) {
             OrbifoldLattice octave = OrbifoldLattice.create(g, NoiseSymmetry.even(1.0 / cell), permutation(3), 0.0, 7);
@@ -164,7 +203,7 @@ class InvariantNoiseTest {
         assertTrue(lattice > 500, "only " + lattice + " lattice octaves");
         assertNull(OrbifoldLattice.create(g, NoiseSymmetry.even(1.0 / 20000.0), permutation(3), 0.0, 7), "a world-sized cell cannot be a lattice");
         // Power-of-two cells up to 256 blocks fit exactly at every size.
-        for (int k : OrbifoldGeometry.SIZE_FACTORS) {
+        for (OrbifoldSize k : OrbifoldSize.PRESETS) {
             for (int cell = 1; cell <= 256; cell *= 2) {
                 OrbifoldLattice octave = OrbifoldLattice.create(new OrbifoldGeometry(k, 4), NoiseSymmetry.even(1.0 / cell), permutation(3), 0.0, 7);
                 assertNotNull(octave);
@@ -177,7 +216,7 @@ class InvariantNoiseTest {
     /** {@link SpectralNoise#PERLIN_STD} is a Perlin octave's spread; a spectral octave has about the same. */
     @Test
     void spectralOctavesMatchPerlinSpread() {
-        OrbifoldGeometry g = new OrbifoldGeometry(4, 4);
+        OrbifoldGeometry g = new OrbifoldGeometry(OrbifoldSize.NORMAL, 4);
         Random random = new Random(5);
         double sum = 0, squares = 0;
         int samples = 0;
@@ -213,7 +252,7 @@ class InvariantNoiseTest {
     /** An odd octave (a shift component) is zero at every cone point. */
     @Test
     void oddOctavesVanishAtConePoints() {
-        OrbifoldGeometry g = new OrbifoldGeometry(4, 4);
+        OrbifoldGeometry g = new OrbifoldGeometry(OrbifoldSize.NORMAL, 4);
         List<InvariantOctave> octaves = new ArrayList<>(octaves(g, LATTICE_SCALES, true));
         octaves.addAll(octaves(g, SPECTRAL_SCALES, false));
         for (InvariantOctave octave : octaves) {

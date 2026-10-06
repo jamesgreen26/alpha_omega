@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import g_mungus.alpha_omega.orbifold.Motion;
 import g_mungus.alpha_omega.orbifold.OrbifoldGeometry;
+import g_mungus.alpha_omega.orbifold.OrbifoldSize;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -16,11 +17,12 @@ import org.junit.jupiter.api.Test;
 /** {@link ImageGeometry}: which images a viewer needs, and the clip that makes home and images draw every place once. */
 class ImageGeometryTest {
 
-    private static final OrbifoldGeometry DEFAULT = new OrbifoldGeometry(4, 4);
+    private static final OrbifoldGeometry DEFAULT = new OrbifoldGeometry(OrbifoldSize.NORMAL, 4);
     private static final int[] VIEWS = {2, 6, 12, 32};
 
     private static List<OrbifoldGeometry> all() {
-        return List.of(new OrbifoldGeometry(2, 4), DEFAULT, new OrbifoldGeometry(8, 4), new OrbifoldGeometry(2, 2), new OrbifoldGeometry(2, 16));
+        return List.of(new OrbifoldGeometry(OrbifoldSize.SMALL, 4), new OrbifoldGeometry(OrbifoldSize.MEDIUM, 4), DEFAULT, new OrbifoldGeometry(OrbifoldSize.LARGE, 4),
+            new OrbifoldGeometry(OrbifoldSize.MEDIUM, 2), new OrbifoldGeometry(OrbifoldSize.MEDIUM, 16), new OrbifoldGeometry(OrbifoldSize.SMALL, 2), new OrbifoldGeometry(OrbifoldSize.SMALL, 16));
     }
 
     /** Viewer positions (blocks) near every seam, corner and cone point, in the tile and in the band. */
@@ -102,7 +104,7 @@ class ImageGeometryTest {
                     for (int qx = px - view - 1; qx <= px + view + 1; qx++) {
                         for (int qz = pz - view - 1; qz <= pz + view + 1; qz++) {
                             if (!ImageGeometry.withinView(px, pz, view, qx, qz, true)) continue;
-                            String at = g.sizeFactor + "/" + g.bandChunks + " viewer " + px + "," + pz + " view " + view + " chunk " + qx + "," + qz;
+                            String at = g.size + "/" + g.bandChunks + " viewer " + px + "," + pz + " view " + view + " chunk " + qx + "," + qz;
                             List<Motion> drawing = new ArrayList<>();
                             for (Motion m : candidates) {
                                 Motion back = m.inverse();

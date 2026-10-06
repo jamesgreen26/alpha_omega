@@ -7,6 +7,7 @@ import g_mungus.alpha_omega.network.OrbifoldPayload;
 import g_mungus.alpha_omega.orbifold.Orbifold;
 import g_mungus.alpha_omega.orbifold.OrbifoldGeometry;
 import g_mungus.alpha_omega.orbifold.OrbifoldSettings;
+import g_mungus.alpha_omega.orbifold.OrbifoldSize;
 import g_mungus.alpha_omega.worldgen.OrbifoldChunkGenerator;
 import io.netty.buffer.Unpooled;
 import java.io.IOException;
@@ -45,7 +46,7 @@ public class OrbifoldGameTests {
         ServerLevel level = helper.getLevel();
         OrbifoldGeometry geometry = Orbifold.of(level);
         helper.assertTrue(geometry != null, "the gametest overworld should be an orbifold world");
-        OrbifoldSettings settings = new OrbifoldSettings(geometry.sizeFactor, geometry.bandChunks);
+        OrbifoldSettings settings = new OrbifoldSettings(geometry.size, geometry.bandChunks);
         helper.assertTrue(settings.equals(AlphaOmegaConfig.defaults()), "preset without settings should take the config: " + settings);
         helper.assertTrue(Orbifold.of(level.getServer().getLevel(Level.NETHER)) == null, "the Nether is not an orbifold (until phase 10)");
         helper.succeed();
@@ -55,16 +56,38 @@ public class OrbifoldGameTests {
     public static void settingsSurviveSaving(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         OrbifoldChunkGenerator current = (OrbifoldChunkGenerator) level.getChunkSource().getGenerator();
-        OrbifoldChunkGenerator generator = new OrbifoldChunkGenerator(current.getBiomeSource(), current.generatorSettings(), new OrbifoldSettings(8, 6));
         RegistryOps<com.google.gson.JsonElement> ops = level.registryAccess().createSerializationContext(JsonOps.INSTANCE);
-        var json = ChunkGenerator.CODEC.encodeStart(ops, generator).getOrThrow();
-        helper.assertTrue(json.toString().contains("\"size_factor\":8") && json.toString().contains("\"band_chunks\":6"),
-            "settings are written explicitly: " + json);
-        ChunkGenerator decoded = ChunkGenerator.CODEC.parse(ops, json).getOrThrow();
-        helper.assertTrue(decoded instanceof OrbifoldChunkGenerator orbifold && orbifold.orbifold().equals(generator.orbifold()), "settings round trip");
+        // Sizes with a size factor are saved as before; the small size by name.
+        for (OrbifoldSize size : OrbifoldSize.PRESETS) {
+            OrbifoldChunkGenerator generator = new OrbifoldChunkGenerator(current.getBiomeSource(), current.generatorSettings(), new OrbifoldSettings(size, 6));
+            var json = ChunkGenerator.CODEC.encodeStart(ops, generator).getOrThrow();
+            String text = json.toString();
+            boolean written = size.sizeFactor() != 0
+                ? text.contains("\"size_factor\":" + size.sizeFactor()) && !text.contains("\"size\"")
+                : text.contains("\"size\":\"" + size.id() + "\"") && !text.contains("\"size_factor\"");
+            helper.assertTrue(written && text.contains("\"band_chunks\":6"), "settings are written explicitly: " + json);
+            ChunkGenerator decoded = ChunkGenerator.CODEC.parse(ops, json).getOrThrow();
+            helper.assertTrue(decoded instanceof OrbifoldChunkGenerator orbifold && orbifold.orbifold().equals(generator.orbifold()),
+                "settings round trip: " + size);
+        }
+        var json = ChunkGenerator.CODEC.encodeStart(ops, new OrbifoldChunkGenerator(current.getBiomeSource(), current.generatorSettings(),
+            new OrbifoldSettings(OrbifoldSize.LARGE, 6))).getOrThrow();
+        // A world saved before sizes had names: size_factor alone.
+        json.getAsJsonObject().addProperty("size_factor", 2);
+        helper.assertTrue(decodedSize(ops, json) == OrbifoldSize.MEDIUM, "size_factor 2 is the medium size");
+        // size takes precedence over size_factor.
+        json.getAsJsonObject().addProperty("size", "small");
+        helper.assertTrue(decodedSize(ops, json) == OrbifoldSize.SMALL, "size wins over size_factor");
+        json.getAsJsonObject().addProperty("size", "huge");
+        helper.assertTrue(ChunkGenerator.CODEC.parse(ops, json).isError(), "an unknown size is refused");
+        json.getAsJsonObject().remove("size");
         json.getAsJsonObject().addProperty("size_factor", 3);
         helper.assertTrue(ChunkGenerator.CODEC.parse(ops, json).isError(), "a size factor other than 2, 4 or 8 is refused");
         helper.succeed();
+    }
+
+    private static OrbifoldSize decodedSize(RegistryOps<com.google.gson.JsonElement> ops, com.google.gson.JsonElement json) {
+        return ((OrbifoldChunkGenerator) ChunkGenerator.CODEC.parse(ops, json).getOrThrow()).orbifold().size();
     }
 
     @GameTest(template = TEMPLATE)

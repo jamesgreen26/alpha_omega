@@ -19,7 +19,7 @@ public record OrbifoldPayload(Optional<OrbifoldSettings> settings) implements Cu
         ByteBufCodecs.optional(OrbifoldSettings.STREAM_CODEC).map(OrbifoldPayload::new, OrbifoldPayload::settings);
 
     public static OrbifoldPayload of(@Nullable OrbifoldGeometry geometry) {
-        return new OrbifoldPayload(Optional.ofNullable(geometry).map(g -> new OrbifoldSettings(g.sizeFactor, g.bandChunks)));
+        return new OrbifoldPayload(Optional.ofNullable(geometry).map(g -> new OrbifoldSettings(g.size, g.bandChunks)));
     }
 
     public Optional<OrbifoldGeometry> geometry() {

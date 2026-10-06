@@ -29,9 +29,6 @@ import java.util.List;
  */
 public final class OrbifoldGeometry {
 
-    /** The size factors a world can have. */
-    public static final List<Integer> SIZE_FACTORS = List.of(2, 4, 8);
-    public static final int DEFAULT_SIZE_FACTOR = 4;
     public static final int MIN_BAND_CHUNKS = 2;
     public static final int MAX_BAND_CHUNKS = 16;
     public static final int DEFAULT_BAND_CHUNKS = 4;
@@ -39,18 +36,6 @@ public final class OrbifoldGeometry {
     public static final int SKIRT = 16;
     /** Interaction radius {@code R}: claims stop this far short of the band's edge ({@code C = H − R}). */
     public static final int INTERACTION_RADIUS = 32;
-
-    /**
-     * Per size factor: the north fold row and spawn, as the wrapping plan's §4 "Sizes" table gives them. The fold rows
-     * are rounded to multiples of 128, so they are data rather than derived.
-     */
-    private record Size(int sizeFactor, int northRow, int spawnX, int spawnZ) {
-    }
-
-    private static final List<Size> SIZES = List.of(
-        new Size(2, -2560, 0, 42),
-        new Size(4, -5248, 0, -44),
-        new Size(8, -10368, 0, 40));
 
     /** A cone point: a fixed point of a half turn in {@code Γ}, on a fold row. */
     public record ConePoint(String name, int x, int z) {
@@ -64,7 +49,8 @@ public final class OrbifoldGeometry {
     public record Cell(int x, int z, Motion frame) {
     }
 
-    public final int sizeFactor;
+    /** The preset this geometry is: its lattice, north fold row and spawn. */
+    public final OrbifoldSize size;
     public final int bandChunks;
     /** Lattice: {@code L1 = (a, 0)}, {@code L2 = (a/2, b)}. */
     public final int a;
@@ -97,25 +83,23 @@ public final class OrbifoldGeometry {
     /** Every frame a footprint cell can have: the inverses of these map a source to its copies. */
     private final List<Motion> frames;
 
-    public OrbifoldGeometry(int sizeFactor, int bandChunks) {
-        Size size = SIZES.stream().filter(s -> s.sizeFactor == sizeFactor).findFirst()
-            .orElseThrow(() -> new IllegalArgumentException("Size factor must be one of " + SIZE_FACTORS + ": " + sizeFactor));
+    public OrbifoldGeometry(OrbifoldSize size, int bandChunks) {
         if (bandChunks < MIN_BAND_CHUNKS || bandChunks > MAX_BAND_CHUNKS) {
             throw new IllegalArgumentException("Band must be " + MIN_BAND_CHUNKS + " to " + MAX_BAND_CHUNKS + " chunks: " + bandChunks);
         }
-        this.sizeFactor = sizeFactor;
+        this.size = size;
         this.bandChunks = bandChunks;
-        this.a = 3840 * sizeFactor;
-        this.b = 3328 * sizeFactor;
+        this.a = size.a();
+        this.b = size.b();
         this.minX = -this.a / 2;
         this.maxX = this.a / 2;
-        this.northRow = size.northRow;
-        this.southRow = size.northRow + this.b / 2;
+        this.northRow = size.northRow();
+        this.southRow = size.northRow() + this.b / 2;
         this.band = 16 * bandChunks;
         this.claim = this.band - INTERACTION_RADIUS;
         this.reach = this.band + SKIRT;
-        this.spawnX = size.spawnX;
-        this.spawnZ = size.spawnZ;
+        this.spawnX = size.spawnX();
+        this.spawnZ = size.spawnZ();
         this.east = Motion.translation(this.a, 0);
         this.west = Motion.translation(-this.a, 0);
         this.northFold = Motion.halfTurn(0, 2 * this.northRow);
@@ -289,7 +273,7 @@ public final class OrbifoldGeometry {
 
     @Override
     public String toString() {
-        return String.format(java.util.Locale.ROOT, "orbifold k=%d: tile x %d..%d, z %d..%d (%d x %d), band %d, claim %d, skirt %d",
-            this.sizeFactor, this.minX, this.maxX, this.northRow, this.southRow, this.a, this.b / 2, this.band, this.claim, SKIRT);
+        return String.format(java.util.Locale.ROOT, "orbifold %s: tile x %d..%d, z %d..%d (%d x %d), band %d, claim %d, skirt %d",
+            this.size, this.minX, this.maxX, this.northRow, this.southRow, this.a, this.b / 2, this.band, this.claim, SKIRT);
     }
 }
