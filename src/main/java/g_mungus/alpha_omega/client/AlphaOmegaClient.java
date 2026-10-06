@@ -30,8 +30,10 @@ public class AlphaOmegaClient {
         AtmosphereRenderer.register(modBus);
         DevScript.init();
         modBus.addListener((RegisterPresetEditorsEvent event) -> event.register(OrbifoldChunkGenerator.PRESET, OrbifoldPresetScreen::create));
-        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> Orbifold.setClient(null));
+        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> Orbifold.setClient(java.util.Map.of()));
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingIn event) -> ClientFrameTransfer.reset());
+        // A new player (respawn or another dimension): claims made in the old level can no longer be undone there.
+        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.Clone event) -> ClientFrameTransfer.levelChanged());
         AlphaOmegaMod.clientFrameTransfer = ClientFrameTransfer::serverTransfer;
         if (Boolean.getBoolean("alpha_omega.auditMixins")) {
             // Debug aid: load every client mixin target once the title screen is up, then optionally quit.

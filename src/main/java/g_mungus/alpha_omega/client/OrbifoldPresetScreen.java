@@ -4,6 +4,8 @@ import g_mungus.alpha_omega.config.AlphaOmegaConfig;
 import g_mungus.alpha_omega.orbifold.OrbifoldSettings;
 import g_mungus.alpha_omega.orbifold.OrbifoldSize;
 import g_mungus.alpha_omega.worldgen.OrbifoldChunkGenerator;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.components.StringWidget;
@@ -14,6 +16,9 @@ import net.minecraft.client.gui.screens.worldselection.CreateWorldScreen;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationContext;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.dimension.LevelStem;
+import net.minecraft.world.level.levelgen.WorldDimensions;
 
 /** "Customize" on the Create World screen for the orbifold preset: the size. */
 public final class OrbifoldPresetScreen extends Screen {
@@ -75,7 +80,15 @@ public final class OrbifoldPresetScreen extends Screen {
         OrbifoldSettings chosen = this.settings;
         this.parent.getUiState().updateDimensions((registries, dimensions) -> {
             if (!(dimensions.overworld() instanceof OrbifoldChunkGenerator old)) return dimensions;
-            return dimensions.replaceOverworldGenerator(registries, new OrbifoldChunkGenerator(old.getBiomeSource(), old.generatorSettings(), chosen));
+            WorldDimensions replaced = dimensions.replaceOverworldGenerator(registries,
+                new OrbifoldChunkGenerator(old.getBiomeSource(), old.generatorSettings(), chosen));
+            // The Nether is the same size at 1:8.
+            LevelStem nether = replaced.dimensions().get(LevelStem.NETHER);
+            if (nether == null || !(nether.generator() instanceof OrbifoldChunkGenerator netherGenerator)) return replaced;
+            Map<ResourceKey<LevelStem>, LevelStem> stems = new LinkedHashMap<>(replaced.dimensions());
+            stems.put(LevelStem.NETHER, new LevelStem(nether.type(), new OrbifoldChunkGenerator(netherGenerator.getBiomeSource(),
+                netherGenerator.generatorSettings(), chosen.withScale(netherGenerator.orbifold().scale()))));
+            return new WorldDimensions(stems);
         });
     }
 }

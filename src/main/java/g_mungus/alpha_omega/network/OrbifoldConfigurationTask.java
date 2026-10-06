@@ -18,7 +18,7 @@ public record OrbifoldConfigurationTask(ServerConfigurationPacketListener listen
     @Override
     public void run(Consumer<CustomPacketPayload> sender) {
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
-        sender.accept(OrbifoldPayload.of(server == null ? null : Orbifold.of(server.overworld())));
+        sender.accept(OrbifoldPayload.of(server));
         this.listener.finishCurrentTask(TYPE);
     }
 

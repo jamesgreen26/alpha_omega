@@ -122,7 +122,7 @@ public class AlphaOmegaMod {
 
     private static void registerPayloads(RegisterPayloadHandlersEvent event) {
         event.registrar("1").configurationToClient(OrbifoldPayload.TYPE, OrbifoldPayload.STREAM_CODEC,
-            (payload, context) -> Orbifold.setClient(payload.geometry().orElse(null)));
+            (payload, context) -> Orbifold.setClient(payload.geometries()));
         event.registrar("1").playToServer(FrameTransferPayload.TYPE, FrameTransferPayload.STREAM_CODEC,
             (payload, context) -> FrameTransfers.handleClaim((ServerPlayer) context.player(), payload));
         event.registrar("1").playToServer(FrameTransferAckPayload.TYPE, FrameTransferAckPayload.STREAM_CODEC,
