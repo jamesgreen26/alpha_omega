@@ -122,18 +122,23 @@ public class LocalTimeGameTests {
     public static void spawnHasVanillasSun(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos pos = platform(helper, Site.SPAWN);
+        // The middle of the spawn block is half a block east of the meridian: ahead by that much sky, in ticks (under one
+        // tick at the default size, about 3.6 at the small one, where the sky turns faster).
+        OrbifoldGeometry geometry = geometry(helper);
+        double ahead = 0.5 * g_mungus.alpha_omega.sky.HexOrbifoldProjection.of(geometry).skySpeed(geometry.spawnX, geometry.spawnZ) / (2.0 * Math.PI) * 24000.0;
+        long tolerance = 1 + (long) Math.floor(ahead);
         for (long t = 240000; t < 264000; t += 250) {
             level.setDayTime(t);
             level.updateSkyBrightness();
             long local = LocalSky.localDayTime(level, pos.getX() + 0.5, pos.getZ() + 0.5);
-            helper.assertTrue(Math.abs(local - t) <= 1, "local clock at spawn " + local + " for day time " + t);
+            helper.assertTrue(Math.abs(local - t) <= tolerance, "local clock at spawn " + local + " for day time " + t);
             // The middle of the spawn block is a fraction of a tick ahead of spawn itself: equal, or a step off at a change.
             int darken = LocalSky.skyDarken(level, pos);
             helper.assertTrue(Math.abs(darken - level.getSkyDarken()) <= 1, "sky darkening at spawn " + darken + ", vanilla " + level.getSkyDarken() + " at " + t);
             if (darken == level.getSkyDarken()) {
                 helper.assertTrue(LocalSky.isDay(level, pos) == level.isDay(), "spawn's day differs from vanilla's at " + t);
             } else {
-                level.setDayTime(t + 2);
+                level.setDayTime(t + 1 + tolerance);
                 level.updateSkyBrightness();
                 helper.assertTrue(darken == level.getSkyDarken(), "sky darkening at spawn " + darken + " is not vanilla's a tick later, at " + t);
             }

@@ -44,6 +44,8 @@ neoForge {
             // Band reaction detectors are always on in gametests; -PcheckCopies also runs the copy check after every test.
             systemProperty 'alpha_omega.band.detectors', 'true'
             if (project.hasProperty('checkCopies')) systemProperty 'alpha_omega.band.checkCopies', 'true'
+            // -PorbifoldSize=small makes the gametest world that size (config.AlphaOmegaConfig.defaults).
+            if (project.hasProperty('orbifoldSize')) systemProperty 'alpha_omega.size', project.property('orbifoldSize')
         }
     }
 

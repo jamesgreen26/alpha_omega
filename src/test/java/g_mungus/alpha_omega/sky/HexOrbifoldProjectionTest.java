@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import g_mungus.alpha_omega.orbifold.Motion;
 import g_mungus.alpha_omega.orbifold.OrbifoldGeometry;
+import g_mungus.alpha_omega.orbifold.OrbifoldSize;
 import g_mungus.alpha_omega.sky.PlanetProjection.Position;
 import java.util.ArrayList;
 import java.util.List;
@@ -14,11 +15,11 @@ import org.junit.jupiter.api.Test;
 /** {@link HexOrbifoldProjection} against {@code orbifold-implementation.md} phase 2 "Tests" and the wrapping plan's §4–6. */
 class HexOrbifoldProjectionTest {
 
-    private static final OrbifoldGeometry DEFAULT = new OrbifoldGeometry(4, 4);
+    private static final OrbifoldGeometry DEFAULT = new OrbifoldGeometry(OrbifoldSize.NORMAL, 4);
     private static final double TETRAHEDRAL_ANGLE = Math.acos(-1.0 / 3.0);
 
     private static List<OrbifoldGeometry> sizes() {
-        return List.of(new OrbifoldGeometry(2, 4), DEFAULT, new OrbifoldGeometry(8, 4));
+        return List.of(new OrbifoldGeometry(OrbifoldSize.SMALL, 4), new OrbifoldGeometry(OrbifoldSize.MEDIUM, 4), DEFAULT, new OrbifoldGeometry(OrbifoldSize.LARGE, 4));
     }
 
     private static HexOrbifoldProjection projection(OrbifoldGeometry geometry) {
@@ -60,10 +61,42 @@ class HexOrbifoldProjectionTest {
     void spawnIsTheOriginFacingNorth() {
         for (OrbifoldGeometry g : sizes()) {
             Position spawn = projection(g).project(g.spawnX, g.spawnZ);
-            // Spawn is rounded to a whole block, a fraction of a block from the exact equator.
-            assertEquals(0.0, Math.toDegrees(spawn.latitude()), 0.01, "k=" + g.sizeFactor);
-            assertEquals(0.0, spawn.longitude(), 1e-12, "k=" + g.sizeFactor);
-            assertEquals(0.0, angleDifference(spawn.heading(), 0.0), 1e-9, "k=" + g.sizeFactor);
+            // Spawn is rounded to a whole block, at most half a block from the exact equator.
+            double halfBlock = 0.5 * Math.toDegrees(projection(g).skySpeed(g.spawnX, g.spawnZ));
+            assertEquals(0.0, Math.toDegrees(spawn.latitude()), halfBlock, "size " + g.size);
+            assertEquals(0.0, spawn.longitude(), 1e-12, "size " + g.size);
+            assertEquals(0.0, angleDifference(spawn.heading(), 0.0), 1e-9, "size " + g.size);
+        }
+    }
+
+    /**
+     * Each preset's north fold row and spawn, derived as the wrapping plan §4–5 derived them: spawn is where the
+     * meridian {@code x = 0}, walking south from {@code N}, crosses the equator (0° 0°, heading 0); the north row is
+     * minus that distance rounded to a multiple of 128, and spawn is the row plus the distance rounded to a block. The
+     * distance is the same fraction of {@code b} at every size, since the projection depends on {@code z} only through
+     * {@code s·z/a = (√3/2)·z/b}.
+     */
+    @Test
+    void foldRowsAndSpawnsAreDerivedFromTheProjection() {
+        for (OrbifoldSize size : OrbifoldSize.PRESETS) {
+            HexOrbifoldProjection atOrigin = new HexOrbifoldProjection(size.a(), size.b(), 0);
+            double north = 1.0, south = 0.6 * size.b();
+            assertTrue(atOrigin.project(0, north).latitude() > 0 && atOrigin.project(0, south).latitude() < 0, size.id());
+            for (int i = 0; i < 100; i++) {
+                double mid = (north + south) / 2;
+                if (atOrigin.project(0, mid).latitude() > 0) north = mid;
+                else south = mid;
+            }
+            double distance = north;
+            Position equator = atOrigin.project(0, distance);
+            assertEquals(0.0, equator.longitude(), 1e-12, size.id());
+            assertEquals(0.0, angleDifference(equator.heading(), 0.0), 1e-9, size.id());
+            assertEquals(0.390913, distance / size.b(), 1e-6, size.id());
+            int northRow = -128 * (int) Math.round(distance / 128.0);
+            assertEquals(northRow, size.northRow(), size.id() + " north fold row");
+            assertEquals(0, size.spawnX(), size.id());
+            assertEquals(Math.round(northRow + distance), size.spawnZ(), size.id() + " spawn");
+            assertTrue(Math.abs(size.spawnZ()) < 64, size.id() + ": spawn a few dozen blocks from z = 0");
         }
     }
 
@@ -110,14 +143,14 @@ class HexOrbifoldProjectionTest {
                 Position here = projection.project(x, z);
                 for (Motion element : elements) {
                     Position there = projection.project(element.pointX(x), element.pointZ(z));
-                    assertSamePlace(here, there, element.turned() ? Math.PI : 0.0, "k=" + g.sizeFactor + " (" + x + ", " + z + ") by " + element);
+                    assertSamePlace(here, there, element.turned() ? Math.PI : 0.0, "size " + g.size + " (" + x + ", " + z + ") by " + element);
                 }
                 // W §4's list, written out: a lap, the diagonal lattice vectors, and the half turn about N.
                 double[][] images = {{x + g.a, z}, {x - g.a, z}, {x + g.a / 2.0, z + g.b}, {x - g.a / 2.0, z - g.b},
                     {x - g.a / 2.0, z + g.b}, {x + g.a / 2.0, z - g.b}, {-x, 2.0 * g.northRow - z}};
                 for (int j = 0; j < images.length; j++) {
                     assertSamePlace(here, projection.project(images[j][0], images[j][1]), j == images.length - 1 ? Math.PI : 0.0,
-                        "k=" + g.sizeFactor + " identification " + j);
+                        "size " + g.size + " identification " + j);
                 }
             }
         }
@@ -157,23 +190,23 @@ class HexOrbifoldProjectionTest {
 
     /**
      * The wrapping plan's §4 "Sizes" table: mean sky speed 3.9°, 1.9° and 1.0° per 100 blocks, and 5.0°, 2.5° and
-     * 1.25° at spawn. The means are given to two figures, so they are checked to that rounding, and the mean scales
+     * 1.25° at spawn; for the small size (3584 × 3072, not in the table) 8.3° and 10.74°. The means are given to two figures, so they are checked to that rounding, and the mean scales
      * exactly with the world; the spawn speeds are checked to 1%. §3's share of the world below half the mean speed,
      * 8.8%, is checked too.
      */
     @Test
     void skySpeedMatchesTheSizesTable() {
-        double[] tableMean = {3.9, 1.9, 1.0};
-        double[] tableSpawn = {5.0, 2.5, 1.25};
+        double[] tableMean = {8.3, 3.9, 1.9, 1.0};
+        double[] tableSpawn = {10.74, 5.0, 2.5, 1.25};
         List<OrbifoldGeometry> sizes = sizes();
         double reference = meanSkySpeed(DEFAULT) * DEFAULT.a;
         for (int i = 0; i < sizes.size(); i++) {
             OrbifoldGeometry g = sizes.get(i);
             double mean = meanSkySpeed(g);
-            assertEquals(tableMean[i], Math.toDegrees(mean) * 100.0, 0.05, "k=" + g.sizeFactor + " mean");
-            assertEquals(reference, mean * g.a, 1e-3 * reference, "k=" + g.sizeFactor + " mean scales with the world");
+            assertEquals(tableMean[i], Math.toDegrees(mean) * 100.0, 0.05, "size " + g.size + " mean");
+            assertEquals(reference, mean * g.a, 1e-3 * reference, "size " + g.size + " mean scales with the world");
             double spawn = Math.toDegrees(projection(g).skySpeed(g.spawnX, g.spawnZ)) * 100.0;
-            assertEquals(tableSpawn[i], spawn, 0.01 * tableSpawn[i], "k=" + g.sizeFactor + " at spawn");
+            assertEquals(tableSpawn[i], spawn, 0.01 * tableSpawn[i], "size " + g.size + " at spawn");
         }
         assertEquals(0.088, shareBelowHalf(DEFAULT), 0.003);
     }

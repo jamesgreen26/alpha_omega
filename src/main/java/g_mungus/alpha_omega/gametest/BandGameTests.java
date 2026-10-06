@@ -101,9 +101,9 @@ public class BandGameTests {
         OrbifoldGeometry g = Orbifold.of(helper.getLevel());
         if (g == null) throw new IllegalStateException("the gametest overworld should be an orbifold");
         Site site = switch (seam) {
-            case EAST -> new Site("east", new BlockPos(g.maxX, Y, -2000 + 32 * lane), Direction.EAST, Direction.SOUTH, Motion.IDENTITY);
+            case EAST -> new Site("east", new BlockPos(g.maxX, Y, TestPlaces.at(g, -2000, g.northRow + 192) + 32 * lane), Direction.EAST, Direction.SOUTH, Motion.IDENTITY);
             case NORTH -> new Site("north", new BlockPos(1000 + 32 * lane, Y, g.northRow - 1), Direction.NORTH, Direction.EAST, Motion.IDENTITY);
-            case SOUTH -> new Site("south", new BlockPos(-1500 - 32 * lane, Y, g.southRow), Direction.SOUTH, Direction.WEST, Motion.IDENTITY);
+            case SOUTH -> new Site("south", new BlockPos(TestPlaces.at(g, -1500, -1000) - 32 * lane, Y, g.southRow), Direction.SOUTH, Direction.WEST, Motion.IDENTITY);
             // Past the north fold 48 blocks west of F: the source is by F's other side, and has copies in the east band too.
             case CORNER -> new Site("corner", new BlockPos(g.maxX - 48, Y + 4 * lane, g.northRow - 1), Direction.NORTH, Direction.EAST, Motion.IDENTITY);
         };
@@ -887,7 +887,7 @@ public class BandGameTests {
         ServerLevel level = helper.getLevel();
         OrbifoldGeometry g = Orbifold.of(level);
         // Deep in the east band, far from every other test.
-        ChunkPos band = new ChunkPos((g.maxX >> 4) + 1, (g.northRow >> 4) + 200);
+        ChunkPos band = new ChunkPos((g.maxX >> 4) + 1, (g.northRow >> 4) + TestPlaces.at(g, 200, 9));
         OrbifoldGeometry.Cell cell = g.canonChunk(band.x, band.z);
         ChunkPos source = new ChunkPos(cell.x(), cell.z());
         if (!unloaded(level, band) || !unloaded(level, source)) {
@@ -921,7 +921,7 @@ public class BandGameTests {
     public static void gateHoldsBesideForcedTileChunk(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         OrbifoldGeometry g = Orbifold.of(level);
-        ChunkPos tile = new ChunkPos((3000 >> 4), g.northRow >> 4);
+        ChunkPos tile = new ChunkPos(TestPlaces.at(g, 3000, -1000) >> 4, g.northRow >> 4);
         BandCounters.reset();
         TestChunks.force(level, tile);
         BlockPos seamCell = new BlockPos(tile.getMinBlockX() + 8, Y + 20, g.northRow);

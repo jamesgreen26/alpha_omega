@@ -1,8 +1,8 @@
 package g_mungus.alpha_omega.client;
 
 import g_mungus.alpha_omega.config.AlphaOmegaConfig;
-import g_mungus.alpha_omega.orbifold.OrbifoldGeometry;
 import g_mungus.alpha_omega.orbifold.OrbifoldSettings;
+import g_mungus.alpha_omega.orbifold.OrbifoldSize;
 import g_mungus.alpha_omega.worldgen.OrbifoldChunkGenerator;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.CycleButton;
@@ -15,7 +15,7 @@ import net.minecraft.client.gui.screens.worldselection.WorldCreationContext;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 
-/** "Customize" on the Create World screen for the orbifold preset: the size factor. */
+/** "Customize" on the Create World screen for the orbifold preset: the size. */
 public final class OrbifoldPresetScreen extends Screen {
 
     private final HeaderAndFooterLayout layout = new HeaderAndFooterLayout(this);
@@ -39,11 +39,11 @@ public final class OrbifoldPresetScreen extends Screen {
         this.layout.addTitleHeader(this.title, this.font);
         LinearLayout rows = this.layout.addToContents(LinearLayout.vertical().spacing(8));
         rows.defaultCellSetting().alignHorizontallyCenter();
-        rows.addChild(CycleButton.<Integer>builder(OrbifoldPresetScreen::sizeName)
-            .withValues(OrbifoldGeometry.SIZE_FACTORS)
-            .withInitialValue(this.settings.sizeFactor())
+        rows.addChild(CycleButton.<OrbifoldSize>builder(OrbifoldPresetScreen::sizeName)
+            .withValues(OrbifoldSize.PRESETS)
+            .withInitialValue(this.settings.size())
             .create(0, 0, 210, 20, Component.translatable("alpha_omega.orbifold.size"),
-                (button, k) -> this.settings = this.settings.withSizeFactor(k)));
+                (button, size) -> this.settings = this.settings.withSize(size)));
         rows.addChild(new StringWidget(Component.translatable("alpha_omega.orbifold.hint").withColor(0xA0A0A0), this.font));
         LinearLayout footer = this.layout.addToFooter(LinearLayout.horizontal().spacing(8));
         footer.addChild(Button.builder(CommonComponents.GUI_DONE, button -> {
@@ -55,9 +55,10 @@ public final class OrbifoldPresetScreen extends Screen {
         this.repositionElements();
     }
 
-    /** A size factor as the button shows it: {@code k} and how far round the world is east to west. */
-    private static Component sizeName(int k) {
-        return Component.translatable("alpha_omega.orbifold.size.value", k, 3840 * k);
+    /** A size as the button shows it: {@code a × b} and its name, such as "3584 × 3072 (small)". */
+    private static Component sizeName(OrbifoldSize size) {
+        return Component.translatable("alpha_omega.orbifold.size.value", size.a(), size.b(),
+            Component.translatable("alpha_omega.orbifold.size." + size.id()));
     }
 
     @Override

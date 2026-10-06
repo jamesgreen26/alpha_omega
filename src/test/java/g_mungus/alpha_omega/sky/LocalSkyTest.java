@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import g_mungus.alpha_omega.orbifold.Motion;
 import g_mungus.alpha_omega.orbifold.OrbifoldGeometry;
+import g_mungus.alpha_omega.orbifold.OrbifoldSize;
 import g_mungus.alpha_omega.sky.PlanetProjection.Position;
 import java.util.Random;
 import org.joml.Quaternionf;
@@ -15,7 +16,7 @@ import org.junit.jupiter.api.Test;
 /** The pure math of {@link LocalSky}, on its own and over the default orbifold world's projection. */
 class LocalSkyTest {
 
-    private static final OrbifoldGeometry WORLD = new OrbifoldGeometry(4, 4);
+    private static final OrbifoldGeometry WORLD = new OrbifoldGeometry(OrbifoldSize.NORMAL, 4);
     private static final PlanetProjection.Projection PROJECTION = PlanetProjection.of(WORLD);
 
     /** Vanilla {@code DimensionType.timeOfDay}, copied verbatim. */
