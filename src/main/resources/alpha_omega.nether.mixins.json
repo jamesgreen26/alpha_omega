@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "package": "g_mungus.alpha_omega.mixin.nether",
+  "compatibilityLevel": "JAVA_21",
+  "minVersion": "0.8",
+  "mixins": [
+    "ChunkMapViewMixin",
+    "NetherPortalBlockInvoker",
+    "NetherPortalBlockMixin",
+    "PlayerListViewMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

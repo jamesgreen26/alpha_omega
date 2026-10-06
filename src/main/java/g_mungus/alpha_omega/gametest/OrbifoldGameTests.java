@@ -48,7 +48,9 @@ public class OrbifoldGameTests {
         helper.assertTrue(geometry != null, "the gametest overworld should be an orbifold world");
         OrbifoldSettings settings = new OrbifoldSettings(geometry.size, geometry.bandChunks);
         helper.assertTrue(settings.equals(AlphaOmegaConfig.defaults()), "preset without settings should take the config: " + settings);
-        helper.assertTrue(Orbifold.of(level.getServer().getLevel(Level.NETHER)) == null, "the Nether is not an orbifold (until phase 10)");
+        OrbifoldGeometry nether = Orbifold.of(level.getServer().getLevel(Level.NETHER));
+        helper.assertTrue(nether != null && nether.scale == OrbifoldGeometry.NETHER_SCALE, "the Nether should be an orbifold at 1:8: " + nether);
+        helper.assertTrue(Orbifold.of(level.getServer().getLevel(Level.END)) == null, "the End is not an orbifold");
         helper.succeed();
     }
 

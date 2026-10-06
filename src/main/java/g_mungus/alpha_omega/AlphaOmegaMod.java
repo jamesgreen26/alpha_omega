@@ -78,6 +78,7 @@ public class AlphaOmegaMod {
         });
         NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> ImageViews.clear());
         g_mungus.alpha_omega.band.BandEvents.register(modEventBus);
+        g_mungus.alpha_omega.nether.NetherEvents.register();
         g_mungus.alpha_omega.gametest.TestMultiblock.register(modEventBus);
         if (net.neoforged.fml.ModList.get().isLoaded("sable")) g_mungus.alpha_omega.compat.sable.SableCompat.init();
         if (Boolean.getBoolean("alpha_omega.auditMixins")) {
@@ -135,7 +136,8 @@ public class AlphaOmegaMod {
         GameTestFilter.register(java.util.List.of(ModLoadGameTests.class, OrbifoldGameTests.class, GeneratorGameTests.class, TerrainGameTests.class, SableGameTests.class, g_mungus.alpha_omega.gametest.LocalTimeGameTests.class,
             g_mungus.alpha_omega.gametest.ImageGameTests.class, g_mungus.alpha_omega.gametest.BandGameTests.class,
             g_mungus.alpha_omega.gametest.TransferGameTests.class, g_mungus.alpha_omega.gametest.RetentionGameTests.class,
-            g_mungus.alpha_omega.gametest.BridgeGameTests.class, g_mungus.alpha_omega.gametest.ClaimGameTests.class), event::register);
+            g_mungus.alpha_omega.gametest.BridgeGameTests.class, g_mungus.alpha_omega.gametest.ClaimGameTests.class,
+            g_mungus.alpha_omega.gametest.NetherGameTests.class), event::register);
     }
 
 }
