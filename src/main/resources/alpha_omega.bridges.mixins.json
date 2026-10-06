@@ -1,0 +1,19 @@
+{
+  "required": true,
+  "package": "g_mungus.alpha_omega.mixin.bridges",
+  "compatibilityLevel": "JAVA_21",
+  "minVersion": "0.8",
+  "mixins": [
+    "AbstractMinecartPushBridgeMixin",
+    "EntityPushBridgeMixin",
+    "EntitySectionStorageBridgeMixin",
+    "PersistentEntitySectionManagerAccessor",
+    "ServerLevelBridgeMixin",
+    "ServerLevelEntitiesAccessor"
+  ],
+  "client": [
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
