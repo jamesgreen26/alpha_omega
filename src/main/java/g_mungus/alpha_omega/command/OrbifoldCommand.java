@@ -15,7 +15,8 @@ import net.minecraft.world.phys.Vec3;
 
 /**
  * {@code /orbifold info}: the tile, its cone points, and for the cell the caller is in: whether it is tile, band or
- * skirt, its source and frame, its source's copy set, and how far past the nearest seam it is.
+ * skirt, its source and frame, its source's copy set, and how far past the nearest seam it is; and who owns the targeted
+ * cell. {@code /orbifold scan}: counters, and the claims held in loaded chunks.
  */
 public final class OrbifoldCommand {
 
@@ -40,12 +41,42 @@ public final class OrbifoldCommand {
             return 0;
         }
         for (String line : lines(geometry, source.getPosition())) source.sendSuccess(() -> Component.literal(line), false);
+        BlockPos target = BlockPos.containing(source.getPosition());
+        if (source.getEntity() != null && source.getEntity().pick(20.0, 0.0F, false) instanceof net.minecraft.world.phys.BlockHitResult hit
+            && hit.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK) {
+            target = hit.getBlockPos();
+        }
+        String owner = ownerLine(source.getLevel(), target);
+        source.sendSuccess(() -> Component.literal(owner), false);
         return 1;
+    }
+
+    /** Who owns the cell at {@code pos} (RS §3.1, §3.3): this copy or another, nominally or by a claim, and where its block entity is. */
+    public static String ownerLine(net.minecraft.server.level.ServerLevel level, BlockPos pos) {
+        String cell = "Target " + pos.toShortString() + " " + net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(level.getBlockState(pos).getBlock());
+        net.minecraft.world.level.chunk.LevelChunk chunk = g_mungus.alpha_omega.band.Band.linkedChunk(level, pos);
+        if (chunk == null) return cell + ": no copies loaded; owned here";
+        OrbifoldGeometry geometry = Orbifold.of(level);
+        boolean here = g_mungus.alpha_omega.band.Ownership.isOwner(chunk, pos);
+        BlockPos ownerPos = pos;
+        if (!here) {
+            var link = g_mungus.alpha_omega.band.Ownership.owner(level, chunk, pos);
+            if (link == null) return cell + ": owner unresolved (masks disagree; see /orbifold check)";
+            ownerPos = link.map(pos);
+        }
+        boolean nominal = geometry.isTile(ownerPos.getX(), ownerPos.getZ());
+        var ownerChunk = g_mungus.alpha_omega.band.Band.loadedChunk(level, ownerPos);
+        boolean blockEntity = ownerChunk != null && ownerChunk.getBlockEntities().containsKey(ownerPos);
+        return String.format(Locale.ROOT, "%s: owned by %s at %s (%s), %s%s", cell, here ? "this copy" : "the copy", ownerPos.toShortString(),
+            nominal ? "tile" : "band, depth " + geometry.cellDepth(ownerPos.getX(), ownerPos.getZ()),
+            nominal ? "nominal" : "claimed", blockEntity ? "; its block entity is there" : "");
     }
 
     /** {@code /orbifold scan}: the band spike's counters. */
     private static int scan(CommandContext<CommandSourceStack> context) {
         for (String line : g_mungus.alpha_omega.band.BandCounters.lines()) context.getSource().sendSuccess(() -> Component.literal(line), false);
+        String claimed = g_mungus.alpha_omega.band.BandCounters.claimedCells(context.getSource().getLevel());
+        context.getSource().sendSuccess(() -> Component.literal(claimed), false);
         for (String line : g_mungus.alpha_omega.transfer.TransferCounters.lines()) context.getSource().sendSuccess(() -> Component.literal(line), false);
         for (String line : g_mungus.alpha_omega.bridge.BridgeCounters.lines()) context.getSource().sendSuccess(() -> Component.literal(line), false);
         return 1;
