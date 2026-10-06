@@ -6,6 +6,7 @@ import g_mungus.alpha_omega.band.BandCheck;
 import g_mungus.alpha_omega.band.BandChunk;
 import g_mungus.alpha_omega.band.BandCounters;
 import g_mungus.alpha_omega.band.BandData;
+import g_mungus.alpha_omega.band.BandGate;
 import g_mungus.alpha_omega.band.BandWrites;
 import g_mungus.alpha_omega.band.Ownership;
 import g_mungus.alpha_omega.orbifold.Motion;
@@ -22,6 +23,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.level.ChunkLevel;
+import net.minecraft.server.level.FullChunkStatus;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
@@ -922,6 +925,47 @@ public class BandGameTests {
         TestChunks.release(level, band);
         if (wrong.isEmpty()) helper.succeed();
         else helper.fail("promotion gate: " + wrong);
+    }
+
+    /**
+     * Two promotions of the same band chunk in flight at once (its level dropped and rose again while the first waited,
+     * or a one-tick ticket asked for it twice): each waiter must hold the source until its own promotion. The second
+     * promotion used to find the source released by the first, and let the band chunk through unfilled.
+     */
+    @GameTest(template = TEMPLATE, batch = "band_gate_overlap", timeoutTicks = 400)
+    public static void gateHoldsSourceForEveryWaiter(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        OrbifoldGeometry g = Orbifold.of(level);
+        ChunkPos band = new ChunkPos((g.maxX >> 4) + 1, (g.northRow >> 4) + 230);
+        OrbifoldGeometry.Cell cell = g.canonChunk(band.x, band.z);
+        ChunkPos source = new ChunkPos(cell.x(), cell.z());
+        if (!unloaded(level, band) || !unloaded(level, source)) {
+            helper.fail("the overlap test's chunks should start unloaded");
+            return;
+        }
+        // Two waiters, then the first promotion: the second waiter's hold must remain, and go with the second promotion.
+        BandGate.holdForTest(level, band);
+        BandGate.holdForTest(level, band);
+        BandGate.release(level, band);
+        helper.runAfterDelay(5, () -> {
+            int held = ticketLevel(level, source);
+            BandGate.release(level, band);
+            helper.runAfterDelay(5, () -> {
+                int after = ticketLevel(level, source);
+                if (held > ChunkLevel.byStatus(FullChunkStatus.FULL)) {
+                    helper.fail("after one of two promotions in flight, the source " + source + " is no longer held full for the other (level " + held + ")");
+                } else if (after <= ChunkLevel.byStatus(FullChunkStatus.FULL)) {
+                    helper.fail("after both promotions the source " + source + " is still held (level " + after + ")");
+                } else {
+                    helper.succeed();
+                }
+            });
+        });
+    }
+
+    private static int ticketLevel(ServerLevel level, ChunkPos pos) {
+        net.minecraft.server.level.ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(pos.toLong());
+        return holder == null ? ChunkLevel.MAX_LEVEL + 1 : holder.getTicketLevel();
     }
 
     /**

@@ -18,7 +18,8 @@ public final class BandEvents {
     public static void register(IEventBus modBus) {
         BandData.register(modBus);
         NeoForge.EVENT_BUS.addListener((ChunkEvent.Load event) -> {
-            if (event.getLevel() instanceof ServerLevel && event.getChunk() instanceof LevelChunk chunk && unfilled(chunk)) {
+            // While the server stops, vanilla has dropped every ticket (gate holds too) before the last queued promotions run.
+            if (event.getLevel() instanceof ServerLevel level && level.getServer().isRunning() && event.getChunk() instanceof LevelChunk chunk && unfilled(chunk)) {
                 BandCounters.gateViolation("loaded unfilled");
             }
         });
@@ -31,7 +32,6 @@ public final class BandEvents {
         NeoForge.EVENT_BUS.addListener((LevelTickEvent.Pre event) -> {
             if (event.getLevel() instanceof ServerLevel level && Band.geometry(level) != null) {
                 BandFill.flush(level);
-                BandGate.tick();
             }
         });
         NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> {

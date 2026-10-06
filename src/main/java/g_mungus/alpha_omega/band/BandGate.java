@@ -42,18 +42,35 @@ public final class BandGate {
     public static final TicketType<ChunkPos> GATE = TicketType.create("alpha_omega_band_gate", Comparator.comparingLong(ChunkPos::toLong));
     private static final int GATE_LEVEL_DISTANCE = 0;
     private static final int MAX_ATTEMPTS = 8;
-    private static final long STALE_MILLIS = 120_000;
 
     /** Band chunks let through the gate, whose next {@code FULL} step runs, by level. Any thread. */
     private static final Set<Key> PASSING = ConcurrentHashMap.newKeySet();
-    /** Band chunks holding a gate ticket on their source, by level. Main thread. */
+    /**
+     * Band chunks holding a gate ticket on their source, by level, with how many promotions are in flight for each.
+     * Main thread. A band chunk can have more than one: its level can drop and rise again (a one-tick ticket, a test
+     * releasing and re-forcing it) while an earlier promotion still waits, and every promotion that was started runs.
+     *
+     * <p>Holds never time out. A promotion whose wait is over can sit in the main thread's chunk queue for as long as the
+     * band chunk's level stays too low to run it (minutes, in a long test run), and runs as soon as the level rises
+     * again. If its source had been let go meanwhile, it would join its level unfilled: the source is held until then.
+     */
     private static final Map<Key, Waiting> WAITING = new HashMap<>();
 
     /** A band chunk of a level: the overworld and the Nether each have their own. */
     private record Key(ResourceKey<Level> level, long chunk) {
     }
 
-    private record Waiting(ServerLevel level, ChunkPos source, long since) {
+    private static final class Waiting {
+        final ServerLevel level;
+        final ChunkPos source;
+        int count;
+        /** When a waiter's wait last ended (its promotion queued), for {@link BandCounters#gateLongestQueueMillis}. */
+        long opened;
+
+        Waiting(ServerLevel level, ChunkPos source) {
+            this.level = level;
+            this.source = source;
+        }
     }
 
     private BandGate() {
@@ -87,48 +104,67 @@ public final class BandGate {
         ChunkPos source = new ChunkPos(cell.x(), cell.z());
         if (attempt == 0) {
             BandCounters.gateWaits++;
-            Key key = new Key(level.dimension(), band.toLong());
-            if (!WAITING.containsKey(key)) {
-                level.getChunkSource().addRegionTicket(GATE, source, GATE_LEVEL_DISTANCE, band);
-                WAITING.put(key, new Waiting(level, source, System.currentTimeMillis()));
-            }
+            hold(level, band, source);
         }
         if (level.getChunkSource().getChunkNow(source.x, source.z) != null) {
-            ready.complete(null);
+            open(level, band, ready);
             return;
         }
         BandCounters.gateHeld++;
         level.getChunkSource().getChunkFuture(source.x, source.z, ChunkStatus.FULL, true).whenComplete((result, error) ->
             ((ChunkMapBandAccessor) level.getChunkSource().chunkMap).alpha_omega$mainThreadExecutor().execute(() -> {
                 if (error == null && result.isSuccess()) {
-                    ready.complete(null);
+                    open(level, band, ready);
                 } else if (attempt + 1 < MAX_ATTEMPTS) {
                     waitForSource(level, geometry, band, ready, attempt + 1);
                 } else {
                     AlphaOmegaMod.LOGGER.warn("Band chunk {}: its source {} did not load; letting it through unfilled", band, source);
-                    ready.complete(null);
+                    open(level, band, ready);
                 }
             }));
     }
 
-    /** The band chunk has been filled (or let through): its source no longer needs holding. Main thread. */
-    public static void release(ServerLevel level, ChunkPos band) {
-        Waiting waiting = WAITING.remove(new Key(level.dimension(), band.toLong()));
-        if (waiting != null) waiting.level.getChunkSource().removeRegionTicket(GATE, waiting.source, GATE_LEVEL_DISTANCE, band);
+    private static void open(ServerLevel level, ChunkPos band, CompletableFuture<Void> ready) {
+        Waiting waiting = WAITING.get(new Key(level.dimension(), band.toLong()));
+        if (waiting != null) waiting.opened = System.currentTimeMillis();
+        ready.complete(null);
     }
 
-    /** Drops gate tickets whose band chunk never got promoted (its load was abandoned). Main thread, each tick. */
-    public static void tick() {
-        if (WAITING.isEmpty()) return;
-        long now = System.currentTimeMillis();
-        var it = WAITING.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<Key, Waiting> entry = it.next();
-            Waiting waiting = entry.getValue();
-            if (now - waiting.since < STALE_MILLIS) continue;
-            waiting.level.getChunkSource().removeRegionTicket(GATE, waiting.source, GATE_LEVEL_DISTANCE, new ChunkPos(entry.getKey().chunk()));
-            it.remove();
+    /** A waiter for {@code band}'s promotion holds its source at full status until that promotion. Main thread. */
+    static void hold(ServerLevel level, ChunkPos band, ChunkPos source) {
+        Waiting waiting = WAITING.computeIfAbsent(new Key(level.dimension(), band.toLong()), key -> {
+            level.getChunkSource().addRegionTicket(GATE, source, GATE_LEVEL_DISTANCE, band);
+            return new Waiting(level, source);
+        });
+        if (waiting.count > 0) BandCounters.gateOverlaps++;
+        waiting.count++;
+    }
+
+    /** For tests: what a gate waiter does first, for {@code band}. */
+    public static void holdForTest(ServerLevel level, ChunkPos band) {
+        OrbifoldGeometry.Cell cell = Band.geometry(level).canonChunk(band.x, band.z);
+        hold(level, band, new ChunkPos(cell.x(), cell.z()));
+    }
+
+    /** One promotion of the band chunk has run (filled, or let through): when it was the last in flight, its source is let go. Main thread. */
+    public static void release(ServerLevel level, ChunkPos band) {
+        Key key = new Key(level.dimension(), band.toLong());
+        Waiting waiting = WAITING.get(key);
+        if (waiting == null) return;
+        if (waiting.opened > 0) {
+            long queued = System.currentTimeMillis() - waiting.opened;
+            BandCounters.gateLongestQueueMillis = Math.max(BandCounters.gateLongestQueueMillis, queued);
+            if (queued > 30_000) AlphaOmegaMod.LOGGER.info("Band chunk {} in {} was promoted {} s after its gate opened", band, level.dimension().location(), queued / 1000);
         }
+        if (--waiting.count > 0) return;
+        WAITING.remove(key);
+        waiting.level.getChunkSource().removeRegionTicket(GATE, waiting.source, GATE_LEVEL_DISTANCE, band);
+    }
+
+    /** For tests: how many promotions of {@code band} are in flight (each holding its source). */
+    public static int holds(ServerLevel level, ChunkPos band) {
+        Waiting waiting = WAITING.get(new Key(level.dimension(), band.toLong()));
+        return waiting == null ? 0 : waiting.count;
     }
 
     public static int waiting() {

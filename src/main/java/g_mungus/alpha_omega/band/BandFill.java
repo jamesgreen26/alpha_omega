@@ -64,6 +64,10 @@ public final class BandFill {
         BandGate.release(level, chunk.getPos());
         CopyLinks.Link source = links.source();
         if (source == null || source.chunk(level) == null) {
+            net.minecraft.server.level.ChunkHolder holder = source == null ? null : level.getChunkSource().chunkMap.getVisibleChunkIfPresent(source.key);
+            if (level.getServer().isRunning()) g_mungus.alpha_omega.AlphaOmegaMod.LOGGER.warn("Band chunk {} in {} promoted while its source {} is not a loaded full chunk (holder {}, ticket level {}, latest {}); left unfilled",
+                chunk.getPos(), level.dimension().location(), source == null ? null : new ChunkPos(source.key), holder,
+                holder == null ? -1 : holder.getTicketLevel(), holder == null ? null : holder.getLatestStatus());
             band.alpha_omega$setFilled(false);
             PENDING.computeIfAbsent(level, l -> new LongLinkedOpenHashSet()).add(chunk.getPos().toLong());
             BandCounters.gateFallbacks++;

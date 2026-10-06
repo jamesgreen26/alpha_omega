@@ -56,6 +56,10 @@ public final class BandCounters {
     // Promotion
     public static long gateWaits;
     public static long gateHeld;
+    /** A promotion started while another of the same band chunk was in flight. */
+    public static long gateOverlaps;
+    /** The longest a promotion waited in the chunk queue after its gate opened (it runs only once the chunk's level allows). */
+    public static long gateLongestQueueMillis;
     public static long gateFills;
     public static long gateFallbacks;
     public static long lateFills;
@@ -98,7 +102,7 @@ public final class BandCounters {
         randomTicksSkipped = precipitationSkipped = tickersSkipped = scheduledTicksDeduped = poiScanSkipped = 0;
         claims = releases = staleBlockEntitiesRemoved = ownershipUnresolved = 0;
         placements = placementClaims = placementReturns = placementsBeyondClaim = blockEntitiesAtOwner = blockEntityClaims = 0;
-        gateWaits = gateHeld = gateFills = gateFallbacks = lateFills = liveRefreshes = cellsFilled = lightChecks = fillNanos = stampMismatches = 0;
+        gateWaits = gateHeld = gateOverlaps = gateLongestQueueMillis = gateFills = gateFallbacks = lateFills = liveRefreshes = cellsFilled = lightChecks = fillNanos = stampMismatches = 0;
         pairedTicketsAdded = placementShapes = 0;
         gateViolations.clear();
         ranAtNonOwner.clear();
@@ -181,8 +185,8 @@ public final class BandCounters {
             claims, releases, staleBlockEntitiesRemoved, ownershipUnresolved));
         lines.add(String.format(Locale.ROOT, "Claims: placements %d (claimed for a band copy %d, taken back for the tile %d), beyond C %d; block entities created at the owner %d, claims by block entity %d",
             placements, placementClaims, placementReturns, placementsBeyondClaim, blockEntitiesAtOwner, blockEntityClaims));
-        lines.add(String.format(Locale.ROOT, "Promotion: gate waits %d (held %d), fills %d (%.1f ms total), fallbacks %d, late fills %d, live refreshes %d; cells filled %d, light checks %d; stamp mismatches %d; paired tickets added %d",
-            gateWaits, gateHeld, gateFills, fillNanos / 1e6, gateFallbacks, lateFills, liveRefreshes, cellsFilled, lightChecks, stampMismatches, pairedTicketsAdded));
+        lines.add(String.format(Locale.ROOT, "Promotion: gate waits %d (held %d, overlapping %d, longest queued %d ms), fills %d (%.1f ms total), fallbacks %d, late fills %d, live refreshes %d; cells filled %d, light checks %d; stamp mismatches %d; paired tickets added %d",
+            gateWaits, gateHeld, gateOverlaps, gateLongestQueueMillis, gateFills, fillNanos / 1e6, gateFallbacks, lateFills, liveRefreshes, cellsFilled, lightChecks, stampMismatches, pairedTicketsAdded));
         lines.add("Gate violations: " + gateViolationTotal() + " " + gateViolations);
         if (Band.DETECTORS) {
             lines.add("Placement shape computations at non-owners (not reactions): " + placementShapes);
