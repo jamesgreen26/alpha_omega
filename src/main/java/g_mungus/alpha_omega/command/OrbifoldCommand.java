@@ -46,6 +46,7 @@ public final class OrbifoldCommand {
     /** {@code /orbifold scan}: the band spike's counters. */
     private static int scan(CommandContext<CommandSourceStack> context) {
         for (String line : g_mungus.alpha_omega.band.BandCounters.lines()) context.getSource().sendSuccess(() -> Component.literal(line), false);
+        for (String line : g_mungus.alpha_omega.transfer.TransferCounters.lines()) context.getSource().sendSuccess(() -> Component.literal(line), false);
         return 1;
     }
 

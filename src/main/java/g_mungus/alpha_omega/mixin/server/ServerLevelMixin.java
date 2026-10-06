@@ -1,6 +1,6 @@
 package g_mungus.alpha_omega.mixin.server;
 
-import g_mungus.alpha_omega.transfer.FaceTransfers;
+import g_mungus.alpha_omega.transfer.FrameTransfers;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import org.spongepowered.asm.mixin.Mixin;
@@ -14,6 +14,6 @@ abstract class ServerLevelMixin {
 
     @Inject(method = "tickNonPassenger", at = @At("TAIL"))
     private void alpha_omega$transfer(Entity entity, CallbackInfo ci) {
-        FaceTransfers.afterTick((ServerLevel) (Object) this, entity);
+        FrameTransfers.afterTick((ServerLevel) (Object) this, entity);
     }
 }

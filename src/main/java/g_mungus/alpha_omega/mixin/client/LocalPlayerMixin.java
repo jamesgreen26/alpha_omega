@@ -1,6 +1,6 @@
 package g_mungus.alpha_omega.mixin.client;
 
-import g_mungus.alpha_omega.client.ClientFaceTransfer;
+import g_mungus.alpha_omega.client.ClientFrameTransfer;
 import net.minecraft.client.player.LocalPlayer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -13,6 +13,6 @@ abstract class LocalPlayerMixin {
 
     @Inject(method = "tick", at = @At("TAIL"))
     private void alpha_omega$crossEdges(CallbackInfo ci) {
-        ClientFaceTransfer.afterTick((LocalPlayer) (Object) this);
+        ClientFrameTransfer.afterTick((LocalPlayer) (Object) this);
     }
 }

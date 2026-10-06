@@ -31,6 +31,8 @@ public class AlphaOmegaClient {
         DevScript.init();
         modBus.addListener((RegisterPresetEditorsEvent event) -> event.register(OrbifoldChunkGenerator.PRESET, OrbifoldPresetScreen::create));
         NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingOut event) -> Orbifold.setClient(null));
+        NeoForge.EVENT_BUS.addListener((ClientPlayerNetworkEvent.LoggingIn event) -> ClientFrameTransfer.reset());
+        AlphaOmegaMod.clientFrameTransfer = ClientFrameTransfer::serverTransfer;
         if (Boolean.getBoolean("alpha_omega.auditMixins")) {
             // Debug aid: load every client mixin target once the title screen is up, then optionally quit.
             NeoForge.EVENT_BUS.addListener((ScreenEvent.Opening event) -> {
