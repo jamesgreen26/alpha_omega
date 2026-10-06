@@ -63,6 +63,7 @@ public class AlphaOmegaMod {
             if (event.getLevel() instanceof ServerLevel level) ImageViews.tick(level);
         });
         NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event) -> ImageViews.clear());
+        g_mungus.alpha_omega.band.BandEvents.register(modEventBus);
         if (net.neoforged.fml.ModList.get().isLoaded("sable")) g_mungus.alpha_omega.compat.sable.SableCompat.init();
         if (Boolean.getBoolean("alpha_omega.auditMixins")) {
             NeoForge.EVENT_BUS.addListener((ServerStartedEvent event) -> auditMixins());
@@ -113,7 +114,7 @@ public class AlphaOmegaMod {
 
     private static void registerGameTests(RegisterGameTestsEvent event) {
         GameTestFilter.register(java.util.List.of(ModLoadGameTests.class, OrbifoldGameTests.class, GeneratorGameTests.class, TerrainGameTests.class, SableGameTests.class, g_mungus.alpha_omega.gametest.LocalTimeGameTests.class,
-            g_mungus.alpha_omega.gametest.ImageGameTests.class), event::register);
+            g_mungus.alpha_omega.gametest.ImageGameTests.class, g_mungus.alpha_omega.gametest.BandGameTests.class), event::register);
     }
 
 }

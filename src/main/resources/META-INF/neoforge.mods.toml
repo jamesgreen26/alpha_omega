@@ -17,6 +17,9 @@ config = "alpha_omega.mixins.json"
 config = "alpha_omega.compat.mixins.json"
 
 [[mixins]]
+config = "alpha_omega.band.mixins.json"
+
+[[mixins]]
 config = "alpha_omega.worldgen.mixins.json"
 
 [[mixins]]

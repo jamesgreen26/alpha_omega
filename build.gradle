@@ -25,6 +25,8 @@ neoForge {
             if (project.hasProperty('devScript')) systemProperty 'alpha_omega.dev.script', project.property('devScript')
             // -PtransferStats logs what each crossing of an edge costs the client (see client.TransferStats).
             if (project.hasProperty('transferStats')) systemProperty 'alpha_omega.dev.transferStats', 'true'
+            // -PbandDetectors counts reactions that reach a non-owner band copy (see band.BandCounters).
+            if (project.hasProperty('bandDetectors')) systemProperty 'alpha_omega.band.detectors', 'true'
         }
         server {
             server()
@@ -37,6 +39,9 @@ neoForge {
             systemProperty 'neoforge.enabledGameTestNamespaces', 'alpha_omega'
             // -Pgametests=NeighbourGameTests,TransferGameTests.mobsWaitForRoom runs part of the suite (gametest.GameTestFilter).
             if (project.hasProperty('gametests')) systemProperty 'alpha_omega.gametests', project.property('gametests')
+            // Band reaction detectors are always on in gametests; -PcheckCopies also runs the copy check after every test.
+            systemProperty 'alpha_omega.band.detectors', 'true'
+            if (project.hasProperty('checkCopies')) systemProperty 'alpha_omega.band.checkCopies', 'true'
         }
     }
 
