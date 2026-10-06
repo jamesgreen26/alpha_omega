@@ -21,6 +21,12 @@ class ImageGeometryTest {
     private static final int[] VIEWS = {2, 6, 12, 32};
 
     private static List<OrbifoldGeometry> all() {
+        List<OrbifoldGeometry> all = new ArrayList<>(overworld());
+        for (OrbifoldSize size : OrbifoldSize.PRESETS) all.add(new OrbifoldGeometry(size, 4, OrbifoldGeometry.NETHER_SCALE));
+        return all;
+    }
+
+    private static List<OrbifoldGeometry> overworld() {
         return List.of(new OrbifoldGeometry(OrbifoldSize.SMALL, 4), new OrbifoldGeometry(OrbifoldSize.MEDIUM, 4), DEFAULT, new OrbifoldGeometry(OrbifoldSize.LARGE, 4),
             new OrbifoldGeometry(OrbifoldSize.MEDIUM, 2), new OrbifoldGeometry(OrbifoldSize.MEDIUM, 16), new OrbifoldGeometry(OrbifoldSize.SMALL, 2), new OrbifoldGeometry(OrbifoldSize.SMALL, 16));
     }
@@ -52,7 +58,9 @@ class ImageGeometryTest {
     void candidatesAreClosedUnderInverse() {
         for (OrbifoldGeometry g : all()) {
             List<Motion> candidates = ImageGeometry.candidates(g);
-            assertEquals(8, new HashSet<>(candidates).size());
+            assertEquals(candidates.size(), new HashSet<>(candidates).size());
+            if (!g.isScaled()) assertEquals(8, candidates.size(), "the overworld's candidates are the generators near the corners");
+            else assertTrue(candidates.size() >= 8, g + ": " + candidates.size());
             for (Motion m : candidates) assertTrue(candidates.contains(m.inverse()), m + " has no inverse among " + candidates);
         }
     }
@@ -88,48 +96,75 @@ class ImageGeometryTest {
     /**
      * The clipping predicate: in every viewer's square, a live chunk is drawn by home and no image, and every other
      * chunk by exactly one image the viewer has, from a tile chunk that image tracks within its own square, and whose
-     * neighbours (which meshing reads) it tracks too.
+     * neighbours (which meshing reads) it tracks too. In the overworld a viewer needs at most four images.
      */
     @Test
     void everyPlaceIsDrawnOnce() {
         int most = 0;
-        for (OrbifoldGeometry g : all()) {
-            List<Motion> candidates = ImageGeometry.candidates(g);
+        for (OrbifoldGeometry g : overworld()) {
             for (int[] place : places(g)) {
                 int px = place[0] >> 4, pz = place[1] >> 4;
                 assertTrue(ImageGeometry.live(g, px, pz), "viewer should stand in the tile or band: " + place[0] + ", " + place[1]);
                 for (int view : VIEWS) {
-                    List<Motion> images = ImageGeometry.images(g, px, pz, view);
-                    most = Math.max(most, images.size());
-                    for (int qx = px - view - 1; qx <= px + view + 1; qx++) {
-                        for (int qz = pz - view - 1; qz <= pz + view + 1; qz++) {
-                            if (!ImageGeometry.withinView(px, pz, view, qx, qz, true)) continue;
-                            String at = g.size + "/" + g.bandChunks + " viewer " + px + "," + pz + " view " + view + " chunk " + qx + "," + qz;
-                            List<Motion> drawing = new ArrayList<>();
-                            for (Motion m : candidates) {
-                                Motion back = m.inverse();
-                                if (ImageGeometry.draws(g, m, back.chunkX(qx), back.chunkZ(qz))) drawing.add(m);
-                            }
-                            if (ImageGeometry.homeDraws(g, qx, qz)) {
-                                assertEquals(List.of(), drawing, "home draws, and so do images: " + at);
-                                continue;
-                            }
-                            assertEquals(1, drawing.size(), "drawn by " + drawing + ": " + at);
-                            Motion m = drawing.get(0);
-                            assertTrue(images.contains(m), m + " draws but is not among " + images + ": " + at);
-                            Motion back = m.inverse();
-                            int cx = back.chunkX(qx), cz = back.chunkZ(qz);
-                            int centerX = back.chunkX(px), centerZ = back.chunkZ(pz);
-                            assertTrue(ImageGeometry.withinView(centerX, centerZ, view, cx, cz, true), "outside its image square: " + at);
-                            for (int dx = -1; dx <= 1; dx++) {
-                                for (int dz = -1; dz <= 1; dz++) assertTrue(ImageGeometry.live(g, cx + dx, cz + dz), "neighbour not tracked: " + at);
-                            }
-                        }
-                    }
+                    most = Math.max(most, ImageGeometry.images(g, px, pz, view).size());
+                    checkView(g, px, pz, view);
                 }
             }
         }
         assertTrue(most <= 4, "a viewer needed " + most + " images");
+    }
+
+    /**
+     * Every Nether tile, at every view distance up to 32: the small Nether's tile is 12 chunks tall, so a view crosses
+     * it several times, and the candidates reach the lattice translations past both fold rows. Images stay few where
+     * the Nether's view is capped ({@link ImageGeometry#maxViewDistance}).
+     */
+    @Test
+    void everyNetherPlaceIsDrawnOnce() {
+        for (OrbifoldGeometry g : all()) {
+            if (!g.isScaled()) continue;
+            int most = 0;
+            for (int[] place : places(g)) {
+                int px = place[0] >> 4, pz = place[1] >> 4;
+                assertTrue(ImageGeometry.live(g, px, pz), "viewer should stand in the tile or band: " + place[0] + ", " + place[1]);
+                for (int view = 2; view <= 32; view++) {
+                    checkView(g, px, pz, view);
+                    if (view <= ImageGeometry.maxViewDistance(g)) most = Math.max(most, ImageGeometry.images(g, px, pz, view).size());
+                }
+            }
+            assertTrue(most <= 9, g + ": a viewer within the capped view needed " + most + " images");
+        }
+    }
+
+    /** {@link #everyPlaceIsDrawnOnce}'s check for one viewer and view distance. */
+    private static void checkView(OrbifoldGeometry g, int px, int pz, int view) {
+        List<Motion> candidates = ImageGeometry.candidates(g);
+        List<Motion> images = ImageGeometry.images(g, px, pz, view);
+        for (int qx = px - view - 1; qx <= px + view + 1; qx++) {
+            for (int qz = pz - view - 1; qz <= pz + view + 1; qz++) {
+                if (!ImageGeometry.withinView(px, pz, view, qx, qz, true)) continue;
+                String at = g + " viewer " + px + "," + pz + " view " + view + " chunk " + qx + "," + qz;
+                List<Motion> drawing = new ArrayList<>();
+                for (Motion m : candidates) {
+                    Motion back = m.inverse();
+                    if (ImageGeometry.draws(g, m, back.chunkX(qx), back.chunkZ(qz))) drawing.add(m);
+                }
+                if (ImageGeometry.homeDraws(g, qx, qz)) {
+                    assertEquals(List.of(), drawing, "home draws, and so do images: " + at);
+                    continue;
+                }
+                assertEquals(1, drawing.size(), "drawn by " + drawing + ": " + at);
+                Motion m = drawing.get(0);
+                assertTrue(images.contains(m), m + " draws but is not among " + images + ": " + at);
+                Motion back = m.inverse();
+                int cx = back.chunkX(qx), cz = back.chunkZ(qz);
+                int centerX = back.chunkX(px), centerZ = back.chunkZ(pz);
+                assertTrue(ImageGeometry.withinView(centerX, centerZ, view, cx, cz, true), "outside its image square: " + at);
+                for (int dx = -1; dx <= 1; dx++) {
+                    for (int dz = -1; dz <= 1; dz++) assertTrue(ImageGeometry.live(g, cx + dx, cz + dz), "neighbour not tracked: " + at);
+                }
+            }
+        }
     }
 
     /** Images never draw band or skirt chunks, and never draw onto home's region. */

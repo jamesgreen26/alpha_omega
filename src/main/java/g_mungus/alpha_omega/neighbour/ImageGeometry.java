@@ -4,7 +4,9 @@ import g_mungus.alpha_omega.orbifold.Motion;
 import g_mungus.alpha_omega.orbifold.OrbifoldGeometry;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Which images of the storage a viewer needs, and which chunks each one shows ({@code orbifold-implementation.md}
@@ -30,17 +32,68 @@ public final class ImageGeometry {
     }
 
     /**
-     * The elements whose images can come into view from the footprint: the generators and their compositions near the
-     * tile corners, as {@link OrbifoldGeometry#frame} produces them. Closed under inverses.
+     * The farthest, in chunks, an image's live chunks can be from home's and still come into some viewer's view:
+     * vanilla's largest view distance (32), its outer ring, and one for rounding.
+     */
+    public static final int MAX_REACH = 34;
+
+    /**
+     * The elements whose images can come into view from the live chunks with any view distance up to 32: every element
+     * of {@code Γ} that moves the live chunks to within {@link #MAX_REACH} of themselves. Closed under inverses (each
+     * is an isometry, so {@code g} and {@code g⁻¹} are as far).
+     *
+     * <p>In the overworld at every size these are the generators and their compositions near the tile corners, as
+     * {@link OrbifoldGeometry#frame} produces them (8). A Nether tile is small enough that a view reaches past a
+     * fold row's image into the next one (the small Nether's tile is 12 chunks tall): there the candidates include the
+     * lattice translations across both rows and their compositions, so that every chunk of every view is still drawn
+     * once, by the one element taking it into the tile.
      */
     public static List<Motion> candidates(OrbifoldGeometry geometry) {
         Candidates last = lastCandidates;
         if (last != null && last.geometry == geometry) return last.elements;
-        List<Motion> elements = List.of(geometry.east, geometry.west, geometry.northFold, geometry.southFold,
+        List<Motion> base = List.of(geometry.east, geometry.west, geometry.northFold, geometry.southFold,
             geometry.northFold.then(geometry.east), geometry.northFold.then(geometry.west),
             geometry.southFold.then(geometry.east), geometry.southFold.then(geometry.west));
-        lastCandidates = new Candidates(geometry, elements);
-        return elements;
+        int[] live = liveChunks(geometry);
+        Set<Motion> found = new LinkedHashSet<>(base);
+        found.add(Motion.IDENTITY);
+        List<Motion> frontier = new ArrayList<>(found);
+        // Breadth first over words in the generators; a word that has left the reach can still come back, so walk a
+        // few steps past it (each generator moves the live chunks by at least a tile's height or width).
+        for (int depth = 0; depth < 8; depth++) {
+            List<Motion> next = new ArrayList<>();
+            for (Motion m : frontier) {
+                for (Motion generator : geometry.generators()) {
+                    Motion product = m.then(generator);
+                    if (found.add(product)) next.add(product);
+                }
+            }
+            frontier = next;
+        }
+        List<Motion> elements = new ArrayList<>(base);
+        for (Motion m : found) {
+            if (m.isIdentity() || elements.contains(m)) continue;
+            if (gap(moved(m, live), live) <= MAX_REACH) elements.add(m);
+        }
+        List<Motion> fixed = List.copyOf(elements);
+        lastCandidates = new Candidates(geometry, fixed);
+        return fixed;
+    }
+
+    /**
+     * The largest view distance a level with this geometry allows: the tile's height in chunks (at least 8), so a view
+     * spans at most about two tiles and a viewer needs at most nine images. Only a small Nether is limited: 12 chunks
+     * for the small size's Nether, 26 for the medium's; every overworld and the larger Nethers allow vanilla's 32.
+     */
+    public static int maxViewDistance(OrbifoldGeometry geometry) {
+        return Math.min(32, Math.max(8, geometry.b / 2 / 16));
+    }
+
+    /** The Chebyshev gap between two chunk rectangles, 0 where they touch or overlap. */
+    private static int gap(int[] r, int[] s) {
+        int dx = Math.max(0, Math.max(r[0] - s[2], s[0] - r[2]));
+        int dz = Math.max(0, Math.max(r[1] - s[3], s[1] - r[3]));
+        return Math.max(dx, dz);
     }
 
     /** The candidates last worked out, for the geometry they were worked out for (asked for per entity and player). */
@@ -70,7 +123,8 @@ public final class ImageGeometry {
     /**
      * The images a viewer at chunk {@code (centerX, centerZ)} needs with a view distance: each element whose live
      * chunks, moved by it, come within the view (as vanilla counts it, outer ring included). In a fixed order; none
-     * for a viewer outside the footprint.
+     * for a viewer outside the footprint. At most four in the overworld; more in a small Nether, whose tile a view
+     * can cross several times.
      */
     public static List<Motion> images(OrbifoldGeometry geometry, int centerX, int centerZ, int viewDistance) {
         // Outside the footprint (a spectator flying off, another mod's storage) there is nothing to see images of.
