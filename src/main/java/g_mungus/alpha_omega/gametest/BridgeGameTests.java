@@ -337,7 +337,9 @@ public class BridgeGameTests {
             floor(level, site, 14, true);
             TestChunks.release(level, forced);
         };
-        check(pois.existsAtPosition(PoiTypes.HOME, head), "the bed's POI should be recorded at its owner " + head.toShortString(), cleanup);
+        check(pois.getInChunk(h -> h.is(PoiTypes.HOME), new ChunkPos(head), PoiManager.Occupancy.ANY).anyMatch(r -> r.getPos().equals(head))
+            && pois.getInChunk(h -> h.is(PoiTypes.HOME), new ChunkPos(site.copy), PoiManager.Occupancy.ANY).noneMatch(r -> r.getPos().equals(site.copy)),
+            "the bed's POI should be recorded at its owner " + head.toShortString() + " only", cleanup);
         BehaviorControl<net.minecraft.world.entity.LivingEntity> validate = ValidateNearbyPoi.create(h -> h.is(PoiTypes.HOME), MemoryModuleType.HOME);
         long[] claimedAt = {-1};
         boolean[] done = {false};

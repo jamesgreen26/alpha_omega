@@ -243,6 +243,15 @@ public class BandGameTests {
         }
     }
 
+    /**
+     * Whether a portal POI is recorded at exactly {@code pos}, read from its chunk's records: lookups by position at a
+     * copy report the owner's record (the phase 7 POI bridge), so they cannot tell where it is stored.
+     */
+    private static boolean poiRecorded(ServerLevel level, BlockPos pos) {
+        return level.getPoiManager().getInChunk(type -> type.is(PoiTypes.NETHER_PORTAL), new ChunkPos(pos), net.minecraft.world.entity.ai.village.poi.PoiManager.Occupancy.ANY)
+            .anyMatch(record -> record.getPos().equals(pos));
+    }
+
     private static Run run(GameTestHelper helper, Seam seam, int lane) {
         return new Run(helper, site(helper, seam, lane)).prepare();
     }
@@ -588,8 +597,8 @@ public class BandGameTests {
             // POIs: the band cells' at their owners, none at the band copies.
             for (int dy = 1; dy <= 3; dy++) {
                 BlockPos band = run.seam.at(0, 0, dy), owner = run.seam.other(band);
-                run.check(run.level.getPoiManager().existsAtPosition(PoiTypes.NETHER_PORTAL, owner), "no portal POI at the owner " + owner.toShortString());
-                run.check(!run.level.getPoiManager().existsAtPosition(PoiTypes.NETHER_PORTAL, band), "a portal POI at the band copy " + band.toShortString());
+                run.check(poiRecorded(run.level, owner), "no portal POI at the owner " + owner.toShortString());
+                run.check(!poiRecorded(run.level, band), "a portal POI at the band copy " + band.toShortString());
             }
             int i = 0;
             for (Site site : List.of(run.seam, run.reference)) {
